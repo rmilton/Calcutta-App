@@ -82,6 +82,20 @@ function SettingsTab() {
     setSettings((s) => ({ ...s, invite_code: data.invite_code }));
   };
 
+  const downloadCsv = async () => {
+    const r = await api('/admin/export/csv');
+    if (!r.ok) return;
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `calcutta-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   if (!settings) return <div className="text-slate-400 py-8 text-center">Loading...</div>;
 
   return (
@@ -205,6 +219,20 @@ function SettingsTab() {
             </button>
           </div>
         </div>
+      </div>
+
+      <div className="border-t border-slate-700 pt-6">
+        <div className="text-sm font-medium text-slate-300 mb-1">Export Results</div>
+        <div className="text-xs text-slate-500 mb-3">
+          Download standings and auction results as a CSV for settling up outside the app.
+        </div>
+        <button
+          type="button"
+          onClick={downloadCsv}
+          className="bg-slate-700 hover:bg-slate-600 text-white font-semibold px-5 py-2 rounded-lg text-sm flex items-center gap-2"
+        >
+          ⬇ Download CSV
+        </button>
       </div>
 
       <button

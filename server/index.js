@@ -1,0 +1,59 @@
+require('dotenv').config();
+const express = require('express');
+const { createServer } = require('http');
+const { Server } = require('socket.io');
+const cookieParser = require('cookie-parser');
+const cors = require('cors');
+const path = require('path');
+
+const { init } = require('./db');
+const { setupSocket, startTimer, closeAuction } = require('./socket');
+
+const authRoutes = require('./routes/auth');
+const auctionRoutes = require('./routes/auction');
+const bracketRoutes = require('./routes/bracket');
+const standingsRoutes = require('./routes/standings');
+const adminRoutes = require('./routes/admin');
+const tournamentsRoutes = require('./routes/tournaments');
+
+const app = express();
+const httpServer = createServer(app);
+
+const io = new Server(httpServer, {
+  cors: { origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173', credentials: true },
+});
+
+// Make io accessible to routes
+app.set('io', io);
+app.set('auctionModule', { startTimer, closeAuction });
+
+// Middleware
+app.use(cors({ origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173', credentials: true }));
+app.use(express.json());
+app.use(cookieParser());
+
+// API routes
+app.use('/api/auth', authRoutes);
+app.use('/api/auction', auctionRoutes);
+app.use('/api/bracket', bracketRoutes);
+app.use('/api/standings', standingsRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/tournaments', tournamentsRoutes);
+
+// Serve React build in production
+const clientBuildPath = path.join(__dirname, '..', 'client', 'dist');
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static(clientBuildPath));
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(clientBuildPath, 'index.html'));
+  });
+}
+
+// Initialize DB and sockets
+init();
+setupSocket(io);
+
+const PORT = process.env.PORT || 3001;
+httpServer.listen(PORT, () => {
+  console.log(`Calcutta server running on port ${PORT}`);
+});

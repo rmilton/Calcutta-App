@@ -1,0 +1,36 @@
+# Dependencies
+node_modules/
+client/node_modules/
+server/node_modules/
+
+# Build output
+client/dist/
+
+# Database files (never commit live data)
+server/calcutta.db
+server/calcutta.db-shm
+server/calcutta.db-wal
+*.db
+*.db-shm
+*.db-wal
+
+# Environment / secrets (NEVER commit these)
+.env
+server/.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor / IDE
+.vscode/
+.idea/
+
+# Claude Code (machine-specific paths, local permissions)
+.claude/

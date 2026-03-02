@@ -173,6 +173,8 @@ export default function Auction() {
   const [bidError, setBidError] = useState('');
   const [soldMessage, setSoldMessage] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [scheduledStart, setScheduledStart] = useState(null); // Unix ms
+  const [countdown, setCountdown] = useState('');
 
   const refreshItems = useCallback(() => {
     fetch(`/api/auction/items${apiTParam || ''}`, { credentials: 'include' })
@@ -197,12 +199,37 @@ export default function Auction() {
     setLoading(false);
   }, [refreshAll, refreshKey]);
 
+  // Countdown effect for scheduled start
+  useEffect(() => {
+    if (!scheduledStart) { setCountdown(''); return; }
+    const tick = () => {
+      const diff = scheduledStart - Date.now();
+      if (diff <= 0) { setCountdown('Any moment now…'); return; }
+      const h = Math.floor(diff / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      const s = Math.floor((diff % 60000) / 1000);
+      setCountdown(
+        h > 0
+          ? `${h}h ${String(m).padStart(2, '0')}m ${String(s).padStart(2, '0')}s`
+          : `${String(m).padStart(2, '0')}m ${String(s).padStart(2, '0')}s`
+      );
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [scheduledStart]);
+
   // Live socket events — skip when viewing archived tournament
-  useSocketEvent('auction:state', useCallback(({ active, recentBids, auctionStatus }) => {
+  useSocketEvent('auction:state', useCallback(({ active, recentBids, auctionStatus, scheduledStart: ss }) => {
     if (isViewingHistory) return;
     if (active !== undefined) setActive(active);
     if (recentBids) setRecentBids(recentBids);
     if (auctionStatus) setAuctionStatus(auctionStatus);
+    setScheduledStart(ss || null);
+  }, [isViewingHistory]));
+
+  useSocketEvent('auction:scheduled_start', useCallback(({ ts }) => {
+    if (!isViewingHistory) setScheduledStart(ts || null);
   }, [isViewingHistory]));
 
   useSocketEvent('auction:status', useCallback(({ status }) => {
@@ -407,9 +434,19 @@ export default function Auction() {
         </div>
       ) : auctionStatus === 'waiting' ? (
         <div className="bg-slate-800 rounded-2xl p-10 text-center mb-6">
-          <div className="text-5xl mb-4">⏳</div>
+          <div className="text-5xl mb-4">{scheduledStart ? '🕐' : '⏳'}</div>
           <h2 className="text-xl font-bold text-white mb-2">Waiting for Auction to Start</h2>
-          <p className="text-slate-400">The admin will start the auction shortly. Stay tuned!</p>
+          {scheduledStart && countdown ? (
+            <>
+              <p className="text-slate-400 mb-3">Auction opens in</p>
+              <div className="text-3xl font-mono font-bold text-orange-400 tabular-nums">{countdown}</div>
+              <p className="text-slate-500 text-xs mt-3">
+                {new Date(scheduledStart).toLocaleString()}
+              </p>
+            </>
+          ) : (
+            <p className="text-slate-400">The admin will start the auction shortly. Stay tuned!</p>
+          )}
         </div>
       ) : (
         <div className="bg-slate-800 rounded-2xl p-10 text-center mb-6">

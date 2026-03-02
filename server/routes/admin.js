@@ -7,6 +7,7 @@ const {
   recalcEarnings, getPayoutConfig,
 } = require('../db');
 const { requireAdmin } = require('./middleware');
+const { scheduleAuctionStart, clearScheduledStart } = require('../scheduler');
 
 const router = express.Router();
 
@@ -16,7 +17,8 @@ router.get('/settings', requireAdmin, (req, res) => {
   const keys = [
     'invite_code', 'auction_timer_seconds', 'auction_grace_seconds',
     'auction_status', 'tournament_started',
-    'auction_order', 'auction_auto_advance',
+    'auction_order', 'auction_auto_advance', 'ai_commentary_enabled',
+    'auction_scheduled_start',
   ];
   const settings = {};
   for (const k of keys) settings[k] = getTournamentSetting(tid, k);
@@ -28,13 +30,27 @@ router.patch('/settings', requireAdmin, (req, res) => {
   const tid = getActiveTournamentId();
   const allowed = [
     'auction_timer_seconds', 'auction_grace_seconds',
-    'auction_order', 'auction_auto_advance',
+    'auction_order', 'auction_auto_advance', 'ai_commentary_enabled',
+    'auction_scheduled_start',
   ];
   for (const [k, v] of Object.entries(req.body)) {
     if (allowed.includes(k)) setTournamentSetting(tid, k, v);
   }
   if (req.body.auction_order) {
     applyAuctionOrder(tid, req.body.auction_order);
+  }
+  // Handle scheduled start: re-arm (or cancel) the server-side timer
+  const io = req.app.get('io');
+  if ('auction_scheduled_start' in req.body) {
+    const rawTs = req.body.auction_scheduled_start;
+    const ts = rawTs ? parseInt(rawTs) : null;
+    if (ts && ts > Date.now()) {
+      scheduleAuctionStart(tid, ts, io);
+      if (io) io.emit('auction:scheduled_start', { ts });
+    } else {
+      clearScheduledStart();
+      if (io) io.emit('auction:scheduled_start', { ts: null });
+    }
   }
   res.json({ ok: true });
 });
@@ -125,9 +141,14 @@ router.patch('/auction/queue', requireAdmin, (req, res) => {
 // POST /api/admin/auction/start
 router.post('/auction/start', requireAdmin, (req, res) => {
   const tid = getActiveTournamentId();
+  clearScheduledStart(); // cancel any pending auto-start
   setTournamentSetting(tid, 'auction_status', 'open');
+  setTournamentSetting(tid, 'auction_scheduled_start', '');
   const io = req.app.get('io');
-  if (io) io.emit('auction:status', { status: 'open' });
+  if (io) {
+    io.emit('auction:status', { status: 'open' });
+    io.emit('auction:scheduled_start', { ts: null }); // clear client countdown
+  }
   res.json({ ok: true });
 });
 

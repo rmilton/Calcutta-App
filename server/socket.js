@@ -57,7 +57,8 @@ function closeAuction(itemId, io) {
       finalPrice: item.current_price,
     });
 
-    // Fire-and-forget AI commentary
+    // Fire-and-forget AI commentary (if enabled; default on)
+    if (getTournamentSetting(tid, 'ai_commentary_enabled') !== '0') {
     const totalPot = db.prepare(
       'SELECT COALESCE(SUM(purchase_price), 0) as t FROM ownership WHERE tournament_id = ?'
     ).get(tid).t;
@@ -79,6 +80,7 @@ function closeAuction(itemId, io) {
       totalPot,
       teamsRemaining,
     }, io).catch((e) => console.error('[AI auction]', e.message));
+    } // end ai_commentary_enabled
 
     // Auto-advance: start next pending team after a short delay
     if (getTournamentSetting(tid, 'auction_auto_advance') === '1') {
@@ -136,18 +138,23 @@ function setupSocket(io) {
     // Send current auction state on connect
     const tid = getActiveTournamentId();
     const active = getActiveAuctionItem(tid);
+    const auctionStatus = getTournamentSetting(tid, 'auction_status');
+    const rawScheduled = getTournamentSetting(tid, 'auction_scheduled_start');
+    const scheduledStart = rawScheduled ? parseInt(rawScheduled) : null;
     if (active) {
       const recentBids = getRecentBids(active.team_id);
       socket.emit('auction:state', {
         active,
         recentBids,
-        auctionStatus: getTournamentSetting(tid, 'auction_status'),
+        auctionStatus,
+        scheduledStart,
       });
     } else {
       socket.emit('auction:state', {
         active: null,
         recentBids: [],
-        auctionStatus: getTournamentSetting(tid, 'auction_status'),
+        auctionStatus,
+        scheduledStart,
       });
     }
 

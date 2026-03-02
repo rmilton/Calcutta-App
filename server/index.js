@@ -11,6 +11,7 @@ const path = require('path');
 
 const { init } = require('./db');
 const { setupSocket, startTimer, closeAuction } = require('./socket');
+const { initScheduler } = require('./scheduler');
 
 const authRoutes = require('./routes/auth');
 const auctionRoutes = require('./routes/auction');
@@ -58,6 +59,7 @@ if (process.env.NODE_ENV === 'production') {
 // Initialize DB and sockets
 init();
 setupSocket(io);
+initScheduler(io);
 
 const PORT = process.env.PORT || 3001;
 httpServer.listen(PORT, () => {

@@ -231,20 +231,20 @@ function SettingsTab() {
         <button
           type="button"
           onClick={downloadCsv}
-          className="bg-slate-700 hover:bg-slate-600 text-white font-semibold px-5 py-2 rounded-lg text-sm flex items-center gap-2"
+          className="btn-secondary gap-2"
         >
-          ⬇ Download CSV
+          <svg aria-hidden="true" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+          Download CSV
         </button>
       </div>
 
-      <button
-        onClick={save}
-        disabled={saving}
-        className="bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white font-bold px-6 py-2 rounded-lg"
-      >
-        {saving ? 'Saving...' : 'Save Settings'}
+      <button onClick={save} disabled={saving} className="btn-primary">
+        {saving ? 'Saving…' : 'Save Settings'}
       </button>
-      {msg && <span className="text-green-400 text-sm ml-3">{msg}</span>}
+      {msg && <span className="text-status-success text-sm ml-3">{msg}</span>}
     </div>
   );
 }
@@ -532,19 +532,19 @@ function AuctionTab() {
 
       {/* Active team */}
       {active && (
-        <div className="bg-orange-900/40 border border-orange-600 rounded-xl p-4">
-          <p className="text-xs uppercase tracking-wider text-orange-400 mb-2">Currently Up for Bid</p>
+        <div className="card-elevated ring-1 ring-brand/30 shadow-glow-sm p-4">
+          <p className="section-label text-brand mb-2">Currently Up for Bid</p>
           <div className="flex items-center justify-between gap-4">
             <div className="flex items-center gap-3 min-w-0">
-              <span className="text-orange-400 font-bold shrink-0">#{active.seed}</span>
-              <span className="text-white font-bold truncate">{active.team_name}</span>
-              <span className="text-slate-400 text-sm shrink-0">{active.region}</span>
+              <span className="text-brand font-bold shrink-0">#{active.seed}</span>
+              <span className="text-text-primary font-bold truncate">{active.team_name}</span>
+              <span className="badge badge-neutral text-xs shrink-0">{active.region}</span>
             </div>
             <div className="flex items-center gap-5 shrink-0">
               <div className="text-right">
-                <div className="text-xs text-slate-500 uppercase tracking-wider mb-0.5">Current Bid</div>
-                <div className="text-white font-bold">{fmt(active.current_price || 0)}</div>
-                {active.leader_name && <div className="text-slate-400 text-xs">{active.leader_name}</div>}
+                <div className="section-label mb-0.5">Current Bid</div>
+                <div className="text-text-primary font-bold tabular-nums">{fmt(active.current_price || 0)}</div>
+                {active.leader_name && <div className="text-text-secondary text-xs">{active.leader_name}</div>}
               </div>
               <TimeLeft endTime={active.bid_end_time} />
             </div>
@@ -554,19 +554,19 @@ function AuctionTab() {
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-3 text-center">
-        <div className="bg-slate-800 rounded-lg p-3">
-          <div className="text-2xl font-bold text-orange-400">{pending.length}</div>
-          <div className="text-xs text-slate-400 mt-1">Pending</div>
+        <div className="card p-3">
+          <div className="text-2xl font-bold text-brand tabular-nums">{pending.length}</div>
+          <div className="section-label mt-1">Pending</div>
         </div>
-        <div className="bg-slate-800 rounded-lg p-3">
-          <div className="text-2xl font-bold text-green-400">{sold.length}</div>
-          <div className="text-xs text-slate-400 mt-1">Sold</div>
+        <div className="card p-3">
+          <div className="text-2xl font-bold text-status-success tabular-nums">{sold.length}</div>
+          <div className="section-label mt-1">Sold</div>
         </div>
-        <div className="bg-slate-800 rounded-lg p-3">
-          <div className="text-2xl font-bold text-white">
+        <div className="card p-3">
+          <div className="text-2xl font-bold text-text-primary tabular-nums">
             {fmt(sold.reduce((s, i) => s + (i.final_price || 0), 0))}
           </div>
-          <div className="text-xs text-slate-400 mt-1">Total Pot</div>
+          <div className="section-label mt-1">Total Pot</div>
         </div>
       </div>
 
@@ -579,8 +579,8 @@ function AuctionTab() {
               <button
                 key={r}
                 onClick={() => setFilterRegion(r)}
-                className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
-                  filterRegion === r ? 'bg-orange-500 text-white' : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
+                className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                  filterRegion === r ? 'bg-brand text-white' : 'bg-surface-input text-text-secondary hover:text-text-primary'
                 }`}
               >
                 {r}
@@ -589,16 +589,16 @@ function AuctionTab() {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             {filtered.map((item) => (
-              <div key={item.id} className="bg-slate-800 rounded-lg p-3 flex items-center justify-between gap-2">
+              <div key={item.id} className="card p-3 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 min-w-0">
-                  <span className="text-orange-400 font-bold text-sm shrink-0">#{item.seed}</span>
-                  <span className="text-white text-sm truncate">{item.team_name}</span>
-                  <span className="text-slate-500 text-xs shrink-0">{item.region}</span>
+                  <span className="text-brand font-bold text-sm shrink-0">#{item.seed}</span>
+                  <span className="text-text-primary text-sm truncate">{item.team_name}</span>
+                  <span className="badge badge-neutral text-xs shrink-0">{item.region}</span>
                 </div>
                 <button
                   onClick={() => startNext(item.team_id)}
                   disabled={!!active || auctionStatus !== 'open'}
-                  className="bg-orange-500 hover:bg-orange-600 disabled:opacity-40 text-white text-xs font-bold px-3 py-1.5 rounded shrink-0"
+                  className="btn-primary btn-sm shrink-0"
                 >
                   Start
                 </button>
@@ -1042,16 +1042,24 @@ export default function Admin() {
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
-      <h1 className="text-2xl font-bold text-white mb-6">Admin Dashboard</h1>
+      <h1 className="text-2xl font-bold text-text-primary mb-6">Admin Dashboard</h1>
 
       {/* Tab bar */}
-      <div className="flex flex-wrap gap-1 mb-8 bg-slate-800 rounded-xl p-1">
+      <div
+        role="tablist"
+        aria-label="Admin sections"
+        className="flex gap-1 bg-surface-input rounded-2xl p-1 overflow-x-auto mb-8 scroll-smooth"
+      >
         {TABS.map((t) => (
           <button
             key={t.id}
+            role="tab"
+            aria-selected={tab === t.id}
             onClick={() => setTab(t.id)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-              tab === t.id ? 'bg-orange-500 text-white' : 'text-slate-300 hover:text-white hover:bg-slate-700'
+            className={`flex-shrink-0 px-4 py-2 rounded-xl text-sm font-semibold transition-all duration-150 ${
+              tab === t.id
+                ? 'bg-surface-raised text-text-primary shadow-sm'
+                : 'text-text-secondary hover:text-text-primary'
             }`}
           >
             {t.label}

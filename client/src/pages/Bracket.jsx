@@ -3,9 +3,9 @@ import { useSocketEvent } from '../context/SocketContext';
 import { useTournament } from '../context/TournamentContext';
 
 const REGION_COLORS = {
-  East: '#ef4444',
-  West: '#3b82f6',
-  South: '#22c55e',
+  East:    '#ef4444',
+  West:    '#3b82f6',
+  South:   '#22c55e',
   Midwest: '#f59e0b',
 };
 
@@ -14,25 +14,31 @@ const ROUND_NAMES = ['R64', 'R32', 'S16', 'E8', 'F4', 'Champ'];
 function TeamSlot({ teamName, teamSeed, ownerName, ownerColor, isWinner, isEmpty }) {
   if (isEmpty) {
     return (
-      <div className="h-9 flex items-center px-2 rounded bg-slate-700/30 border border-slate-700/50">
+      <div className="h-9 flex items-center px-2 rounded-lg bg-surface-input/30 border border-surface-border/50">
         <span className="text-text-muted text-xs">TBD</span>
       </div>
     );
   }
 
   return (
-    <div className={`h-9 flex items-center justify-between px-2 rounded border text-xs transition-all ${
+    <div className={`h-9 flex items-center justify-between px-2 rounded-lg border text-xs transition-all ${
       isWinner
-        ? 'bg-green-900/60 border-green-700 font-semibold'
-        : 'bg-slate-700/60 border-slate-600'
+        ? 'bg-status-success/10 border-status-success/40 font-semibold ring-1 ring-status-success/20'
+        : 'bg-surface-input/60 border-surface-border'
     }`}>
       <div className="flex items-center gap-1.5 min-w-0">
-        {teamSeed && <span className={`shrink-0 ${isWinner ? 'text-green-400' : 'text-slate-400'}`}>#{teamSeed}</span>}
-        <span className={`truncate ${isWinner ? 'text-white' : 'text-slate-200'}`}>{teamName || 'TBD'}</span>
+        {teamSeed && (
+          <span className={`shrink-0 tabular-nums ${isWinner ? 'text-status-success' : 'text-text-secondary'}`}>
+            #{teamSeed}
+          </span>
+        )}
+        <span className={`truncate ${isWinner ? 'text-text-primary' : 'text-text-primary'}`}>
+          {teamName || 'TBD'}
+        </span>
       </div>
       {ownerName && (
         <span
-          className="shrink-0 ml-1 text-xs font-medium px-1.5 py-0.5 rounded"
+          className="shrink-0 ml-1 text-xs font-medium px-1.5 py-0.5 rounded-md"
           style={{ color: ownerColor, backgroundColor: ownerColor + '22' }}
         >
           {ownerName}
@@ -47,18 +53,24 @@ function GameCard({ game }) {
   const color = REGION_COLORS[game.region] || '#6366f1';
 
   return (
-    <div className={`rounded-lg border overflow-hidden ${hasResult ? 'opacity-90' : ''}`}
-      style={{ borderColor: hasResult ? '#374151' : color + '44' }}>
-      <div className="px-2 py-0.5 text-xs text-text-secondary bg-slate-800/80 flex items-center justify-between">
-        <span>{game.region}</span>
+    <div
+      className={`rounded-xl border overflow-hidden transition-all duration-150 ${
+        hasResult ? 'opacity-75 hover:opacity-90' : 'hover:shadow-md'
+      }`}
+      style={{ borderColor: hasResult ? '#334155' : color + '55' }}
+    >
+      {/* Game header */}
+      <div className="px-2 py-0.5 text-xs text-text-secondary flex items-center justify-between"
+        style={{ backgroundColor: color + '15' }}>
+        <span className="font-medium" style={{ color: color + 'cc' }}>{game.region}</span>
         {hasResult && (
           <>
-            <span aria-hidden="true" className="text-green-500">✓</span>
+            <span aria-hidden="true" className="text-status-success">✓</span>
             <span className="sr-only">Game complete</span>
           </>
         )}
       </div>
-      <div className="p-1 bg-slate-800/50 space-y-0.5">
+      <div className="p-1 bg-surface-raised/60 space-y-0.5">
         <TeamSlot
           teamName={game.team1_name} teamSeed={game.team1_seed}
           ownerName={game.team1_owner_name} ownerColor={game.team1_owner_color}
@@ -85,8 +97,12 @@ function RegionBracket({ region, games }) {
   }
 
   return (
-    <div className="bg-slate-800/50 rounded-xl p-4">
-      <h3 className="text-sm font-bold uppercase tracking-wider mb-4" style={{ color }}>
+    <div className="card p-4">
+      {/* Region header with color-accent left border */}
+      <h3
+        className="text-sm font-bold uppercase tracking-wider mb-4 pl-3"
+        style={{ color, borderLeft: `4px solid ${color}` }}
+      >
         {region} Region
       </h3>
       <div className="flex gap-3 overflow-x-auto pb-2">
@@ -94,7 +110,7 @@ function RegionBracket({ region, games }) {
           const roundGames = byRound[round] || [];
           return (
             <div key={round} className="shrink-0 min-w-[160px]">
-              <div className="text-xs text-text-secondary uppercase tracking-wider text-center mb-2">
+              <div className="section-label text-center mb-2">
                 {ROUND_NAMES[round - 1]}
               </div>
               <div className="space-y-2">
@@ -134,20 +150,35 @@ export default function Bracket() {
   useSocketEvent('bracket:update', handleBracketUpdate);
   useSocketEvent('bracket:initialized', handleBracketUpdate);
 
-  if (loading) return <div className="flex items-center justify-center min-h-[60vh] text-slate-400">Loading...</div>;
+  if (loading) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 py-8" role="status" aria-label="Loading bracket">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fade-in">
+          <div className="skeleton h-64 w-full" />
+          <div className="skeleton h-64 w-full" />
+          <div className="skeleton h-64 w-full" />
+          <div className="skeleton h-64 w-full" />
+        </div>
+      </div>
+    );
+  }
 
   if (!initialized) {
     return (
-      <div className="max-w-3xl mx-auto px-4 py-16 text-center">
-        <div className="text-5xl mb-4">🏆</div>
-        <h2 className="text-xl font-bold text-white mb-2">Tournament Not Started</h2>
-        <p className="text-slate-400">The admin will initialize the bracket once the auction is complete.</p>
+      <div className="max-w-3xl mx-auto px-4 py-16">
+        <div className="card p-12 text-center">
+          <div className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4"
+            style={{ background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)' }}>
+            <span aria-hidden="true" className="text-3xl leading-none">🏆</span>
+          </div>
+          <h2 className="text-xl font-bold text-text-primary mb-2">Tournament Not Started</h2>
+          <p className="text-text-secondary">The admin will initialize the bracket once the auction is complete.</p>
+        </div>
       </div>
     );
   }
 
   const regionGames = {};
-  const finalGames = games.filter((g) => ['Final Four', 'Championship'].includes(g.region));
   for (const region of ['East', 'West', 'South', 'Midwest']) {
     regionGames[region] = games.filter((g) => g.region === region);
   }
@@ -157,7 +188,7 @@ export default function Bracket() {
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-8">
-      <h1 className="text-2xl font-bold text-white mb-6">Tournament Bracket</h1>
+      <h1 className="text-2xl font-bold text-text-primary mb-6">Tournament Bracket</h1>
 
       {/* Regional brackets */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
@@ -166,14 +197,14 @@ export default function Bracket() {
         ))}
       </div>
 
-      {/* Final Four + Championship */}
+      {/* Final Weekend */}
       {(finalFour.length > 0 || championship.length > 0) && (
-        <div className="bg-slate-800/50 rounded-xl p-6">
-          <h3 className="text-sm font-bold uppercase tracking-wider text-orange-400 mb-4">Final Weekend</h3>
+        <div className="card-elevated ring-1 ring-brand/20 p-6">
+          <h3 className="section-label text-brand mb-4">Final Weekend</h3>
           <div className="flex gap-6 flex-wrap">
             {finalFour.length > 0 && (
               <div>
-                <div className="text-xs text-slate-500 uppercase tracking-wider mb-2">Final Four</div>
+                <div className="section-label mb-2">Final Four</div>
                 <div className="space-y-2">
                   {finalFour.map((g) => <GameCard key={g.id} game={g} />)}
                 </div>
@@ -181,7 +212,7 @@ export default function Bracket() {
             )}
             {championship.length > 0 && (
               <div>
-                <div className="text-xs text-slate-500 uppercase tracking-wider mb-2">Championship</div>
+                <div className="section-label mb-2">Championship</div>
                 <div className="space-y-2">
                   {championship.map((g) => <GameCard key={g.id} game={g} />)}
                 </div>

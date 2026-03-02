@@ -3,13 +3,144 @@
 @tailwind utilities;
 
 @layer base {
+  *, *::before, *::after { box-sizing: border-box; }
+
   body {
-    @apply bg-slate-900 text-slate-100 antialiased;
+    @apply bg-surface-base text-text-primary antialiased;
+    font-feature-settings: "kern" 1, "liga" 1, "calt" 1;
+  }
+
+  /* ── Global focus ring — WCAG 2.4.7 Focus Visible ────────────────────── */
+  :focus-visible {
+    outline: 2px solid #f97316;
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  :focus:not(:focus-visible) { outline: none; }
+
+  /* ── Reduced motion — WCAG 2.3.3 ─────────────────────────────────────── */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 }
 
 @layer utilities {
-  .bracket-line {
-    border-color: #334155;
+  /* Screen-reader only — WCAG 1.1.1 */
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  /* Minimum 44×44px touch target — WCAG 2.5.5 */
+  .touch-target {
+    min-height: 44px;
+    min-width: 44px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* Bracket connector lines (preserved from original) */
+  .bracket-line { border-color: #334155; }
+}
+
+@layer components {
+  /* ── Skeleton loader ─────────────────────────────────────────────────── */
+  .skeleton {
+    @apply bg-surface-input animate-skeleton rounded-lg;
+  }
+
+  /* ── Card elevation system ───────────────────────────────────────────── */
+  .card {
+    @apply bg-surface-raised border border-surface-border rounded-2xl shadow-md;
+    background-image: linear-gradient(135deg, rgba(255,255,255,0.03) 0%, transparent 60%);
+  }
+  .card-elevated {
+    @apply bg-surface-overlay border border-surface-subtle rounded-2xl shadow-lg;
+    background-image: linear-gradient(135deg, rgba(255,255,255,0.04) 0%, transparent 60%);
+  }
+
+  /* ── Button system ───────────────────────────────────────────────────── */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 font-semibold rounded-xl
+           transition-all duration-150 cursor-pointer select-none
+           disabled:opacity-50 disabled:cursor-not-allowed
+           px-5 py-2.5 text-sm leading-none;
+    min-height: 44px;
+  }
+  .btn:focus-visible {
+    outline: 2px solid #f97316;
+    outline-offset: 2px;
+  }
+  .btn-primary {
+    @apply btn text-white hover:shadow-glow-sm active:scale-[0.98];
+    background-image: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+  }
+  .btn-secondary {
+    @apply btn bg-surface-input text-text-primary hover:bg-surface-subtle border border-surface-border;
+  }
+  .btn-ghost {
+    @apply btn text-text-secondary hover:text-text-primary hover:bg-surface-input;
+  }
+  .btn-danger {
+    @apply btn text-status-error hover:bg-surface-input border border-status-error/30;
+    background-color: rgba(248,113,113,0.08);
+  }
+  .btn-sm  { @apply px-3 py-1.5 text-xs rounded-lg; min-height: 36px; }
+  .btn-lg  { @apply px-7 py-3.5 text-base rounded-xl; min-height: 52px; }
+
+  /* ── Badge / Pill system ─────────────────────────────────────────────── */
+  .badge {
+    @apply inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold;
+  }
+  .badge-brand {
+    @apply badge border border-brand/20 text-brand;
+    background-color: rgba(249,115,22,0.12);
+  }
+  .badge-success {
+    @apply badge border text-status-success;
+    background-color: rgba(74,222,128,0.1);
+    border-color: rgba(74,222,128,0.2);
+  }
+  .badge-warning {
+    @apply badge border text-status-warning;
+    background-color: rgba(251,191,36,0.1);
+    border-color: rgba(251,191,36,0.2);
+  }
+  .badge-error {
+    @apply badge border text-status-error;
+    background-color: rgba(248,113,113,0.1);
+    border-color: rgba(248,113,113,0.2);
+  }
+  .badge-info {
+    @apply badge border text-status-info;
+    background-color: rgba(96,165,250,0.1);
+    border-color: rgba(96,165,250,0.2);
+  }
+  .badge-neutral {
+    @apply badge bg-surface-input text-text-secondary border border-surface-border;
+  }
+
+  /* ── Form input ──────────────────────────────────────────────────────── */
+  .input {
+    @apply w-full bg-surface-input border border-surface-border rounded-xl px-4 py-2.5
+           text-sm text-text-primary placeholder:text-text-muted
+           focus:outline-none focus:ring-2 focus:ring-brand focus:border-transparent
+           transition-colors duration-150;
+  }
+
+  /* ── Section label ───────────────────────────────────────────────────── */
+  .section-label {
+    @apply text-xs font-semibold uppercase tracking-widest text-text-secondary;
   }
 }

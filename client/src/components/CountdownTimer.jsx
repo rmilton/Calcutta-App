@@ -21,9 +21,14 @@ export default function CountdownTimer({ endTime }) {
   const isDone = timeLeft === 0;
 
   return (
-    <div className={`text-center ${isUrgent ? 'animate-pulse' : ''}`}>
+    <div
+      role="timer"
+      aria-live="off"
+      aria-label={`${seconds} second${seconds !== 1 ? 's' : ''} remaining`}
+      className={`text-center ${isUrgent ? 'motion-safe:animate-pulse' : ''}`}
+    >
       <div className={`text-5xl font-mono font-bold tabular-nums ${
-        isDone ? 'text-slate-500' : isUrgent ? 'text-red-400' : 'text-green-400'
+        isDone ? 'text-text-secondary' : isUrgent ? 'text-red-400' : 'text-green-400'
       }`}>
         {String(Math.floor(seconds / 60)).padStart(1, '0')}:{String(seconds % 60).padStart(2, '0')}
       </div>

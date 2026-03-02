@@ -37,99 +37,118 @@ export default function Join() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center p-4">
+    <div className="min-h-screen bg-surface-base flex flex-col items-center justify-center p-4">
       <div className="w-full max-w-md">
-        {/* Header */}
+
+        {/* ── Hero ── */}
         <div className="text-center mb-8">
-          <div className="text-6xl mb-4">🏀</div>
-          <h1 className="text-3xl font-bold text-white">March Madness</h1>
-          <p className="text-orange-400 font-semibold text-lg mt-1">Calcutta Tournament</p>
+          <div
+            className="w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-glow-sm"
+            style={{ background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)' }}
+          >
+            <span aria-hidden="true" className="text-3xl leading-none">🏀</span>
+          </div>
+          <h1 className="text-3xl font-bold text-text-primary">March Madness</h1>
+          <p className="text-brand font-semibold text-lg mt-1">Calcutta Tournament</p>
         </div>
 
-        {/* Tab switcher */}
-        <div className="flex bg-slate-800 rounded-lg p-1 mb-6">
+        {/* ── Tab switcher ── */}
+        <div className="flex bg-surface-input rounded-xl p-1 mb-6 gap-1" role="tablist">
           <button
+            role="tab"
+            aria-selected={mode === 'join'}
             onClick={() => { setMode('join'); setError(''); }}
-            className={`flex-1 py-2 rounded-md text-sm font-medium transition-colors ${
-              mode === 'join' ? 'bg-orange-500 text-white' : 'text-slate-400 hover:text-white'
+            className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+              mode === 'join'
+                ? 'bg-surface-raised text-text-primary shadow-sm'
+                : 'text-text-secondary hover:text-text-primary'
             }`}
           >
             Join as Participant
           </button>
           <button
+            role="tab"
+            aria-selected={mode === 'admin'}
             onClick={() => { setMode('admin'); setError(''); }}
-            className={`flex-1 py-2 rounded-md text-sm font-medium transition-colors ${
-              mode === 'admin' ? 'bg-orange-500 text-white' : 'text-slate-400 hover:text-white'
+            className={`flex-1 py-2.5 rounded-lg text-sm font-semibold transition-all ${
+              mode === 'admin'
+                ? 'bg-surface-raised text-text-primary shadow-sm'
+                : 'text-text-secondary hover:text-text-primary'
             }`}
           >
             Admin Login
           </button>
         </div>
 
-        {/* Join form */}
+        {/* ── Join form ── */}
         {mode === 'join' && (
-          <form onSubmit={handleJoin} className="bg-slate-800 rounded-xl p-6 space-y-4">
+          <form onSubmit={handleJoin} className="card p-6 space-y-5 animate-fade-in" role="tabpanel">
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">Your Name</label>
+              <label className="section-label mb-2 block" htmlFor="join-name">Your Name</label>
               <input
+                id="join-name"
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Enter your name"
                 maxLength={32}
-                className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                className="input"
                 required
+                autoFocus
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">Invite Code</label>
+              <label className="section-label mb-2 block" htmlFor="join-code">Invite Code</label>
               <input
+                id="join-code"
                 type="text"
                 value={inviteCode}
                 onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
-                placeholder="Enter invite code"
+                placeholder="XXXXXX"
                 maxLength={8}
-                className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent font-mono tracking-widest"
+                className="input font-mono tracking-widest"
                 required
               />
             </div>
-            {error && <p className="text-red-400 text-sm">{error}</p>}
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white font-bold py-3 rounded-lg transition-colors"
-            >
-              {loading ? 'Joining...' : 'Join Tournament'}
+            {error && (
+              <div role="alert" className="badge badge-error w-full justify-start px-3 py-2 rounded-xl text-sm">
+                {error}
+              </div>
+            )}
+            <button type="submit" disabled={loading} className="btn-primary btn-lg w-full">
+              {loading ? 'Joining…' : 'Join Tournament →'}
             </button>
           </form>
         )}
 
-        {/* Admin form */}
+        {/* ── Admin form ── */}
         {mode === 'admin' && (
-          <form onSubmit={handleAdmin} className="bg-slate-800 rounded-xl p-6 space-y-4">
+          <form onSubmit={handleAdmin} className="card p-6 space-y-5 animate-fade-in" role="tabpanel">
             <div>
-              <label className="block text-sm font-medium text-slate-300 mb-1">Admin Password</label>
+              <label className="section-label mb-2 block" htmlFor="admin-password">Admin Password</label>
               <input
+                id="admin-password"
                 type="password"
                 value={adminPassword}
                 onChange={(e) => setAdminPassword(e.target.value)}
                 placeholder="Enter admin password"
-                className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-3 text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                className="input"
                 required
+                autoFocus
               />
             </div>
-            {error && <p className="text-red-400 text-sm">{error}</p>}
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full bg-orange-500 hover:bg-orange-600 disabled:opacity-60 text-white font-bold py-3 rounded-lg transition-colors"
-            >
-              {loading ? 'Logging in...' : 'Login as Admin'}
+            {error && (
+              <div role="alert" className="badge badge-error w-full justify-start px-3 py-2 rounded-xl text-sm">
+                {error}
+              </div>
+            )}
+            <button type="submit" disabled={loading} className="btn-primary btn-lg w-full">
+              {loading ? 'Logging in…' : 'Login as Admin →'}
             </button>
           </form>
         )}
 
-        <p className="text-center text-slate-500 text-sm mt-6">
+        <p className="text-center text-text-secondary text-sm mt-6">
           Ask your group admin for the invite code
         </p>
       </div>

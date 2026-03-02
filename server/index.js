@@ -19,6 +19,7 @@ const bracketRoutes = require('./routes/bracket');
 const standingsRoutes = require('./routes/standings');
 const adminRoutes = require('./routes/admin');
 const tournamentsRoutes = require('./routes/tournaments');
+const exportRoutes = require('./routes/export');
 
 const app = express();
 const httpServer = createServer(app);
@@ -45,6 +46,7 @@ app.use('/api/auction', auctionRoutes);
 app.use('/api/bracket', bracketRoutes);
 app.use('/api/standings', standingsRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/admin/export', exportRoutes);
 app.use('/api/tournaments', tournamentsRoutes);
 
 // Serve React build in production

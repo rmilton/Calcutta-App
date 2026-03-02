@@ -40,7 +40,7 @@ ${spendNote}
 Respond with only the commentary text. No quotes, no prefix.`;
 
   const stream = client.messages.stream({
-    model: 'claude-haiku-4-5',
+    model: 'claude-haiku-4-5-20251001',
     max_tokens: 120,
     messages: [{ role: 'user', content: prompt }],
   });
@@ -96,7 +96,7 @@ ${standingsSummary}
 Respond with only the commentary. No quotes, no prefix.`;
 
   const stream = client.messages.stream({
-    model: 'claude-haiku-4-5',
+    model: 'claude-haiku-4-5-20251001',
     max_tokens: 180,
     messages: [{ role: 'user', content: prompt }],
   });

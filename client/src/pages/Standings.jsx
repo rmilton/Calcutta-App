@@ -6,10 +6,10 @@ import TeamLogo from '../components/TeamLogo';
 import { fmt } from '../utils';
 
 function Medal({ rank }) {
-  if (rank === 1) return <span className="text-yellow-400">🥇</span>;
-  if (rank === 2) return <span className="text-slate-300">🥈</span>;
-  if (rank === 3) return <span className="text-amber-600">🥉</span>;
-  return <span className="text-slate-500 text-sm font-mono">#{rank}</span>;
+  if (rank === 1) return <span role="img" aria-label="Rank 1 — Gold medal" className="text-yellow-400">🥇</span>;
+  if (rank === 2) return <span role="img" aria-label="Rank 2 — Silver medal" className="text-slate-300">🥈</span>;
+  if (rank === 3) return <span role="img" aria-label="Rank 3 — Bronze medal" className="text-amber-600">🥉</span>;
+  return <span aria-label={`Rank ${rank}`} className="text-text-secondary text-sm font-mono">#{rank}</span>;
 }
 
 export default function Standings() {
@@ -76,10 +76,15 @@ export default function Standings() {
             return (
               <div
                 key={p.id}
+                role="button"
+                tabIndex={0}
+                aria-expanded={expanded}
+                aria-label={`${p.name} — ${expanded ? 'collapse' : 'expand'} team details`}
                 className={`rounded-xl overflow-hidden border transition-all cursor-pointer ${
                   isMe ? 'border-orange-500' : 'border-slate-700'
                 } ${expanded ? 'bg-slate-800' : 'bg-slate-800 hover:bg-slate-750'}`}
                 onClick={() => setExpandedId(expanded ? null : p.id)}
+                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpandedId(expanded ? null : p.id); } }}
               >
                 <div className="px-4 py-4 flex items-center gap-4">
                   <div className="w-8 text-center">
@@ -106,22 +111,22 @@ export default function Standings() {
 
                   <div className="grid grid-cols-3 gap-4 text-right text-sm shrink-0">
                     <div>
-                      <div className="text-xs text-slate-500">Spent</div>
+                      <div className="text-xs text-text-secondary">Spent</div>
                       <div className="text-slate-200 font-medium">{fmt(p.total_spent)}</div>
                     </div>
                     <div>
-                      <div className="text-xs text-slate-500">Earned</div>
+                      <div className="text-xs text-text-secondary">Earned</div>
                       <div className="text-green-400 font-medium">{fmt(p.total_earned)}</div>
                     </div>
                     <div>
-                      <div className="text-xs text-slate-500">Net</div>
+                      <div className="text-xs text-text-secondary">Net</div>
                       <div className={`font-bold ${net >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                         {net >= 0 ? '+' : '-'}{fmt(Math.abs(net))}
                       </div>
                     </div>
                   </div>
 
-                  <span className="text-slate-500 text-xs">{expanded ? '▲' : '▼'}</span>
+                  <span aria-hidden="true" className="text-text-secondary text-xs">{expanded ? '▲' : '▼'}</span>
                 </div>
 
                 {/* Expanded team list */}

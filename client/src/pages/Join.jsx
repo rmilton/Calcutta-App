@@ -129,7 +129,7 @@ export default function Join() {
           </form>
         )}
 
-        <p className="text-center text-slate-500 text-sm mt-6">
+        <p className="text-center text-text-secondary text-sm mt-6">
           Ask your group admin for the invite code
         </p>
       </div>

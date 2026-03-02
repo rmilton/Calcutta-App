@@ -110,7 +110,7 @@ function SoldByOwner({ items, participantId }) {
                 <span className={`font-semibold text-sm ${isMe ? 'text-orange-400' : 'text-white'}`}>
                   {isMe ? `${group.name} (You)` : group.name}
                 </span>
-                <span className="text-slate-500 text-xs">· {group.teams.length} team{group.teams.length !== 1 ? 's' : ''}</span>
+                <span className="text-text-secondary text-xs">· {group.teams.length} team{group.teams.length !== 1 ? 's' : ''}</span>
               </div>
               <span className="text-sm font-bold text-white">{fmt(group.spent)}</span>
             </div>
@@ -127,7 +127,7 @@ function SoldByOwner({ items, participantId }) {
                     size={20}
                   />
                   <span className="text-sm text-slate-200 flex-1 truncate">{item.team_name}</span>
-                  <span className="text-xs text-slate-500 shrink-0">{item.region}</span>
+                  <span className="text-xs text-text-secondary shrink-0">{item.region}</span>
                   <span className="text-sm font-semibold text-white shrink-0">{fmt(item.final_price)}</span>
                 </div>
               ))}
@@ -140,7 +140,7 @@ function SoldByOwner({ items, participantId }) {
 }
 
 function BidFeed({ bids }) {
-  if (!bids?.length) return <p className="text-slate-500 text-sm text-center py-4">No bids yet — be the first!</p>;
+  if (!bids?.length) return <p className="text-text-secondary text-sm text-center py-4">No bids yet — be the first!</p>;
   return (
     <div className="space-y-1.5 max-h-48 overflow-y-auto">
       {bids.map((bid, i) => (
@@ -366,7 +366,7 @@ export default function Auction() {
                   </span>
                 </div>
               ) : (
-                <div className="text-slate-500 font-medium">No bids</div>
+                <div className="text-text-secondary font-medium">No bids</div>
               )}
             </div>
           </div>
@@ -440,7 +440,7 @@ export default function Auction() {
             <>
               <p className="text-slate-400 mb-3">Auction opens in</p>
               <div className="text-3xl font-mono font-bold text-orange-400 tabular-nums">{countdown}</div>
-              <p className="text-slate-500 text-xs mt-3">
+              <p className="text-text-secondary text-xs mt-3">
                 {new Date(scheduledStart).toLocaleString()}
               </p>
             </>

@@ -15,7 +15,7 @@ function TeamSlot({ teamName, teamSeed, ownerName, ownerColor, isWinner, isEmpty
   if (isEmpty) {
     return (
       <div className="h-9 flex items-center px-2 rounded bg-slate-700/30 border border-slate-700/50">
-        <span className="text-slate-600 text-xs">TBD</span>
+        <span className="text-text-muted text-xs">TBD</span>
       </div>
     );
   }
@@ -49,9 +49,14 @@ function GameCard({ game }) {
   return (
     <div className={`rounded-lg border overflow-hidden ${hasResult ? 'opacity-90' : ''}`}
       style={{ borderColor: hasResult ? '#374151' : color + '44' }}>
-      <div className="px-2 py-0.5 text-xs text-slate-500 bg-slate-800/80 flex items-center justify-between">
+      <div className="px-2 py-0.5 text-xs text-text-secondary bg-slate-800/80 flex items-center justify-between">
         <span>{game.region}</span>
-        {hasResult && <span className="text-green-500">✓</span>}
+        {hasResult && (
+          <>
+            <span aria-hidden="true" className="text-green-500">✓</span>
+            <span className="sr-only">Game complete</span>
+          </>
+        )}
       </div>
       <div className="p-1 bg-slate-800/50 space-y-0.5">
         <TeamSlot
@@ -89,7 +94,7 @@ function RegionBracket({ region, games }) {
           const roundGames = byRound[round] || [];
           return (
             <div key={round} className="shrink-0 min-w-[160px]">
-              <div className="text-xs text-slate-500 uppercase tracking-wider text-center mb-2">
+              <div className="text-xs text-text-secondary uppercase tracking-wider text-center mb-2">
                 {ROUND_NAMES[round - 1]}
               </div>
               <div className="space-y-2">

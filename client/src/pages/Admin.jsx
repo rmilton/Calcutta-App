@@ -29,7 +29,7 @@ function TimeLeft({ endTime }) {
     <div className="text-right shrink-0">
       <div className="text-xs text-slate-500 uppercase tracking-wider mb-0.5">Time Left</div>
       <div className={`font-mono font-bold tabular-nums text-xl ${
-        isDone ? 'text-slate-500' : isUrgent ? 'text-red-400 animate-pulse' : 'text-green-400'
+        isDone ? 'text-slate-500' : isUrgent ? 'text-red-400 motion-safe:animate-pulse' : 'text-green-400'
       }`}>
         {String(Math.floor(seconds / 60)).padStart(1, '0')}:{String(seconds % 60).padStart(2, '0')}
       </div>
@@ -149,8 +149,9 @@ function SettingsTab() {
           type="button"
           role="switch"
           aria-checked={settings.auction_auto_advance === '1'}
+          aria-label="Auto-advance after sale"
           onClick={() => setSettings((s) => ({ ...s, auction_auto_advance: s.auction_auto_advance === '1' ? '0' : '1' }))}
-          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none shrink-0 ml-4 ${
+          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors shrink-0 ml-4 ${
             settings.auction_auto_advance === '1' ? 'bg-orange-500' : 'bg-slate-600'
           }`}
         >
@@ -171,8 +172,9 @@ function SettingsTab() {
           type="button"
           role="switch"
           aria-checked={settings.ai_commentary_enabled !== '0'}
+          aria-label="AI commentary after sale"
           onClick={() => setSettings((s) => ({ ...s, ai_commentary_enabled: s.ai_commentary_enabled === '0' ? '1' : '0' }))}
-          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none shrink-0 ml-4 ${
+          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors shrink-0 ml-4 ${
             settings.ai_commentary_enabled !== '0' ? 'bg-orange-500' : 'bg-slate-600'
           }`}
         >

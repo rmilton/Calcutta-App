@@ -74,22 +74,22 @@ export default function AiCommentary() {
       <div className="pointer-events-auto bg-slate-800 border border-slate-600 rounded-xl shadow-2xl overflow-hidden">
         {/* Content */}
         <div className="flex items-start gap-3 px-4 pt-4 pb-3">
-          <span className="text-xl shrink-0 mt-0.5">{icon}</span>
+          <span aria-hidden="true" className="text-xl shrink-0 mt-0.5">{icon}</span>
           <div className="flex-1 min-w-0">
-            <div className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1">
+            <div className="text-xs font-semibold text-text-secondary uppercase tracking-wider mb-1">
               {label}
             </div>
             <p className="text-white text-sm leading-relaxed">
               {note.text}
               {!note.done && (
-                <span className="inline-block w-0.5 h-3.5 bg-slate-400 ml-0.5 align-middle animate-pulse" />
+                <span className="inline-block w-0.5 h-3.5 bg-slate-400 ml-0.5 align-middle motion-safe:animate-pulse" />
               )}
             </p>
           </div>
           <button
             onClick={() => setNote(null)}
-            className="text-slate-500 hover:text-white text-xl leading-none shrink-0 mt-0.5 transition-colors"
-            aria-label="Dismiss"
+            className="touch-target text-slate-500 hover:text-white text-xl leading-none shrink-0 mt-0.5 transition-colors"
+            aria-label="Dismiss commentary"
           >
             ×
           </button>

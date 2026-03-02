@@ -32,7 +32,7 @@ export default function Nav() {
             </Link>
             {/* Tournament name badge */}
             {tournament?.activeTournament && (
-              <span className="hidden md:inline text-slate-500 text-xs border border-slate-700 rounded px-2 py-0.5 truncate max-w-[180px]">
+              <span className="hidden md:inline text-text-secondary text-xs border border-slate-700 rounded px-2 py-0.5 truncate max-w-[180px]">
                 {tournament.activeTournament.name}
               </span>
             )}
@@ -112,6 +112,9 @@ export default function Nav() {
             <button
               className="md:hidden text-slate-300 hover:text-white"
               onClick={() => setMenuOpen(!menuOpen)}
+              aria-label={menuOpen ? 'Close navigation menu' : 'Open navigation menu'}
+              aria-expanded={menuOpen}
+              aria-controls="mobile-nav-drawer"
             >
               <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
@@ -123,7 +126,7 @@ export default function Nav() {
 
         {/* Mobile menu */}
         {menuOpen && (
-          <div className="md:hidden bg-slate-800 border-t border-slate-700 px-4 py-3 flex flex-col gap-2">
+          <div id="mobile-nav-drawer" className="md:hidden bg-slate-800 border-t border-slate-700 px-4 py-3 flex flex-col gap-2">
             {links.map((l) => (
               <Link
                 key={l.to}
@@ -140,7 +143,7 @@ export default function Nav() {
             ))}
             {pastTournaments.length > 0 && (
               <>
-                <div className="text-xs text-slate-500 px-3 pt-1 uppercase tracking-wider">Archive</div>
+                <div className="text-xs text-text-secondary px-3 pt-1 uppercase tracking-wider">Archive</div>
                 {pastTournaments.map((t) => (
                   <button
                     key={t.id}

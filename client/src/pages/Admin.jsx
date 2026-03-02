@@ -39,6 +39,16 @@ function TimeLeft({ endTime }) {
 
 // ──────────────────────── Sub-tabs ────────────────────────
 
+// Unix ms → value string for <input type="datetime-local">
+const msToDatetimeLocal = (ms) => {
+  if (!ms) return '';
+  const d = new Date(parseInt(ms));
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+};
+// datetime-local string → Unix ms (or '' to clear)
+const datetimeLocalToMs = (val) => (val ? String(new Date(val).getTime()) : '');
+
 function SettingsTab() {
   const [settings, setSettings] = useState(null);
   const [saving, setSaving] = useState(false);
@@ -58,6 +68,7 @@ function SettingsTab() {
         auction_order: settings.auction_order || 'random',
         auction_auto_advance: settings.auction_auto_advance || '0',
         ai_commentary_enabled: settings.ai_commentary_enabled ?? '1',
+        auction_scheduled_start: settings.auction_scheduled_start || '',
       }),
     });
     setSaving(false);
@@ -155,6 +166,28 @@ function SettingsTab() {
             settings.ai_commentary_enabled !== '0' ? 'translate-x-6' : 'translate-x-1'
           }`} />
         </button>
+      </div>
+
+      <div className="bg-slate-800 rounded-lg px-4 py-3 space-y-2">
+        <div className="text-sm font-medium text-slate-300">Scheduled Auction Start</div>
+        <div className="text-xs text-slate-500">
+          Automatically open the auction at this date &amp; time. Leave blank to open manually.
+        </div>
+        <input
+          type="datetime-local"
+          className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-orange-500"
+          value={msToDatetimeLocal(settings.auction_scheduled_start)}
+          onChange={(e) => setSettings((s) => ({ ...s, auction_scheduled_start: datetimeLocalToMs(e.target.value) }))}
+        />
+        {settings.auction_scheduled_start && (
+          <button
+            type="button"
+            onClick={() => setSettings((s) => ({ ...s, auction_scheduled_start: '' }))}
+            className="text-xs text-slate-500 hover:text-red-400 transition-colors"
+          >
+            ✕ Clear schedule
+          </button>
+        )}
       </div>
 
       <div className="flex items-end gap-3">

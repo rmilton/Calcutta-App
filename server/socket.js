@@ -16,7 +16,11 @@ function startTimer(itemId, endTime) {
   if (delay <= 0) return;
   activeTimer = setTimeout(() => {
     const io = global._io;
-    if (io) closeAuction(itemId, io);
+    try {
+      if (io) closeAuction(itemId, io);
+    } catch (e) {
+      console.error('[closeAuction timer]', e);
+    }
   }, delay);
 }
 

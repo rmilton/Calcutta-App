@@ -12,6 +12,7 @@ db.pragma('foreign_keys = ON');
 const TOURNAMENT_SETTING_KEYS = [
   'name', 'invite_code', 'auction_timer_seconds', 'auction_grace_seconds',
   'auction_status', 'tournament_started', 'auction_order', 'auction_auto_advance',
+  'ai_commentary_enabled',
 ];
 
 // Payout round defaults (shared between init and createTournament)
@@ -119,10 +120,17 @@ function init() {
       tournament_started    INTEGER NOT NULL DEFAULT 0,
       auction_order         TEXT NOT NULL DEFAULT 'random',
       auction_auto_advance  INTEGER NOT NULL DEFAULT 0,
+      ai_commentary_enabled INTEGER NOT NULL DEFAULT 1,
       created_at            INTEGER DEFAULT (unixepoch()),
       archived_at           INTEGER
     );
   `);
+
+  // M-ai: add ai_commentary_enabled column to existing databases
+  const hasCols = db.prepare("PRAGMA table_info(tournaments)").all().map((c) => c.name);
+  if (!hasCols.includes('ai_commentary_enabled')) {
+    db.exec('ALTER TABLE tournaments ADD COLUMN ai_commentary_enabled INTEGER NOT NULL DEFAULT 1');
+  }
 
   // M2: Seed tournament id=1 from existing settings (if tournaments table is empty)
   const tournamentCount = db.prepare('SELECT COUNT(*) as c FROM tournaments').get().c;

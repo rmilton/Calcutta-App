@@ -32,6 +32,9 @@ app.use(cors({ origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173', cre
 app.use(express.json());
 app.use(cookieParser());
 
+// Health check
+app.get('/api/health', (req, res) => res.json({ ok: true }));
+
 // API routes
 app.use('/api/auth', authRoutes);
 app.use('/api/auction', auctionRoutes);

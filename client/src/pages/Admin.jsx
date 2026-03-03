@@ -57,6 +57,8 @@ function SettingsTab() {
         auction_grace_seconds: settings.auction_grace_seconds,
         auction_order: settings.auction_order || 'random',
         auction_auto_advance: settings.auction_auto_advance || '0',
+        ai_commentary_after_sale: settings.ai_commentary_after_sale || '1',
+        ai_commentary_end_of_round: settings.ai_commentary_end_of_round || '1',
       }),
     });
     setSaving(false);
@@ -132,6 +134,57 @@ function SettingsTab() {
             settings.auction_auto_advance === '1' ? 'translate-x-6' : 'translate-x-1'
           }`} />
         </button>
+      </div>
+
+      {/* AI Features group */}
+      <div className="border border-slate-700 rounded-xl overflow-hidden">
+        <div className="bg-slate-700/50 px-4 py-2">
+          <span className="text-xs font-semibold uppercase tracking-wider text-orange-400">AI Features</span>
+        </div>
+        <div className="divide-y divide-slate-700">
+          <div className="flex items-center justify-between bg-slate-800 px-4 py-3">
+            <div>
+              <div className="text-sm font-medium text-slate-300">AI Commentary After Sale</div>
+              <div className="text-xs text-slate-500 mt-0.5">
+                Generate AI play-by-play commentary after each team is sold
+              </div>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={settings.ai_commentary_after_sale !== '0'}
+              onClick={() => setSettings((s) => ({ ...s, ai_commentary_after_sale: s.ai_commentary_after_sale === '0' ? '1' : '0' }))}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none shrink-0 ml-4 ${
+                settings.ai_commentary_after_sale !== '0' ? 'bg-orange-500' : 'bg-slate-600'
+              }`}
+            >
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                settings.ai_commentary_after_sale !== '0' ? 'translate-x-6' : 'translate-x-1'
+              }`} />
+            </button>
+          </div>
+          <div className="flex items-center justify-between bg-slate-800 px-4 py-3">
+            <div>
+              <div className="text-sm font-medium text-slate-300">AI Commentary End of Round</div>
+              <div className="text-xs text-slate-500 mt-0.5">
+                Generate AI recap commentary at the end of each tournament round
+              </div>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={settings.ai_commentary_end_of_round !== '0'}
+              onClick={() => setSettings((s) => ({ ...s, ai_commentary_end_of_round: s.ai_commentary_end_of_round === '0' ? '1' : '0' }))}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none shrink-0 ml-4 ${
+                settings.ai_commentary_end_of_round !== '0' ? 'bg-orange-500' : 'bg-slate-600'
+              }`}
+            >
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                settings.ai_commentary_end_of_round !== '0' ? 'translate-x-6' : 'translate-x-1'
+              }`} />
+            </button>
+          </div>
+        </div>
       </div>
 
       <div className="flex items-end gap-3">

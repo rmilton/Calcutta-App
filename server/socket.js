@@ -64,17 +64,19 @@ function closeAuction(itemId, io) {
       'SELECT COUNT(*) as team_count, SUM(purchase_price) as total_spent FROM ownership WHERE participant_id = ? AND tournament_id = ?'
     ).get(item.current_leader_id, tid);
 
-    generateAuctionCommentary({
-      teamName: team?.name,
-      seed: team?.seed,
-      region: team?.region,
-      price: item.current_price,
-      winnerName: winner?.name,
-      winnerTotalSpent: winnerStats?.total_spent || item.current_price,
-      winnerTeamCount: winnerStats?.team_count || 1,
-      totalPot,
-      teamsRemaining,
-    }, io).catch((e) => console.error('[AI auction]', e.message));
+    if (getTournamentSetting(tid, 'ai_commentary_after_sale') !== '0') {
+      generateAuctionCommentary({
+        teamName: team?.name,
+        seed: team?.seed,
+        region: team?.region,
+        price: item.current_price,
+        winnerName: winner?.name,
+        winnerTotalSpent: winnerStats?.total_spent || item.current_price,
+        winnerTeamCount: winnerStats?.team_count || 1,
+        totalPot,
+        teamsRemaining,
+      }, io).catch((e) => console.error('[AI auction]', e.message));
+    }
 
     // Auto-advance: start next pending team after a short delay
     if (getTournamentSetting(tid, 'auction_auto_advance') === '1') {

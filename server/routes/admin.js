@@ -17,6 +17,7 @@ router.get('/settings', requireAdmin, (req, res) => {
     'invite_code', 'auction_timer_seconds', 'auction_grace_seconds',
     'auction_status', 'tournament_started',
     'auction_order', 'auction_auto_advance',
+    'ai_commentary_after_sale', 'ai_commentary_end_of_round',
   ];
   const settings = {};
   for (const k of keys) settings[k] = getTournamentSetting(tid, k);
@@ -29,6 +30,7 @@ router.patch('/settings', requireAdmin, (req, res) => {
   const allowed = [
     'auction_timer_seconds', 'auction_grace_seconds',
     'auction_order', 'auction_auto_advance',
+    'ai_commentary_after_sale', 'ai_commentary_end_of_round',
   ];
   for (const [k, v] of Object.entries(req.body)) {
     if (allowed.includes(k)) setTournamentSetting(tid, k, v);

@@ -12,6 +12,7 @@ db.pragma('foreign_keys = ON');
 const TOURNAMENT_SETTING_KEYS = [
   'name', 'invite_code', 'auction_timer_seconds', 'auction_grace_seconds',
   'auction_status', 'tournament_started', 'auction_order', 'auction_auto_advance',
+  'ai_commentary_after_sale', 'ai_commentary_end_of_round',
 ];
 
 // Payout round defaults (shared between init and createTournament)
@@ -226,6 +227,15 @@ function init() {
     SELECT 1, id FROM participants
   `).run();
 
+  // M11: Add AI commentary toggle columns if missing
+  const tournamentCols = db.prepare('PRAGMA table_info(tournaments)').all().map((c) => c.name);
+  if (!tournamentCols.includes('ai_commentary_after_sale')) {
+    db.prepare('ALTER TABLE tournaments ADD COLUMN ai_commentary_after_sale INTEGER NOT NULL DEFAULT 1').run();
+  }
+  if (!tournamentCols.includes('ai_commentary_end_of_round')) {
+    db.prepare('ALTER TABLE tournaments ADD COLUMN ai_commentary_end_of_round INTEGER NOT NULL DEFAULT 1').run();
+  }
+
   // ── Legacy column migrations (pre-multi-tournament) ───────────────────────────
 
   // Migrate: add payout_type column if missing (very old databases)
@@ -289,8 +299,9 @@ function createTournament({ name, inviteCode }) {
   const result = db.prepare(`
     INSERT INTO tournaments
       (name, invite_code, auction_timer_seconds, auction_grace_seconds,
-       auction_status, tournament_started, auction_order, auction_auto_advance)
-    VALUES (?, ?, 30, 15, 'waiting', 0, 'random', 0)
+       auction_status, tournament_started, auction_order, auction_auto_advance,
+       ai_commentary_after_sale, ai_commentary_end_of_round)
+    VALUES (?, ?, 30, 15, 'waiting', 0, 'random', 0, 1, 1)
   `).run(name, inviteCode);
 
   const newTid = result.lastInsertRowid;

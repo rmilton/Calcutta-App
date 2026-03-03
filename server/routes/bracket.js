@@ -1,6 +1,7 @@
 const express = require('express');
 const {
   db, getActiveTournamentId,
+  getTournamentSetting,
   getGames, getPayoutConfig, getFullStandings,
   getTotalPot, getGameById, getGameByPosition, calculatePayoutAmount,
 } = require('../db');
@@ -68,29 +69,31 @@ router.post('/result', requireAdmin, (req, res) => {
   if (io) {
     io.emit('bracket:update', { gameId, winnerId, loserId });
 
-    // Fire-and-forget AI recap
-    const winnerTeam = db.prepare('SELECT name, seed, region FROM teams WHERE id = ?').get(winnerId);
-    const loserTeam  = db.prepare('SELECT name, seed, region FROM teams WHERE id = ?').get(loserId);
-    const winnerOwner = db.prepare(
-      'SELECT p.name, o.purchase_price FROM ownership o JOIN participants p ON p.id = o.participant_id WHERE o.team_id = ? AND o.tournament_id = ?'
-    ).get(winnerId, tid);
-    const loserOwner = db.prepare(
-      'SELECT p.name, o.purchase_price FROM ownership o JOIN participants p ON p.id = o.participant_id WHERE o.team_id = ? AND o.tournament_id = ?'
-    ).get(loserId, tid);
-    const earnings = db.prepare('SELECT amount FROM earnings WHERE game_id = ?').get(gameId)?.amount || 0;
-    const totalPot = getTotalPot(tid);
-    const standings = getFullStandings(tid).slice(0, 5);
+    if (getTournamentSetting(tid, 'ai_commentary_end_of_round') !== '0') {
+      // Fire-and-forget AI recap
+      const winnerTeam = db.prepare('SELECT name, seed, region FROM teams WHERE id = ?').get(winnerId);
+      const loserTeam  = db.prepare('SELECT name, seed, region FROM teams WHERE id = ?').get(loserId);
+      const winnerOwner = db.prepare(
+        'SELECT p.name, o.purchase_price FROM ownership o JOIN participants p ON p.id = o.participant_id WHERE o.team_id = ? AND o.tournament_id = ?'
+      ).get(winnerId, tid);
+      const loserOwner = db.prepare(
+        'SELECT p.name, o.purchase_price FROM ownership o JOIN participants p ON p.id = o.participant_id WHERE o.team_id = ? AND o.tournament_id = ?'
+      ).get(loserId, tid);
+      const earnings = db.prepare('SELECT amount FROM earnings WHERE game_id = ?').get(gameId)?.amount || 0;
+      const totalPot = getTotalPot(tid);
+      const standings = getFullStandings(tid).slice(0, 5);
 
-    streamGameRecap({
-      roundNumber: game.round,
-      winnerTeam,
-      loserTeam,
-      winnerOwner,
-      loserOwner,
-      earnings,
-      standings,
-      totalPot,
-    }, io).catch((e) => console.error('[AI recap]', e.message));
+      streamGameRecap({
+        roundNumber: game.round,
+        winnerTeam,
+        loserTeam,
+        winnerOwner,
+        loserOwner,
+        earnings,
+        standings,
+        totalPot,
+      }, io).catch((e) => console.error('[AI recap]', e.message));
+    }
   }
 
   res.json({ ok: true, game: db.prepare('SELECT * FROM games WHERE id = ?').get(gameId) });

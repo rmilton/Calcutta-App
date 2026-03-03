@@ -6,12 +6,92 @@ const {
   getTotalPot, getGameById, getGameByPosition, calculatePayoutAmount,
 } = require('../db');
 const { requireAuth, requireAdmin } = require('./middleware');
-const { streamGameRecap } = require('../ai');
+const { streamRoundRecap } = require('../ai');
 
 const router = express.Router();
 
 function resolveTid(req) {
   return req.query.t ? parseInt(req.query.t) : getActiveTournamentId();
+}
+
+function isRoundComplete(roundNumber, tid) {
+  const row = db.prepare(`
+    SELECT
+      COUNT(*) as total_games,
+      SUM(CASE WHEN winner_id IS NOT NULL THEN 1 ELSE 0 END) as completed_games
+    FROM games
+    WHERE tournament_id = ?
+      AND round = ?
+      AND team1_id IS NOT NULL
+      AND team2_id IS NOT NULL
+  `).get(tid, roundNumber);
+
+  const totalGames = row?.total_games || 0;
+  const completedGames = row?.completed_games || 0;
+  return totalGames > 0 && completedGames === totalGames;
+}
+
+function getRoundTeamSummaries(roundNumber, tid) {
+  const roundGames = db.prepare(`
+    SELECT
+      g.id as game_id,
+      g.position,
+      g.winner_id,
+      t1.id as team1_id, t1.name as team1_name, t1.seed as team1_seed,
+      t2.id as team2_id, t2.name as team2_name, t2.seed as team2_seed,
+      p1.name as team1_owner_name, o1.purchase_price as team1_purchase_price,
+      p2.name as team2_owner_name, o2.purchase_price as team2_purchase_price
+    FROM games g
+    LEFT JOIN teams t1 ON t1.id = g.team1_id
+    LEFT JOIN teams t2 ON t2.id = g.team2_id
+    LEFT JOIN ownership o1 ON o1.team_id = g.team1_id AND o1.tournament_id = g.tournament_id
+    LEFT JOIN participants p1 ON p1.id = o1.participant_id
+    LEFT JOIN ownership o2 ON o2.team_id = g.team2_id AND o2.tournament_id = g.tournament_id
+    LEFT JOIN participants p2 ON p2.id = o2.participant_id
+    WHERE g.tournament_id = ?
+      AND g.round = ?
+      AND g.team1_id IS NOT NULL
+      AND g.team2_id IS NOT NULL
+    ORDER BY g.position
+  `).all(tid, roundNumber);
+
+  const earningsRows = db.prepare(`
+    SELECT game_id, amount
+    FROM earnings
+    WHERE tournament_id = ? AND round_number = ?
+  `).all(tid, roundNumber);
+  const earningsByGame = new Map(earningsRows.map((r) => [r.game_id, r.amount || 0]));
+
+  const summaries = [];
+  for (const game of roundGames) {
+    const gameEarnings = earningsByGame.get(game.game_id) || 0;
+
+    if (game.team1_id) {
+      const advanced = game.winner_id === game.team1_id;
+      summaries.push({
+        seed: game.team1_seed,
+        teamName: game.team1_name,
+        ownerName: game.team1_owner_name || null,
+        purchasePrice: game.team1_purchase_price != null ? game.team1_purchase_price : null,
+        outcome: advanced ? 'advanced' : 'eliminated',
+        roundEarnings: advanced ? gameEarnings : 0,
+      });
+    }
+
+    if (game.team2_id) {
+      const advanced = game.winner_id === game.team2_id;
+      summaries.push({
+        seed: game.team2_seed,
+        teamName: game.team2_name,
+        ownerName: game.team2_owner_name || null,
+        purchasePrice: game.team2_purchase_price != null ? game.team2_purchase_price : null,
+        outcome: advanced ? 'advanced' : 'eliminated',
+        roundEarnings: advanced ? gameEarnings : 0,
+      });
+    }
+  }
+
+  return summaries;
 }
 
 // GET /api/bracket
@@ -69,27 +149,17 @@ router.post('/result', requireAdmin, (req, res) => {
   if (io) {
     io.emit('bracket:update', { gameId, winnerId, loserId });
 
-    if (getTournamentSetting(tid, 'ai_commentary_end_of_round') !== '0') {
-      // Fire-and-forget AI recap
-      const winnerTeam = db.prepare('SELECT name, seed, region FROM teams WHERE id = ?').get(winnerId);
-      const loserTeam  = db.prepare('SELECT name, seed, region FROM teams WHERE id = ?').get(loserId);
-      const winnerOwner = db.prepare(
-        'SELECT p.name, o.purchase_price FROM ownership o JOIN participants p ON p.id = o.participant_id WHERE o.team_id = ? AND o.tournament_id = ?'
-      ).get(winnerId, tid);
-      const loserOwner = db.prepare(
-        'SELECT p.name, o.purchase_price FROM ownership o JOIN participants p ON p.id = o.participant_id WHERE o.team_id = ? AND o.tournament_id = ?'
-      ).get(loserId, tid);
-      const earnings = db.prepare('SELECT amount FROM earnings WHERE game_id = ?').get(gameId)?.amount || 0;
+    if (
+      getTournamentSetting(tid, 'ai_commentary_end_of_round') !== '0'
+      && isRoundComplete(game.round, tid)
+    ) {
       const totalPot = getTotalPot(tid);
-      const standings = getFullStandings(tid).slice(0, 5);
+      const standings = getFullStandings(tid).slice(0, 8);
+      const teamSummaries = getRoundTeamSummaries(game.round, tid);
 
-      streamGameRecap({
+      streamRoundRecap({
         roundNumber: game.round,
-        winnerTeam,
-        loserTeam,
-        winnerOwner,
-        loserOwner,
-        earnings,
+        teamSummaries,
         standings,
         totalPot,
       }, io).catch((e) => console.error('[AI recap]', e.message));

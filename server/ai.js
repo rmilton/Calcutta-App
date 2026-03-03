@@ -53,16 +53,12 @@ Respond with only the commentary text. No quotes, no prefix.`;
   }
 }
 
-// Generates a 2-3 sentence Calcutta-focused recap after a bracket game result.
+// Generates an end-of-round recap with a per-team summary block.
 // Emits: bracket:recap:chunk { token }, bracket:recap:done { text }
-async function streamGameRecap({
+async function streamRoundRecap({
   roundNumber,
-  winnerTeam,  // { name, seed, region }
-  loserTeam,   // { name, seed, region }
-  winnerOwner, // { name, purchase_price } | null
-  loserOwner,  // { name, purchase_price } | null
-  earnings,    // dollars earned for this win (0 if no payout configured)
-  standings,   // top-5 array [{ name, total_earned, total_spent }]
+  teamSummaries, // [{ seed, teamName, ownerName, purchasePrice, outcome, roundEarnings }]
+  standings,     // top array [{ name, total_earned, total_spent }]
   totalPot,
 }, io) {
   const client = getClient();
@@ -70,38 +66,40 @@ async function streamGameRecap({
 
   const roundName = ROUND_NAMES[roundNumber] || `Round ${roundNumber}`;
 
-  const ownershipLines = [
-    winnerOwner
-      ? `${winnerTeam.name} is owned by ${winnerOwner.name} (paid $${winnerOwner.purchase_price} at auction)${earnings > 0 ? ` — earns $${earnings} for this win` : ''}.`
-      : `${winnerTeam.name} is unowned — no one profits from this win.`,
-    loserOwner
-      ? `${loserTeam.name} was owned by ${loserOwner.name} (paid $${loserOwner.purchase_price}) — they're out.`
-      : `${loserTeam.name} was unowned.`,
-  ].join('\n');
-
   const standingsSummary = standings
-    .slice(0, 5)
+    .slice(0, 8)
     .map((p, i) => `${i + 1}. ${p.name}: $${p.total_earned} earned, $${p.total_spent} spent`)
     .join('\n');
 
-  const prompt = `You are a commentator for a small March Madness Calcutta pool among friends. Write 2-3 conversational sentences about this result from a Calcutta money perspective — who profits, who's hurting, any standings drama. Be specific with names and dollar amounts. Keep it tight.
+  const teamInput = (teamSummaries || []).map((t) => (
+    `#${t.seed} ${t.teamName} | ${t.ownerName ? `${t.ownerName} (paid $${t.purchasePrice})` : 'Unowned'} | ${t.outcome}${t.roundEarnings > 0 ? ` | +$${t.roundEarnings}` : ''}`
+  )).join('\n');
 
-${roundName}: #${winnerTeam.seed} ${winnerTeam.name} defeats #${loserTeam.seed} ${loserTeam.name}
-
-${ownershipLines}
+  const prompt = `You are a commentator for a small March Madness Calcutta pool among friends.
+Write 2-3 conversational sentences about the completed ${roundName} from a money/standings perspective.
+Be specific with names and dollar amounts.
 
 Current standings (total pot $${totalPot}):
 ${standingsSummary}
 
-Respond with only the commentary. No quotes, no prefix.`;
+Round team outcomes:
+${teamInput}
+
+Respond with only the 2-3 sentence intro text. No quotes, no prefix.`;
 
   try {
     const message = await client.messages.create({
       model: 'claude-sonnet-4-5-20250929',
-      max_tokens: 180,
+      max_tokens: 220,
       messages: [{ role: 'user', content: prompt }],
     });
-    const text = message.content[0]?.text || '';
+
+    const intro = (message.content[0]?.text || '').trim();
+    const perTeamSummary = (teamSummaries || []).map((t) => (
+      `- #${t.seed} ${t.teamName} (${t.ownerName ? `${t.ownerName}, paid $${t.purchasePrice}` : 'Unowned'}) — ${t.outcome}${t.roundEarnings > 0 ? `, earned $${t.roundEarnings}` : ''}`
+    )).join('\n');
+
+    const text = `${intro}\n\n${roundName} Team Summary:\n${perTeamSummary}`.trim();
     io.emit('bracket:recap:chunk', { token: text });
     io.emit('bracket:recap:done', { text });
   } catch (e) {
@@ -109,4 +107,4 @@ Respond with only the commentary. No quotes, no prefix.`;
   }
 }
 
-module.exports = { generateAuctionCommentary, streamGameRecap };
+module.exports = { generateAuctionCommentary, streamRoundRecap };

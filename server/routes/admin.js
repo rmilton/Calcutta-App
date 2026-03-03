@@ -25,9 +25,8 @@ router.get('/settings', requireAdmin, (req, res) => {
 router.patch('/settings', requireAdmin, (req, res) => {
   const tid = getActiveTournamentId();
   const allowed = [
-    'auction_timer_seconds', 'auction_grace_seconds',
     'auction_order', 'auction_auto_advance', 'ai_commentary_enabled',
-    'auction_scheduled_start',
+    'auction_scheduled_start', 'ai_commentary_end_of_round',
   ];
   for (const [k, v] of Object.entries(req.body)) {
     if (allowed.includes(k)) setTournamentSetting(tid, k, v);

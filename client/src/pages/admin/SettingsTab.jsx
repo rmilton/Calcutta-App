@@ -19,6 +19,7 @@ export default function SettingsTab() {
   const [testingMsg, setTestingMsg] = useState('');
   const [fixtureParticipantCount, setFixtureParticipantCount] = useState(8);
   const [fixtureSoldTeamCount, setFixtureSoldTeamCount] = useState(24);
+  const [inviteMsg, setInviteMsg] = useState('');
 
   useEffect(() => {
     api('/admin/settings').then((r) => r.json()).then(setSettings);
@@ -47,6 +48,34 @@ export default function SettingsTab() {
     const r = await api('/admin/invite-code/regenerate', { method: 'POST' });
     const data = await r.json();
     setSettings((s) => ({ ...s, invite_code: data.invite_code }));
+  };
+
+  const getInviteLink = () => {
+    if (!settings?.invite_code) return '';
+    return `${window.location.origin}/join?invite=${encodeURIComponent(settings.invite_code)}`;
+  };
+
+  const copyInviteLink = async () => {
+    const link = getInviteLink();
+    if (!link) return;
+
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(link);
+      } else {
+        const input = document.createElement('input');
+        input.value = link;
+        document.body.appendChild(input);
+        input.select();
+        document.execCommand('copy');
+        document.body.removeChild(input);
+      }
+      setInviteMsg('Invite link copied!');
+      setTimeout(() => setInviteMsg(''), 2000);
+    } catch {
+      setInviteMsg('Could not copy link');
+      setTimeout(() => setInviteMsg(''), 2000);
+    }
   };
 
   const downloadCsv = async () => {
@@ -258,6 +287,25 @@ export default function SettingsTab() {
             >
               Regenerate
             </button>
+          </div>
+          <div className="mt-3">
+            <label className="block text-xs font-medium text-slate-400 mb-1">Share Link</label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                readOnly
+                value={getInviteLink()}
+                className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-slate-200 text-xs"
+              />
+              <button
+                type="button"
+                onClick={copyInviteLink}
+                className="bg-slate-600 hover:bg-slate-500 text-white px-3 py-2 rounded-lg text-xs whitespace-nowrap"
+              >
+                Copy Link
+              </button>
+            </div>
+            {inviteMsg && <div className="text-status-success text-xs mt-1">{inviteMsg}</div>}
           </div>
         </div>
       </div>

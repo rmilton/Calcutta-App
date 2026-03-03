@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useSocket, useSocketEvent } from '../context/SocketContext';
 import { useTournament } from '../context/TournamentContext';
@@ -264,14 +264,37 @@ export default function Auction() {
     setBidError('');
   }, [isViewingHistory]));
 
-  useSocketEvent('auction:sold', useCallback(({ teamName, winnerName, winnerColor, finalPrice }) => {
+  useSocketEvent('auction:sold', useCallback(({ teamName, winnerName, winnerColor, finalPrice, aiCommentaryEnabled }) => {
     if (isViewingHistory) return;
-    setSoldMessage({ teamName, winnerName, winnerColor, finalPrice });
+    setSoldMessage({
+      teamName,
+      winnerName,
+      winnerColor,
+      finalPrice,
+      commentary: '',
+      commentaryLoading: !!aiCommentaryEnabled,
+    });
     setActive(null);
     setRecentBids([]);
     refreshItems();
-    setTimeout(() => setSoldMessage(null), 6000);
   }, [refreshItems, isViewingHistory]));
+
+  useSocketEvent('auction:commentary:chunk', useCallback(({ token }) => {
+    if (isViewingHistory) return;
+    setSoldMessage((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        commentary: `${prev.commentary || ''}${token || ''}`,
+        commentaryLoading: true,
+      };
+    });
+  }, [isViewingHistory]));
+
+  useSocketEvent('auction:commentary:done', useCallback(() => {
+    if (isViewingHistory) return;
+    setSoldMessage((prev) => (prev ? { ...prev, commentaryLoading: false } : prev));
+  }, [isViewingHistory]));
 
   useSocketEvent('auction:nobids', useCallback(() => {
     if (isViewingHistory) return;
@@ -350,6 +373,17 @@ export default function Auction() {
             <span className="font-semibold" style={{ color: soldMessage.winnerColor }}>{soldMessage.winnerName}</span>
             {' '}for <span className="font-bold text-text-primary tabular-nums">{fmt(soldMessage.finalPrice)}</span>
           </div>
+          {soldMessage.commentary && (
+            <div className="mt-3 max-w-2xl mx-auto text-sm text-text-primary leading-relaxed">
+              {soldMessage.commentary}
+            </div>
+          )}
+          {soldMessage.commentaryLoading && (
+            <div className="mt-3 inline-flex items-center gap-2 text-xs text-text-secondary">
+              <span className="w-3.5 h-3.5 rounded-full border-2 border-text-muted border-t-brand animate-spin" aria-hidden="true" />
+              <span>Generating AI commentary…</span>
+            </div>
+          )}
         </div>
       )}
 

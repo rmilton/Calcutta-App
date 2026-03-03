@@ -5,29 +5,16 @@ import { useSocketEvent } from '../context/SocketContext';
 const AUTO_DISMISS_MS = 10000;
 
 const CONFIG = {
-  auction: { icon: '🎙️', label: 'Auction Commentary' },
-  recap:   { icon: '📊', label: 'Game Recap' },
+  recap: { icon: '📊', label: 'Game Recap' },
 };
 
 export default function AiCommentary() {
-  // note: { type: 'auction'|'recap', text: string, done: boolean } | null
+  // note: { type: 'recap', text: string, done: boolean } | null
   const [note, setNote] = useState(null);
   // Progress bar width (0→100) for the auto-dismiss timer
   const [progress, setProgress] = useState(100);
 
   // --- socket handlers ---
-  const onAuctionChunk = useCallback(({ token }) => {
-    setNote((prev) =>
-      !prev || prev.done
-        ? { type: 'auction', text: token, done: false }
-        : { ...prev, text: prev.text + token }
-    );
-  }, []);
-
-  const onAuctionDone = useCallback(() => {
-    setNote((prev) => (prev ? { ...prev, done: true } : null));
-  }, []);
-
   const onRecapChunk = useCallback(({ token }) => {
     setNote((prev) =>
       !prev || prev.done
@@ -40,10 +27,8 @@ export default function AiCommentary() {
     setNote((prev) => (prev ? { ...prev, done: true } : null));
   }, []);
 
-  useSocketEvent('auction:commentary:chunk', onAuctionChunk);
-  useSocketEvent('auction:commentary:done',  onAuctionDone);
-  useSocketEvent('bracket:recap:chunk',      onRecapChunk);
-  useSocketEvent('bracket:recap:done',       onRecapDone);
+  useSocketEvent('bracket:recap:chunk', onRecapChunk);
+  useSocketEvent('bracket:recap:done', onRecapDone);
 
   // --- auto-dismiss with animated countdown bar ---
   useEffect(() => {

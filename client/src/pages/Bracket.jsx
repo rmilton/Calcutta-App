@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSocketEvent } from '../context/SocketContext';
 import { useTournament } from '../context/TournamentContext';
-import { api, REGION_COLORS, ROUND_NAMES_SHORT } from '../utils';
+import { api, fmtGameMeta, REGION_COLORS, ROUND_NAMES_SHORT } from '../utils';
 
 
 
@@ -45,6 +45,7 @@ function TeamSlot({ teamName, teamSeed, ownerName, ownerColor, isWinner, isEmpty
 function GameCard({ game }) {
   const hasResult = !!game.winner_id;
   const color = REGION_COLORS[game.region] || '#6366f1';
+  const gameMeta = fmtGameMeta(game.tipoff_at, game.tv_network);
 
   return (
     <div
@@ -65,6 +66,11 @@ function GameCard({ game }) {
         )}
       </div>
       <div className="p-1 bg-surface-raised/60 space-y-0.5">
+        {gameMeta && (
+          <div className="px-2 py-1 text-[11px] text-text-secondary border border-surface-border/50 rounded-lg bg-surface-input/20">
+            {gameMeta}
+          </div>
+        )}
         <TeamSlot
           teamName={game.team1_name} teamSeed={game.team1_seed}
           ownerName={game.team1_owner_name} ownerColor={game.team1_owner_color}

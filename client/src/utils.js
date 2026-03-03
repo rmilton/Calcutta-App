@@ -18,6 +18,25 @@ export const api = (path, opts = {}) =>
     ...opts,
   });
 
+export const fmtGameTipoff = (iso) => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+    timeZoneName: 'short',
+  }).format(d);
+};
+
+export const fmtGameMeta = (iso, network) => {
+  const when = fmtGameTipoff(iso);
+  if (when && network) return `${when} · ${network}`;
+  return when || network || '';
+};
+
 export const REGION_COLORS = {
   East:    '#ef4444',
   West:    '#3b82f6',

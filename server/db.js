@@ -1,6 +1,7 @@
 const Database = require('better-sqlite3');
 const path = require('path');
 const { TEAMS_2025 } = require('./data/teams2025');
+const { GAME_SCHEDULE_2025 } = require('./data/gameSchedule2025');
 
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'calcutta.db');
 const db = new Database(DB_PATH);
@@ -80,6 +81,8 @@ function init() {
       team1_id INTEGER REFERENCES teams(id),
       team2_id INTEGER REFERENCES teams(id),
       winner_id INTEGER REFERENCES teams(id),
+      tipoff_at TEXT,
+      tv_network TEXT,
       played_at INTEGER
     );
 
@@ -253,11 +256,20 @@ function init() {
   if (!columnExists('teams', 'color')) {
     db.prepare('ALTER TABLE teams ADD COLUMN color TEXT').run();
   }
+  // Migrate: add historical schedule metadata columns to games if missing
+  if (!columnExists('games', 'tipoff_at')) {
+    db.prepare('ALTER TABLE games ADD COLUMN tipoff_at TEXT').run();
+  }
+  if (!columnExists('games', 'tv_network')) {
+    db.prepare('ALTER TABLE games ADD COLUMN tv_network TEXT').run();
+  }
   // Backfill espn_id and color for any existing teams missing them
   const backfillTeam = db.prepare('UPDATE teams SET espn_id = ?, color = ? WHERE name = ? AND espn_id IS NULL');
   for (const t of TEAMS_2025) {
     if (t.espn_id || t.color) backfillTeam.run(t.espn_id || null, t.color || null, t.name);
   }
+  // Backfill existing active-tournament games with 2025 schedule metadata by bracket slot.
+  backfillGameScheduleMetadata2025(getActiveTournamentId());
 
   // ── Default payout config for tournament 1 ───────────────────────────────────
   const insertPayoutDefault = db.prepare(
@@ -569,6 +581,25 @@ function columnExists(tableName, columnName) {
   return db.prepare(`PRAGMA table_info(${tableName})`).all().map((c) => c.name).includes(columnName);
 }
 
+function backfillGameScheduleMetadata2025(tid) {
+  const _tid = tid ?? getActiveTournamentId();
+  const update = db.prepare(`
+    UPDATE games
+    SET tipoff_at = COALESCE(tipoff_at, ?),
+        tv_network = COALESCE(tv_network, ?)
+    WHERE tournament_id = ?
+      AND round = ?
+      AND region = ?
+      AND position = ?
+  `);
+
+  db.transaction(() => {
+    for (const g of GAME_SCHEDULE_2025) {
+      update.run(g.tipoff_at, g.tv_network, _tid, g.round, g.region, g.position);
+    }
+  })();
+}
+
 // ── Earnings recalculation ────────────────────────────────────────────────────
 
 function recalcEarnings(tid) {
@@ -644,4 +675,5 @@ module.exports = {
   getGameById,
   getGameByPosition,
   calculatePayoutAmount,
+  backfillGameScheduleMetadata2025,
 };

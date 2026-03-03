@@ -4,7 +4,7 @@ import { useSocketEvent } from '../context/SocketContext';
 import { useTournament } from '../context/TournamentContext';
 import TeamLogo from '../components/TeamLogo';
 import ParticipantAvatar from '../components/ParticipantAvatar';
-import { fmt, api, REGION_COLORS, ROUND_NAMES } from '../utils';
+import { fmt, api, fmtGameMeta, REGION_COLORS, ROUND_NAMES } from '../utils';
 
 
 
@@ -122,6 +122,11 @@ export default function MyTeams() {
 
 function TeamCard({ team, eliminated }) {
   const color = REGION_COLORS[team.region] || '#6366f1';
+  const nextGameMeta = fmtGameMeta(team.next_game_tipoff_at, team.next_game_tv_network);
+  const lastGameMeta = fmtGameMeta(team.last_game_tipoff_at, team.last_game_tv_network);
+  const gameMeta = eliminated ? lastGameMeta : (nextGameMeta || lastGameMeta);
+  const gameRound = eliminated ? team.last_game_round : (team.next_game_round || team.last_game_round);
+  const gameLabel = eliminated ? 'Last Game' : (nextGameMeta ? 'Next Game' : 'Most Recent');
 
   return (
     <div className={`card p-4 transition-shadow hover:shadow-lg ${eliminated ? 'opacity-50' : ''}`}
@@ -147,6 +152,11 @@ function TeamCard({ team, eliminated }) {
           </span>
         )}
       </div>
+      {gameMeta && (
+        <div className="mb-2 text-xs text-text-secondary">
+          {gameLabel}{gameRound ? ` (${ROUND_NAMES[gameRound]})` : ''}: {gameMeta}
+        </div>
+      )}
       <div className="flex items-center justify-between text-sm">
         <div>
           <span className="text-text-secondary text-xs">Paid</span>

@@ -7,6 +7,7 @@ const {
 } = require('../db');
 const { requireAuth, requireAdmin } = require('./middleware');
 const { streamRoundRecap } = require('../ai');
+const { getGameSchedule2025 } = require('../data/gameSchedule2025');
 
 const router = express.Router();
 
@@ -215,14 +216,29 @@ function advanceWinner(game, winnerId, tid) {
   if (game.round >= 6) return;
 
   const { nextRound, nextRegion, nextPosition } = getNextGame(game);
+  const schedule = getGameSchedule2025(nextRound, nextRegion, nextPosition);
 
   let nextGame = getGameByPosition(nextRound, nextRegion, nextPosition, tid);
 
   if (!nextGame) {
     db.prepare(
-      'INSERT INTO games (round, region, position, team1_id, tournament_id) VALUES (?, ?, ?, ?, ?)'
-    ).run(nextRound, nextRegion, nextPosition, winnerId, tid);
+      'INSERT INTO games (round, region, position, team1_id, tipoff_at, tv_network, tournament_id) VALUES (?, ?, ?, ?, ?, ?, ?)'
+    ).run(
+      nextRound, nextRegion, nextPosition, winnerId,
+      schedule?.tipoff_at || null,
+      schedule?.tv_network || null,
+      tid
+    );
     return;
+  }
+
+  if (schedule && (!nextGame.tipoff_at || !nextGame.tv_network)) {
+    db.prepare(`
+      UPDATE games
+      SET tipoff_at = COALESCE(tipoff_at, ?),
+          tv_network = COALESCE(tv_network, ?)
+      WHERE id = ?
+    `).run(schedule.tipoff_at, schedule.tv_network, nextGame.id);
   }
 
   if (!nextGame.team1_id) {

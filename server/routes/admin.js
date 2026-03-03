@@ -11,6 +11,7 @@ const {
 const { requireAdmin } = require('./middleware');
 const { scheduleAuctionStart, clearScheduledStart } = require('../scheduler');
 const { TEAMS_2025 } = require('../data/teams2025');
+const { getGameSchedule2025 } = require('../data/gameSchedule2025');
 
 const router = express.Router();
 
@@ -297,9 +298,10 @@ router.post('/bracket/initialize', requireAdmin, (req, res) => {
         const t1 = db.prepare('SELECT id FROM teams WHERE region = ? AND seed = ? AND tournament_id = ?').get(region, s1, tid);
         const t2 = db.prepare('SELECT id FROM teams WHERE region = ? AND seed = ? AND tournament_id = ?').get(region, s2, tid);
         if (t1 && t2) {
+          const schedule = getGameSchedule2025(1, region, idx + 1);
           db.prepare(
-            'INSERT INTO games (round, region, position, team1_id, team2_id, tournament_id) VALUES (?, ?, ?, ?, ?, ?)'
-          ).run(1, region, idx + 1, t1.id, t2.id, tid);
+            'INSERT INTO games (round, region, position, team1_id, team2_id, tipoff_at, tv_network, tournament_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+          ).run(1, region, idx + 1, t1.id, t2.id, schedule?.tipoff_at || null, schedule?.tv_network || null, tid);
         }
       });
     });

@@ -1,0 +1,77 @@
+// Historical 2025 NCAA men's tournament schedule metadata by bracket slot.
+// Source: ESPN scoreboard API (captured on 2026-03-03).
+const GAME_SCHEDULE_2025 = [
+  { round: 1, region: 'East', position: 1, tipoff_at: '2025-03-21T19:09Z', tv_network: 'CBS' },
+  { round: 1, region: 'East', position: 2, tipoff_at: '2025-03-21T16:15Z', tv_network: 'CBS' },
+  { round: 1, region: 'East', position: 3, tipoff_at: '2025-03-22T02:26Z', tv_network: 'truTV' },
+  { round: 1, region: 'East', position: 4, tipoff_at: '2025-03-21T23:48Z', tv_network: 'truTV' },
+  { round: 1, region: 'East', position: 5, tipoff_at: '2025-03-20T20:05Z', tv_network: 'TNT' },
+  { round: 1, region: 'East', position: 6, tipoff_at: '2025-03-20T17:30Z', tv_network: 'TNT' },
+  { round: 1, region: 'East', position: 7, tipoff_at: '2025-03-21T19:30Z', tv_network: 'truTV' },
+  { round: 1, region: 'East', position: 8, tipoff_at: '2025-03-21T16:40Z', tv_network: 'truTV' },
+  { round: 1, region: 'Midwest', position: 1, tipoff_at: '2025-03-20T18:00Z', tv_network: 'TBS' },
+  { round: 1, region: 'Midwest', position: 2, tipoff_at: '2025-03-20T20:35Z', tv_network: 'TBS' },
+  { round: 1, region: 'Midwest', position: 3, tipoff_at: '2025-03-20T19:29Z', tv_network: 'truTV' },
+  { round: 1, region: 'Midwest', position: 4, tipoff_at: '2025-03-20T16:40Z', tv_network: 'truTV' },
+  { round: 1, region: 'Midwest', position: 5, tipoff_at: '2025-03-22T01:57Z', tv_network: 'CBS' },
+  { round: 1, region: 'Midwest', position: 6, tipoff_at: '2025-03-21T23:20Z', tv_network: 'CBS' },
+  { round: 1, region: 'Midwest', position: 7, tipoff_at: '2025-03-21T01:25Z', tv_network: 'TNT' },
+  { round: 1, region: 'Midwest', position: 8, tipoff_at: '2025-03-20T22:50Z', tv_network: 'TNT' },
+  { round: 1, region: 'South', position: 1, tipoff_at: '2025-03-20T18:50Z', tv_network: 'CBS' },
+  { round: 1, region: 'South', position: 2, tipoff_at: '2025-03-20T16:15Z', tv_network: 'CBS' },
+  { round: 1, region: 'South', position: 3, tipoff_at: '2025-03-21T02:00Z', tv_network: 'TBS' },
+  { round: 1, region: 'South', position: 4, tipoff_at: '2025-03-20T23:25Z', tv_network: 'TBS' },
+  { round: 1, region: 'South', position: 5, tipoff_at: '2025-03-21T20:05Z', tv_network: 'TNT' },
+  { round: 1, region: 'South', position: 6, tipoff_at: '2025-03-21T17:30Z', tv_network: 'TNT' },
+  { round: 1, region: 'South', position: 7, tipoff_at: '2025-03-21T23:25Z', tv_network: 'TBS' },
+  { round: 1, region: 'South', position: 8, tipoff_at: '2025-03-22T02:12Z', tv_network: 'TBS' },
+  { round: 1, region: 'West', position: 1, tipoff_at: '2025-03-21T22:50Z', tv_network: 'TNT' },
+  { round: 1, region: 'West', position: 2, tipoff_at: '2025-03-22T01:32Z', tv_network: 'TNT' },
+  { round: 1, region: 'West', position: 3, tipoff_at: '2025-03-21T18:00Z', tv_network: 'TBS' },
+  { round: 1, region: 'West', position: 4, tipoff_at: '2025-03-21T20:35Z', tv_network: 'TBS' },
+  { round: 1, region: 'West', position: 5, tipoff_at: '2025-03-20T23:51Z', tv_network: 'truTV' },
+  { round: 1, region: 'West', position: 6, tipoff_at: '2025-03-21T02:42Z', tv_network: 'truTV' },
+  { round: 1, region: 'West', position: 7, tipoff_at: '2025-03-20T23:10Z', tv_network: 'CBS' },
+  { round: 1, region: 'West', position: 8, tipoff_at: '2025-03-21T01:58Z', tv_network: 'CBS' },
+  { round: 2, region: 'East', position: 1, tipoff_at: '2025-03-23T19:04Z', tv_network: 'CBS' },
+  { round: 2, region: 'East', position: 2, tipoff_at: '2025-03-24T01:48Z', tv_network: 'TBS' },
+  { round: 2, region: 'East', position: 3, tipoff_at: '2025-03-23T00:27Z', tv_network: 'CBS' },
+  { round: 2, region: 'East', position: 4, tipoff_at: '2025-03-23T22:10Z', tv_network: 'TNT' },
+  { round: 2, region: 'Midwest', position: 1, tipoff_at: '2025-03-23T00:44Z', tv_network: 'TNT' },
+  { round: 2, region: 'Midwest', position: 2, tipoff_at: '2025-03-22T16:10Z', tv_network: 'CBS' },
+  { round: 2, region: 'Midwest', position: 3, tipoff_at: '2025-03-23T21:30Z', tv_network: 'CBS' },
+  { round: 2, region: 'Midwest', position: 4, tipoff_at: '2025-03-23T01:53Z', tv_network: 'TBS, truTV' },
+  { round: 2, region: 'South', position: 1, tipoff_at: '2025-03-22T23:10Z', tv_network: 'TBS, truTV' },
+  { round: 2, region: 'South', position: 2, tipoff_at: '2025-03-22T21:30Z', tv_network: 'CBS' },
+  { round: 2, region: 'South', position: 3, tipoff_at: '2025-03-24T00:20Z', tv_network: 'truTV' },
+  { round: 2, region: 'South', position: 4, tipoff_at: '2025-03-24T00:50Z', tv_network: 'TNT' },
+  { round: 2, region: 'West', position: 1, tipoff_at: '2025-03-23T16:10Z', tv_network: 'CBS' },
+  { round: 2, region: 'West', position: 2, tipoff_at: '2025-03-23T23:10Z', tv_network: 'TBS' },
+  { round: 2, region: 'West', position: 3, tipoff_at: '2025-03-22T22:10Z', tv_network: 'TNT' },
+  { round: 2, region: 'West', position: 4, tipoff_at: '2025-03-22T18:40Z', tv_network: 'CBS' },
+  { round: 3, region: 'East', position: 1, tipoff_at: '2025-03-28T02:03Z', tv_network: 'CBS' },
+  { round: 3, region: 'East', position: 2, tipoff_at: '2025-03-27T23:09Z', tv_network: 'CBS' },
+  { round: 3, region: 'Midwest', position: 1, tipoff_at: '2025-03-29T02:28Z', tv_network: 'TBS, truTV' },
+  { round: 3, region: 'Midwest', position: 2, tipoff_at: '2025-03-28T23:39Z', tv_network: 'TBS, truTV' },
+  { round: 3, region: 'South', position: 1, tipoff_at: '2025-03-29T02:00Z', tv_network: 'CBS' },
+  { round: 3, region: 'South', position: 2, tipoff_at: '2025-03-28T23:09Z', tv_network: 'CBS' },
+  { round: 3, region: 'West', position: 1, tipoff_at: '2025-03-27T23:39Z', tv_network: 'TBS, truTV' },
+  { round: 3, region: 'West', position: 2, tipoff_at: '2025-03-28T02:20Z', tv_network: 'TBS, truTV' },
+  { round: 4, region: 'East', position: 1, tipoff_at: '2025-03-30T00:59Z', tv_network: 'TBS, truTV' },
+  { round: 4, region: 'Midwest', position: 1, tipoff_at: '2025-03-30T18:20Z', tv_network: 'CBS' },
+  { round: 4, region: 'South', position: 1, tipoff_at: '2025-03-30T21:05Z', tv_network: 'CBS' },
+  { round: 4, region: 'West', position: 1, tipoff_at: '2025-03-29T22:09Z', tv_network: 'TBS, truTV' },
+  { round: 5, region: 'Final Four', position: 1, tipoff_at: '2025-04-05T22:09Z', tv_network: 'CBS' },
+  { round: 5, region: 'Final Four', position: 2, tipoff_at: '2025-04-06T01:28Z', tv_network: 'CBS' },
+  { round: 6, region: 'Championship', position: 1, tipoff_at: '2025-04-08T00:50Z', tv_network: 'CBS' },
+];
+
+const GAME_SCHEDULE_2025_BY_KEY = new Map(
+  GAME_SCHEDULE_2025.map((g) => [`${g.round}|${g.region}|${g.position}`, g])
+);
+
+function getGameSchedule2025(round, region, position) {
+  return GAME_SCHEDULE_2025_BY_KEY.get(`${round}|${region}|${position}`) || null;
+}
+
+module.exports = { GAME_SCHEDULE_2025, getGameSchedule2025 };

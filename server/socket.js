@@ -100,6 +100,8 @@ function closeAuction(itemId, io) {
 
     const winner = db.prepare('SELECT name, color FROM participants WHERE id = ?').get(item.current_leader_id);
     const team = db.prepare('SELECT name, seed, region FROM teams WHERE id = ?').get(item.team_id);
+    const aiCommentaryEnabled = getTournamentSetting(tid, 'ai_commentary_enabled') !== '0'
+      && !!process.env.ANTHROPIC_API_KEY;
 
     io.emit('auction:sold', {
       itemId,
@@ -109,9 +111,12 @@ function closeAuction(itemId, io) {
       winnerName: winner?.name,
       winnerColor: winner?.color,
       finalPrice: item.current_price,
+      aiCommentaryEnabled,
     });
 
-    generateSaleCommentary(item, winner, team, tid, io);
+    if (aiCommentaryEnabled) {
+      generateSaleCommentary(item, winner, team, tid, io);
+    }
     autoAdvanceToNextItem(tid, io);
   } else {
     // No bids — mark as skipped/pending again for re-queue

@@ -1,4 +1,5 @@
 const express = require('express');
+const { v4: uuidv4 } = require('uuid');
 const {
   db,
   getActiveTournamentId,
@@ -9,8 +10,77 @@ const {
 } = require('../db');
 const { requireAdmin } = require('./middleware');
 const { scheduleAuctionStart, clearScheduledStart } = require('../scheduler');
+const { TEAMS_2025 } = require('../data/teams2025');
 
 const router = express.Router();
+
+const FIXTURE_COLORS = [
+  '#ef4444', '#f97316', '#eab308', '#22c55e',
+  '#06b6d4', '#6366f1', '#a855f7', '#ec4899',
+  '#14b8a6', '#84cc16', '#f59e0b', '#3b82f6',
+];
+
+const FIXTURE_NAMES = [
+  'Fixture Alpha', 'Fixture Bravo', 'Fixture Charlie', 'Fixture Delta',
+  'Fixture Echo', 'Fixture Foxtrot', 'Fixture Golf', 'Fixture Hotel',
+  'Fixture India', 'Fixture Juliet', 'Fixture Kilo', 'Fixture Lima',
+  'Fixture Mike', 'Fixture November', 'Fixture Oscar', 'Fixture Papa',
+];
+
+function fixtureNames(count) {
+  return Array.from({ length: count }, (_, i) => FIXTURE_NAMES[i] || `Fixture Player ${i + 1}`);
+}
+
+function clearTournamentState(tid, { removeNonAdminParticipants = false } = {}) {
+  db.transaction(() => {
+    db.prepare('DELETE FROM bids WHERE tournament_id = ?').run(tid);
+    db.prepare('DELETE FROM ownership WHERE tournament_id = ?').run(tid);
+    db.prepare('DELETE FROM earnings WHERE tournament_id = ?').run(tid);
+    db.prepare('DELETE FROM games WHERE tournament_id = ?').run(tid);
+
+    db.prepare(`
+      UPDATE auction_items
+      SET status = 'pending',
+          current_price = 0,
+          current_leader_id = NULL,
+          bid_end_time = NULL,
+          final_price = NULL,
+          winner_id = NULL
+      WHERE tournament_id = ?
+    `).run(tid);
+
+    db.prepare('UPDATE teams SET eliminated = 0 WHERE tournament_id = ?').run(tid);
+
+    if (removeNonAdminParticipants) {
+      db.prepare(`
+        DELETE FROM tournament_participants
+        WHERE tournament_id = ?
+          AND participant_id IN (SELECT id FROM participants WHERE is_admin = 0)
+      `).run(tid);
+
+      db.prepare(`
+        DELETE FROM participants
+        WHERE is_admin = 0
+          AND id NOT IN (SELECT participant_id FROM tournament_participants)
+      `).run();
+    }
+
+    setTournamentSetting(tid, 'auction_status', 'waiting');
+    setTournamentSetting(tid, 'tournament_started', '0');
+    setTournamentSetting(tid, 'auction_scheduled_start', '');
+  })();
+
+  applyAuctionOrder(tid, getTournamentSetting(tid, 'auction_order') || 'random');
+}
+
+function emitFixtureRefresh(io) {
+  if (!io) return;
+  io.emit('auction:status', { status: 'waiting' });
+  io.emit('auction:scheduled_start', { ts: null });
+  io.emit('auction:nobids', { itemId: null }); // force queue refresh on clients
+  io.emit('bracket:reset');
+  io.emit('standings:update');
+}
 
 // GET /api/admin/settings
 router.get('/settings', requireAdmin, (req, res) => {
@@ -277,6 +347,134 @@ router.post('/teams/import', requireAdmin, (req, res) => {
   if (io) io.emit('teams:imported');
 
   res.json({ ok: true });
+});
+
+// POST /api/admin/testing/clear-fixture
+router.post('/testing/clear-fixture', requireAdmin, (req, res) => {
+  const tid = getActiveTournamentId();
+  clearScheduledStart();
+  clearTournamentState(tid, { removeNonAdminParticipants: true });
+
+  const io = req.app.get('io');
+  emitFixtureRefresh(io);
+
+  const remainingParticipants = db.prepare(`
+    SELECT COUNT(*) as c
+    FROM tournament_participants tp
+    JOIN participants p ON p.id = tp.participant_id
+    WHERE tp.tournament_id = ? AND p.is_admin = 0
+  `).get(tid).c;
+
+  res.json({
+    ok: true,
+    summary: {
+      participantCount: remainingParticipants,
+      soldTeamCount: 0,
+      pendingTeamCount: db.prepare("SELECT COUNT(*) as c FROM auction_items WHERE tournament_id = ? AND status = 'pending'").get(tid).c,
+    },
+  });
+});
+
+// POST /api/admin/testing/load-fixture
+router.post('/testing/load-fixture', requireAdmin, (req, res) => {
+  const tid = getActiveTournamentId();
+  const requestedParticipants = parseInt(req.body?.participantCount, 10);
+  const requestedSoldTeams = parseInt(req.body?.soldTeamCount, 10);
+
+  const participantCount = Number.isFinite(requestedParticipants)
+    ? Math.max(2, Math.min(16, requestedParticipants))
+    : 8;
+
+  clearScheduledStart();
+
+  try {
+    // Ensure the active tournament has teams to assign
+    const teamCount = db.prepare('SELECT COUNT(*) as c FROM teams WHERE tournament_id = ?').get(tid).c;
+    if (teamCount === 0) {
+      seedTeamsForTournament(tid, TEAMS_2025);
+    }
+
+    clearTournamentState(tid, { removeNonAdminParticipants: true });
+
+    const participants = [];
+    const names = fixtureNames(participantCount);
+    const findByName = db.prepare('SELECT id FROM participants WHERE LOWER(name) = LOWER(?)');
+    const insertParticipant = db.prepare('INSERT INTO participants (name, color, session_token) VALUES (?, ?, ?)');
+    const addToTournament = db.prepare('INSERT OR IGNORE INTO tournament_participants (tournament_id, participant_id) VALUES (?, ?)');
+
+    db.transaction(() => {
+      names.forEach((name, idx) => {
+        const existing = findByName.get(name);
+        const participantId = existing
+          ? existing.id
+          : insertParticipant.run(name, FIXTURE_COLORS[idx % FIXTURE_COLORS.length], uuidv4()).lastInsertRowid;
+        addToTournament.run(tid, participantId);
+        participants.push({ id: participantId, name });
+      });
+
+      // Ensure admin (if present) stays joined to the active tournament
+      db.prepare(`
+        INSERT OR IGNORE INTO tournament_participants (tournament_id, participant_id)
+        SELECT ?, id FROM participants WHERE is_admin = 1
+      `).run(tid);
+    })();
+
+    const auctionRows = db.prepare(`
+      SELECT ai.id as auction_item_id, ai.team_id, t.seed
+      FROM auction_items ai
+      JOIN teams t ON t.id = ai.team_id
+      WHERE ai.tournament_id = ?
+      ORDER BY ai.queue_order, ai.id
+    `).all(tid);
+
+    const soldTarget = Number.isFinite(requestedSoldTeams)
+      ? Math.max(0, Math.min(auctionRows.length, requestedSoldTeams))
+      : Math.min(24, auctionRows.length);
+
+    const markSold = db.prepare(`
+      UPDATE auction_items
+      SET status = 'sold',
+          current_price = 0,
+          current_leader_id = NULL,
+          bid_end_time = NULL,
+          final_price = ?,
+          winner_id = ?
+      WHERE id = ? AND tournament_id = ?
+    `);
+    const insertOwnership = db.prepare(
+      'INSERT INTO ownership (tournament_id, team_id, participant_id, purchase_price) VALUES (?, ?, ?, ?)'
+    );
+    const insertBid = db.prepare(
+      'INSERT INTO bids (team_id, participant_id, amount, tournament_id) VALUES (?, ?, ?, ?)'
+    );
+
+    db.transaction(() => {
+      for (let i = 0; i < soldTarget; i += 1) {
+        const row = auctionRows[i];
+        const owner = participants[i % participants.length];
+        const base = Math.max(5, 78 - (row.seed * 3));
+        const finalPrice = Math.max(5, base + Math.floor(Math.random() * 15));
+
+        markSold.run(finalPrice, owner.id, row.auction_item_id, tid);
+        insertOwnership.run(tid, row.team_id, owner.id, finalPrice);
+        insertBid.run(row.team_id, owner.id, finalPrice, tid);
+      }
+    })();
+
+    const io = req.app.get('io');
+    emitFixtureRefresh(io);
+
+    const summary = {
+      participantCount: participants.length,
+      soldTeamCount: soldTarget,
+      pendingTeamCount: db.prepare("SELECT COUNT(*) as c FROM auction_items WHERE tournament_id = ? AND status = 'pending'").get(tid).c,
+    };
+
+    return res.json({ ok: true, summary });
+  } catch (e) {
+    console.error('[testing/load-fixture]', e);
+    return res.status(500).json({ error: 'Failed to load fixture data' });
+  }
 });
 
 module.exports = router;

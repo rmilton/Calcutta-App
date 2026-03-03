@@ -3,23 +3,10 @@ import { useAuth } from '../context/AuthContext';
 import { useSocketEvent } from '../context/SocketContext';
 import { useTournament } from '../context/TournamentContext';
 import TeamLogo from '../components/TeamLogo';
-import { fmt } from '../utils';
+import ParticipantAvatar from '../components/ParticipantAvatar';
+import { fmt, api, REGION_COLORS, ROUND_NAMES } from '../utils';
 
-const REGION_COLORS = {
-  East:    '#ef4444',
-  West:    '#3b82f6',
-  South:   '#22c55e',
-  Midwest: '#f59e0b',
-};
 
-const ROUND_NAMES = {
-  1: 'Round of 64',
-  2: 'Round of 32',
-  3: 'Sweet 16',
-  4: 'Elite 8',
-  5: 'Final Four',
-  6: 'Championship',
-};
 
 export default function MyTeams() {
   const { participant } = useAuth();
@@ -29,7 +16,7 @@ export default function MyTeams() {
 
   const load = useCallback(() => {
     if (!participant) return;
-    fetch(`/api/standings/participant/${participant.id}${apiTParam || ''}`, { credentials: 'include' })
+    api(`/standings/participant/${participant.id}${apiTParam || ''}`)
       .then((r) => r.json())
       .then((d) => { setData(d); setLoading(false); })
       .catch(() => setLoading(false));
@@ -78,13 +65,7 @@ export default function MyTeams() {
 
       {/* ── Header ── */}
       <div className="flex items-center gap-3 mb-6">
-        <div
-          className="w-10 h-10 rounded-full flex items-center justify-center text-lg font-bold text-white ring-2 ring-surface-border"
-          style={{ backgroundColor: participant?.color }}
-          aria-hidden="true"
-        >
-          {participant?.name?.[0]?.toUpperCase()}
-        </div>
+        <ParticipantAvatar name={participant?.name} color={participant?.color} size={40} />
         <div>
           <h1 className="text-xl font-bold text-text-primary">{participant?.name}'s Teams</h1>
           <p className="text-text-secondary text-sm">{teams.length} teams owned · {aliveTeams.length} still alive</p>

@@ -4,14 +4,9 @@ import { useSocket, useSocketEvent } from '../context/SocketContext';
 import { useTournament } from '../context/TournamentContext';
 import CountdownTimer from '../components/CountdownTimer';
 import TeamLogo from '../components/TeamLogo';
-import { fmt } from '../utils';
+import ParticipantAvatar from '../components/ParticipantAvatar';
+import { fmt, api, REGION_COLORS } from '../utils';
 
-const REGION_COLORS = {
-  East:    '#ef4444',
-  West:    '#3b82f6',
-  South:   '#22c55e',
-  Midwest: '#f59e0b',
-};
 
 const REGION_BADGE_CLASS = {
   East:    'badge bg-red-500/10 text-red-400 border border-red-500/20',
@@ -113,13 +108,7 @@ function SoldByOwner({ items, participantId }) {
             {/* Owner header */}
             <div className={`flex items-center justify-between px-4 py-3 border-b border-surface-border ${isMe ? 'bg-brand-muted' : ''}`}>
               <div className="flex items-center gap-2.5">
-                <div
-                  className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white ring-2 ring-surface-border shrink-0"
-                  style={{ backgroundColor: group.color }}
-                  aria-hidden="true"
-                >
-                  {group.name?.[0]?.toUpperCase()}
-                </div>
+                <ParticipantAvatar name={group.name} color={group.color} size={28} />
                 <span className={`font-semibold text-sm ${isMe ? 'text-brand' : 'text-text-primary'}`}>
                   {isMe ? `${group.name} (You)` : group.name}
                 </span>
@@ -169,13 +158,7 @@ function BidFeed({ bids }) {
           style={{ borderLeft: `3px solid ${bid.color ?? '#6366f1'}` }}
         >
           <div className="flex items-center gap-2">
-            <span
-              className="w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-white"
-              style={{ backgroundColor: bid.color }}
-              aria-hidden="true"
-            >
-              {bid.participant_name?.[0]?.toUpperCase()}
-            </span>
+            <ParticipantAvatar name={bid.participant_name} color={bid.color} size={20} ring={false} />
             <span className="text-text-primary text-sm">{bid.participant_name}</span>
           </div>
           <span className="font-bold text-status-success text-sm tabular-nums">{fmt(bid.amount)}</span>
@@ -201,13 +184,13 @@ export default function Auction() {
   const [countdown, setCountdown] = useState('');
 
   const refreshItems = useCallback(() => {
-    fetch(`/api/auction/items${apiTParam || ''}`, { credentials: 'include' })
+    api(`/auction/items${apiTParam || ''}`)
       .then((r) => r.json())
       .then(setItems);
   }, [apiTParam]);
 
   const refreshAll = useCallback(() => {
-    fetch(`/api/auction${apiTParam || ''}`, { credentials: 'include' })
+    api(`/auction${apiTParam || ''}`)
       .then((r) => r.json())
       .then((data) => {
         setAuctionStatus(data.auctionStatus);

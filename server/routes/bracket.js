@@ -2,6 +2,7 @@ const express = require('express');
 const {
   db, getActiveTournamentId,
   getGames, getPayoutConfig, getFullStandings,
+  getTotalPot, getGameById, getGameByPosition, calculatePayoutAmount,
 } = require('../db');
 const { requireAuth, requireAdmin } = require('./middleware');
 const { streamGameRecap } = require('../ai');
@@ -27,7 +28,7 @@ router.post('/result', requireAdmin, (req, res) => {
   const { gameId, winnerId } = req.body;
   if (!gameId || !winnerId) return res.status(400).json({ error: 'gameId and winnerId required' });
 
-  const game = db.prepare('SELECT * FROM games WHERE id = ? AND tournament_id = ?').get(gameId, tid);
+  const game = getGameById(gameId, tid);
   if (!game) return res.status(404).json({ error: 'Game not found' });
   if (game.winner_id) return res.status(400).json({ error: 'Game already has a result' });
   if (winnerId !== game.team1_id && winnerId !== game.team2_id) {
@@ -47,17 +48,7 @@ router.post('/result', requireAdmin, (req, res) => {
     const payoutConfig = db.prepare(
       'SELECT * FROM payout_config WHERE round_number = ? AND tournament_id = ?'
     ).get(game.round, tid);
-    let payoutAmount = 0;
-    if (payoutConfig && payoutConfig.amount > 0) {
-      if (payoutConfig.payout_type === 'percent') {
-        const totalPot = db.prepare(
-          'SELECT COALESCE(SUM(purchase_price), 0) as total FROM ownership WHERE tournament_id = ?'
-        ).get(tid).total;
-        payoutAmount = parseFloat(((payoutConfig.amount / 100) * totalPot).toFixed(2));
-      } else {
-        payoutAmount = payoutConfig.amount;
-      }
-    }
+    const payoutAmount = calculatePayoutAmount(payoutConfig, getTotalPot(tid));
 
     if (payoutAmount > 0) {
       const ownership = db.prepare(
@@ -87,9 +78,7 @@ router.post('/result', requireAdmin, (req, res) => {
       'SELECT p.name, o.purchase_price FROM ownership o JOIN participants p ON p.id = o.participant_id WHERE o.team_id = ? AND o.tournament_id = ?'
     ).get(loserId, tid);
     const earnings = db.prepare('SELECT amount FROM earnings WHERE game_id = ?').get(gameId)?.amount || 0;
-    const totalPot = db.prepare(
-      'SELECT COALESCE(SUM(purchase_price), 0) as t FROM ownership WHERE tournament_id = ?'
-    ).get(tid).t;
+    const totalPot = getTotalPot(tid);
     const standings = getFullStandings(tid).slice(0, 5);
 
     streamGameRecap({
@@ -111,7 +100,7 @@ router.post('/result', requireAdmin, (req, res) => {
 router.post('/unset', requireAdmin, (req, res) => {
   const tid = getActiveTournamentId();
   const { gameId } = req.body;
-  const game = db.prepare('SELECT * FROM games WHERE id = ? AND tournament_id = ?').get(gameId, tid);
+  const game = getGameById(gameId, tid);
   if (!game) return res.status(404).json({ error: 'Game not found' });
 
   db.transaction(() => {
@@ -154,9 +143,7 @@ function advanceWinner(game, winnerId, tid) {
 
   const { nextRound, nextRegion, nextPosition } = getNextGame(game);
 
-  let nextGame = db.prepare(
-    'SELECT * FROM games WHERE round = ? AND region = ? AND position = ? AND tournament_id = ?'
-  ).get(nextRound, nextRegion, nextPosition, tid);
+  let nextGame = getGameByPosition(nextRound, nextRegion, nextPosition, tid);
 
   if (!nextGame) {
     db.prepare(
@@ -177,9 +164,7 @@ function removeFromNextRound(game, teamId, tid) {
 
   const { nextRound, nextRegion, nextPosition } = getNextGame(game);
 
-  const nextGame = db.prepare(
-    'SELECT * FROM games WHERE round = ? AND region = ? AND position = ? AND tournament_id = ?'
-  ).get(nextRound, nextRegion, nextPosition, tid);
+  const nextGame = getGameByPosition(nextRound, nextRegion, nextPosition, tid);
 
   if (!nextGame) return;
 

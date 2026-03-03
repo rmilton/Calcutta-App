@@ -3,8 +3,9 @@ const {
   db,
   getActiveTournamentId,
   getTournamentSetting, setTournamentSetting,
-  getAuctionItems, seedTeamsForTournament, applyAuctionOrder,
+  getAuctionItems, getActiveAuctionItem, seedTeamsForTournament, applyAuctionOrder,
   recalcEarnings, getPayoutConfig,
+  TOURNAMENT_SETTING_KEYS,
 } = require('../db');
 const { requireAdmin } = require('./middleware');
 const { scheduleAuctionStart, clearScheduledStart } = require('../scheduler');
@@ -14,12 +15,7 @@ const router = express.Router();
 // GET /api/admin/settings
 router.get('/settings', requireAdmin, (req, res) => {
   const tid = getActiveTournamentId();
-  const keys = [
-    'invite_code', 'auction_timer_seconds', 'auction_grace_seconds',
-    'auction_status', 'tournament_started',
-    'auction_order', 'auction_auto_advance', 'ai_commentary_enabled',
-    'auction_scheduled_start',
-  ];
+  const keys = TOURNAMENT_SETTING_KEYS.filter(k => k !== 'name');
   const settings = {};
   for (const k of keys) settings[k] = getTournamentSetting(tid, k);
   res.json(settings);
@@ -166,9 +162,7 @@ router.post('/auction/next', requireAdmin, (req, res) => {
   const tid = getActiveTournamentId();
   const { teamId } = req.body;
 
-  const currentActive = db.prepare(
-    "SELECT * FROM auction_items WHERE status = 'active' AND tournament_id = ?"
-  ).get(tid);
+  const currentActive = getActiveAuctionItem(tid);
   if (currentActive) return res.status(400).json({ error: 'An auction is already active. Close it first.' });
 
   let item;
@@ -203,9 +197,7 @@ router.post('/auction/next', requireAdmin, (req, res) => {
 // POST /api/admin/auction/close
 router.post('/auction/close', requireAdmin, (req, res) => {
   const tid = getActiveTournamentId();
-  const active = db.prepare(
-    "SELECT * FROM auction_items WHERE status = 'active' AND tournament_id = ?"
-  ).get(tid);
+  const active = getActiveAuctionItem(tid);
   if (!active) return res.status(400).json({ error: 'No active auction' });
 
   const io = req.app.get('io');

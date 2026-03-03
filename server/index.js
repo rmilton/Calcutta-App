@@ -24,16 +24,16 @@ const exportRoutes = require('./routes/export');
 const app = express();
 const httpServer = createServer(app);
 
-const io = new Server(httpServer, {
-  cors: { origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173', credentials: true },
-});
+const corsConfig = { origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173', credentials: true };
+
+const io = new Server(httpServer, { cors: corsConfig });
 
 // Make io accessible to routes
 app.set('io', io);
 app.set('auctionModule', { startTimer, closeAuction });
 
 // Middleware
-app.use(cors({ origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173', credentials: true }));
+app.use(cors(corsConfig));
 app.use(express.json());
 app.use(cookieParser());
 

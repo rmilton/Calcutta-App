@@ -5,7 +5,7 @@ import { useSocketEvent } from '../context/SocketContext';
 const AUTO_DISMISS_MS = 10000;
 
 const CONFIG = {
-  recap: { icon: '📊', label: 'Game Recap' },
+  recap: { icon: '📊', label: 'Round Recap' },
 };
 
 export default function AiCommentary() {

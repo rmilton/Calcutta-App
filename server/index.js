@@ -10,7 +10,8 @@ const cors = require('cors');
 const path = require('path');
 
 const { init } = require('./db');
-const { setupSocket, startTimer, closeAuction } = require('./socket');
+const { setupSocket } = require('./socket');
+const { createAuctionService } = require('./services/auctionService');
 const { initScheduler } = require('./scheduler');
 
 const authRoutes = require('./routes/auth');
@@ -30,7 +31,6 @@ const io = new Server(httpServer, { cors: corsConfig });
 
 // Make io accessible to routes
 app.set('io', io);
-app.set('auctionModule', { startTimer, closeAuction });
 
 // Middleware
 app.use(cors(corsConfig));
@@ -60,7 +60,10 @@ if (process.env.NODE_ENV === 'production') {
 
 // Initialize DB and sockets
 init();
-setupSocket(io);
+const auctionService = createAuctionService(io);
+app.set('auctionService', auctionService);
+app.set('auctionModule', auctionService); // backwards compatibility
+setupSocket(io, auctionService);
 initScheduler(io);
 
 const PORT = process.env.PORT || 3001;

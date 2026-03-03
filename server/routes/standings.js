@@ -1,5 +1,5 @@
 const express = require('express');
-const { db, getActiveTournamentId, getFullStandings, getOwnership, getPayoutConfig } = require('../db');
+const { db, getActiveTournamentId, getFullStandings, getOwnership, getPayoutConfig, getTotalPot } = require('../db');
 const { requireAuth } = require('./middleware');
 
 const router = express.Router();
@@ -12,9 +12,7 @@ function resolveTid(req) {
 router.get('/', requireAuth, (req, res) => {
   const tid = resolveTid(req);
   const standings = getFullStandings(tid);
-  const totalPot = db.prepare(
-    'SELECT COALESCE(SUM(purchase_price), 0) as total FROM ownership WHERE tournament_id = ?'
-  ).get(tid).total;
+  const totalPot = getTotalPot(tid);
   res.json({ standings, totalPot });
 });
 

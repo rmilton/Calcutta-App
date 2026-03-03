@@ -12,7 +12,7 @@ db.pragma('foreign_keys = ON');
 const TOURNAMENT_SETTING_KEYS = [
   'name', 'invite_code', 'auction_timer_seconds', 'auction_grace_seconds',
   'auction_status', 'tournament_started', 'auction_order', 'auction_auto_advance',
-  'ai_commentary_after_sale', 'ai_commentary_end_of_round',
+  'ai_commentary_enabled', 'auction_scheduled_start', 'ai_commentary_end_of_round',
 ];
 
 // Payout round defaults (shared between init and createTournament)
@@ -120,10 +120,20 @@ function init() {
       tournament_started    INTEGER NOT NULL DEFAULT 0,
       auction_order         TEXT NOT NULL DEFAULT 'random',
       auction_auto_advance  INTEGER NOT NULL DEFAULT 0,
-      created_at            INTEGER DEFAULT (unixepoch()),
-      archived_at           INTEGER
+      ai_commentary_enabled   INTEGER NOT NULL DEFAULT 1,
+      auction_scheduled_start INTEGER DEFAULT NULL,
+      created_at              INTEGER DEFAULT (unixepoch()),
+      archived_at             INTEGER
     );
   `);
+
+  // M-ai: add ai_commentary_enabled column to existing databases
+  if (!columnExists('tournaments', 'ai_commentary_enabled')) {
+    db.exec('ALTER TABLE tournaments ADD COLUMN ai_commentary_enabled INTEGER NOT NULL DEFAULT 1');
+  }
+  if (!columnExists('tournaments', 'auction_scheduled_start')) {
+    db.exec('ALTER TABLE tournaments ADD COLUMN auction_scheduled_start INTEGER DEFAULT NULL');
+  }
 
   // M2: Seed tournament id=1 from existing settings (if tournaments table is empty)
   const tournamentCount = db.prepare('SELECT COUNT(*) as c FROM tournaments').get().c;
@@ -151,16 +161,14 @@ function init() {
   // M3/M4: Add tournament_id columns to scoped tables (except ownership + payout_config handled below)
   const scopedTables = ['teams', 'auction_items', 'bids', 'games', 'earnings'];
   for (const tbl of scopedTables) {
-    const cols = db.prepare(`PRAGMA table_info(${tbl})`).all().map((c) => c.name);
-    if (!cols.includes('tournament_id')) {
+    if (!columnExists(tbl, 'tournament_id')) {
       db.prepare(`ALTER TABLE ${tbl} ADD COLUMN tournament_id INTEGER DEFAULT 1`).run();
       db.prepare(`UPDATE ${tbl} SET tournament_id = 1 WHERE tournament_id IS NULL`).run();
     }
   }
 
   // M9: Rebuild ownership to change UNIQUE(team_id) → UNIQUE(tournament_id, team_id)
-  const ownershipCols = db.prepare('PRAGMA table_info(ownership)').all().map((c) => c.name);
-  if (!ownershipCols.includes('tournament_id')) {
+  if (!columnExists('ownership', 'tournament_id')) {
     db.transaction(() => {
       db.exec(`
         CREATE TABLE ownership_new (
@@ -179,8 +187,7 @@ function init() {
   }
 
   // M10: Rebuild payout_config to change UNIQUE(round_number) → UNIQUE(tournament_id, round_number)
-  const payoutCols = db.prepare('PRAGMA table_info(payout_config)').all().map((c) => c.name);
-  if (!payoutCols.includes('tournament_id')) {
+  if (!columnExists('payout_config', 'tournament_id')) {
     db.transaction(() => {
       db.exec(`
         CREATE TABLE payout_config_new (
@@ -227,29 +234,23 @@ function init() {
     SELECT 1, id FROM participants
   `).run();
 
-  // M11: Add AI commentary toggle columns if missing
-  const tournamentCols = db.prepare('PRAGMA table_info(tournaments)').all().map((c) => c.name);
-  if (!tournamentCols.includes('ai_commentary_after_sale')) {
-    db.prepare('ALTER TABLE tournaments ADD COLUMN ai_commentary_after_sale INTEGER NOT NULL DEFAULT 1').run();
-  }
-  if (!tournamentCols.includes('ai_commentary_end_of_round')) {
-    db.prepare('ALTER TABLE tournaments ADD COLUMN ai_commentary_end_of_round INTEGER NOT NULL DEFAULT 1').run();
+  // M11: Add end-of-round AI commentary column if missing
+  if (!columnExists('tournaments', 'ai_commentary_end_of_round')) {
+    db.exec('ALTER TABLE tournaments ADD COLUMN ai_commentary_end_of_round INTEGER NOT NULL DEFAULT 1');
   }
 
   // ── Legacy column migrations (pre-multi-tournament) ───────────────────────────
 
   // Migrate: add payout_type column if missing (very old databases)
-  const payoutCols2 = db.prepare('PRAGMA table_info(payout_config)').all().map((c) => c.name);
-  if (!payoutCols2.includes('payout_type')) {
+  if (!columnExists('payout_config', 'payout_type')) {
     db.prepare("ALTER TABLE payout_config ADD COLUMN payout_type TEXT NOT NULL DEFAULT 'fixed'").run();
   }
 
   // Migrate: add espn_id and color columns to teams if missing
-  const teamCols = db.prepare('PRAGMA table_info(teams)').all().map((c) => c.name);
-  if (!teamCols.includes('espn_id')) {
+  if (!columnExists('teams', 'espn_id')) {
     db.prepare('ALTER TABLE teams ADD COLUMN espn_id INTEGER').run();
   }
-  if (!teamCols.includes('color')) {
+  if (!columnExists('teams', 'color')) {
     db.prepare('ALTER TABLE teams ADD COLUMN color TEXT').run();
   }
   // Backfill espn_id and color for any existing teams missing them
@@ -300,7 +301,7 @@ function createTournament({ name, inviteCode }) {
     INSERT INTO tournaments
       (name, invite_code, auction_timer_seconds, auction_grace_seconds,
        auction_status, tournament_started, auction_order, auction_auto_advance,
-       ai_commentary_after_sale, ai_commentary_end_of_round)
+       ai_commentary_enabled, ai_commentary_end_of_round)
     VALUES (?, ?, 30, 15, 'waiting', 0, 'random', 0, 1, 1)
   `).run(name, inviteCode);
 
@@ -417,7 +418,7 @@ function getAllParticipants(tid) {
     SELECT p.id, p.name, p.color, p.is_admin, p.created_at
     FROM participants p
     JOIN tournament_participants tp ON tp.participant_id = p.id
-    WHERE tp.tournament_id = ?
+    WHERE tp.tournament_id = ? AND p.is_admin = 0
     ORDER BY tp.joined_at
   `).all(_tid);
 }
@@ -505,6 +506,7 @@ function getFullStandings(tid) {
       WHERE tournament_id = ?
       GROUP BY participant_id
     ) e_agg ON e_agg.participant_id = p.id
+    WHERE p.is_admin = 0
     ORDER BY total_earned DESC, total_spent ASC
   `).all(_tid, _tid, _tid);
 }
@@ -536,6 +538,37 @@ function getPayoutConfig(tid) {
   return db.prepare('SELECT * FROM payout_config WHERE tournament_id = ? ORDER BY round_number').all(_tid);
 }
 
+// ── Shared query helpers ─────────────────────────────────────────────────────
+
+function getTotalPot(tid) {
+  const _tid = tid ?? getActiveTournamentId();
+  return db.prepare(
+    'SELECT COALESCE(SUM(purchase_price), 0) as total FROM ownership WHERE tournament_id = ?'
+  ).get(_tid).total;
+}
+
+function getGameById(gameId, tid) {
+  return db.prepare('SELECT * FROM games WHERE id = ? AND tournament_id = ?').get(gameId, tid);
+}
+
+function getGameByPosition(round, region, position, tid) {
+  return db.prepare(
+    'SELECT * FROM games WHERE round = ? AND region = ? AND position = ? AND tournament_id = ?'
+  ).get(round, region, position, tid);
+}
+
+function calculatePayoutAmount(payoutConfig, totalPot) {
+  if (!payoutConfig || payoutConfig.amount <= 0) return 0;
+  if (payoutConfig.payout_type === 'percent') {
+    return parseFloat(((payoutConfig.amount / 100) * totalPot).toFixed(2));
+  }
+  return payoutConfig.amount;
+}
+
+function columnExists(tableName, columnName) {
+  return db.prepare(`PRAGMA table_info(${tableName})`).all().map((c) => c.name).includes(columnName);
+}
+
 // ── Earnings recalculation ────────────────────────────────────────────────────
 
 function recalcEarnings(tid) {
@@ -545,9 +578,7 @@ function recalcEarnings(tid) {
     'SELECT id, round, winner_id FROM games WHERE winner_id IS NOT NULL AND tournament_id = ?'
   ).all(_tid);
 
-  const totalPot = db.prepare(
-    'SELECT COALESCE(SUM(purchase_price), 0) as total FROM ownership WHERE tournament_id = ?'
-  ).get(_tid).total;
+  const totalPot = getTotalPot(_tid);
 
   db.transaction(() => {
     db.prepare('DELETE FROM earnings WHERE tournament_id = ?').run(_tid);
@@ -566,12 +597,7 @@ function recalcEarnings(tid) {
       const payoutConfig = getPayoutRow.get(game.round, _tid);
       if (!payoutConfig || payoutConfig.amount <= 0) continue;
 
-      let payoutAmount = 0;
-      if (payoutConfig.payout_type === 'percent') {
-        payoutAmount = parseFloat(((payoutConfig.amount / 100) * totalPot).toFixed(2));
-      } else {
-        payoutAmount = payoutConfig.amount;
-      }
+      const payoutAmount = calculatePayoutAmount(payoutConfig, totalPot);
       if (payoutAmount <= 0) continue;
 
       const ownership = getOwner.get(game.winner_id, _tid);
@@ -585,6 +611,7 @@ function recalcEarnings(tid) {
 module.exports = {
   db,
   init,
+  TOURNAMENT_SETTING_KEYS,
   // Tournament management
   getActiveTournamentId,
   setActiveTournamentId,
@@ -613,4 +640,8 @@ module.exports = {
   getFullStandings,
   getGames,
   getPayoutConfig,
+  getTotalPot,
+  getGameById,
+  getGameByPosition,
+  calculatePayoutAmount,
 };

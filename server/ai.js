@@ -16,7 +16,7 @@ function getClient() {
   return _client;
 }
 
-// Streams a fun 1-2 sentence sports-announcer quip after a team sells at auction.
+// Generates a fun 1-2 sentence sports-announcer quip after a team sells at auction.
 // Emits: auction:commentary:chunk { token }, auction:commentary:done { text }
 async function generateAuctionCommentary({
   teamName, seed, region, price,
@@ -39,21 +39,21 @@ ${spendNote}
 
 Respond with only the commentary text. No quotes, no prefix.`;
 
-  const stream = client.messages.stream({
-    model: 'claude-haiku-4-5',
-    max_tokens: 120,
-    messages: [{ role: 'user', content: prompt }],
-  });
-
-  let fullText = '';
-  for await (const text of stream.textStream) {
-    fullText += text;
+  try {
+    const message = await client.messages.create({
+      model: 'claude-sonnet-4-5-20250929',
+      max_tokens: 120,
+      messages: [{ role: 'user', content: prompt }],
+    });
+    const text = message.content[0]?.text || '';
     io.emit('auction:commentary:chunk', { token: text });
+    io.emit('auction:commentary:done', { text });
+  } catch (e) {
+    console.error('[AI auction]', e.message);
   }
-  io.emit('auction:commentary:done', { text: fullText });
 }
 
-// Streams a 2-3 sentence Calcutta-focused recap after a bracket game result.
+// Generates a 2-3 sentence Calcutta-focused recap after a bracket game result.
 // Emits: bracket:recap:chunk { token }, bracket:recap:done { text }
 async function streamGameRecap({
   roundNumber,
@@ -95,18 +95,18 @@ ${standingsSummary}
 
 Respond with only the commentary. No quotes, no prefix.`;
 
-  const stream = client.messages.stream({
-    model: 'claude-haiku-4-5',
-    max_tokens: 180,
-    messages: [{ role: 'user', content: prompt }],
-  });
-
-  let fullText = '';
-  for await (const text of stream.textStream) {
-    fullText += text;
+  try {
+    const message = await client.messages.create({
+      model: 'claude-sonnet-4-5-20250929',
+      max_tokens: 180,
+      messages: [{ role: 'user', content: prompt }],
+    });
+    const text = message.content[0]?.text || '';
     io.emit('bracket:recap:chunk', { token: text });
+    io.emit('bracket:recap:done', { text });
+  } catch (e) {
+    console.error('[AI recap]', e.message);
   }
-  io.emit('bracket:recap:done', { text: fullText });
 }
 
 module.exports = { generateAuctionCommentary, streamGameRecap };

@@ -3,22 +3,19 @@ const {
   db,
   getActiveTournamentId,
   getTournamentSetting, setTournamentSetting,
-  getAuctionItems, seedTeamsForTournament, applyAuctionOrder,
+  getAuctionItems, getActiveAuctionItem, seedTeamsForTournament, applyAuctionOrder,
   recalcEarnings, getPayoutConfig,
+  TOURNAMENT_SETTING_KEYS,
 } = require('../db');
 const { requireAdmin } = require('./middleware');
+const { scheduleAuctionStart, clearScheduledStart } = require('../scheduler');
 
 const router = express.Router();
 
 // GET /api/admin/settings
 router.get('/settings', requireAdmin, (req, res) => {
   const tid = getActiveTournamentId();
-  const keys = [
-    'invite_code', 'auction_timer_seconds', 'auction_grace_seconds',
-    'auction_status', 'tournament_started',
-    'auction_order', 'auction_auto_advance',
-    'ai_commentary_after_sale', 'ai_commentary_end_of_round',
-  ];
+  const keys = TOURNAMENT_SETTING_KEYS.filter(k => k !== 'name');
   const settings = {};
   for (const k of keys) settings[k] = getTournamentSetting(tid, k);
   res.json(settings);
@@ -28,15 +25,27 @@ router.get('/settings', requireAdmin, (req, res) => {
 router.patch('/settings', requireAdmin, (req, res) => {
   const tid = getActiveTournamentId();
   const allowed = [
-    'auction_timer_seconds', 'auction_grace_seconds',
-    'auction_order', 'auction_auto_advance',
-    'ai_commentary_after_sale', 'ai_commentary_end_of_round',
+    'auction_order', 'auction_auto_advance', 'ai_commentary_enabled',
+    'auction_scheduled_start', 'ai_commentary_end_of_round',
   ];
   for (const [k, v] of Object.entries(req.body)) {
     if (allowed.includes(k)) setTournamentSetting(tid, k, v);
   }
   if (req.body.auction_order) {
     applyAuctionOrder(tid, req.body.auction_order);
+  }
+  // Handle scheduled start: re-arm (or cancel) the server-side timer
+  const io = req.app.get('io');
+  if ('auction_scheduled_start' in req.body) {
+    const rawTs = req.body.auction_scheduled_start;
+    const ts = rawTs ? parseInt(rawTs) : null;
+    if (ts && ts > Date.now()) {
+      scheduleAuctionStart(tid, ts, io);
+      if (io) io.emit('auction:scheduled_start', { ts });
+    } else {
+      clearScheduledStart();
+      if (io) io.emit('auction:scheduled_start', { ts: null });
+    }
   }
   res.json({ ok: true });
 });
@@ -127,9 +136,14 @@ router.patch('/auction/queue', requireAdmin, (req, res) => {
 // POST /api/admin/auction/start
 router.post('/auction/start', requireAdmin, (req, res) => {
   const tid = getActiveTournamentId();
+  clearScheduledStart(); // cancel any pending auto-start
   setTournamentSetting(tid, 'auction_status', 'open');
+  setTournamentSetting(tid, 'auction_scheduled_start', '');
   const io = req.app.get('io');
-  if (io) io.emit('auction:status', { status: 'open' });
+  if (io) {
+    io.emit('auction:status', { status: 'open' });
+    io.emit('auction:scheduled_start', { ts: null }); // clear client countdown
+  }
   res.json({ ok: true });
 });
 
@@ -147,9 +161,7 @@ router.post('/auction/next', requireAdmin, (req, res) => {
   const tid = getActiveTournamentId();
   const { teamId } = req.body;
 
-  const currentActive = db.prepare(
-    "SELECT * FROM auction_items WHERE status = 'active' AND tournament_id = ?"
-  ).get(tid);
+  const currentActive = getActiveAuctionItem(tid);
   if (currentActive) return res.status(400).json({ error: 'An auction is already active. Close it first.' });
 
   let item;
@@ -184,9 +196,7 @@ router.post('/auction/next', requireAdmin, (req, res) => {
 // POST /api/admin/auction/close
 router.post('/auction/close', requireAdmin, (req, res) => {
   const tid = getActiveTournamentId();
-  const active = db.prepare(
-    "SELECT * FROM auction_items WHERE status = 'active' AND tournament_id = ?"
-  ).get(tid);
+  const active = getActiveAuctionItem(tid);
   if (!active) return res.status(400).json({ error: 'No active auction' });
 
   const io = req.app.get('io');

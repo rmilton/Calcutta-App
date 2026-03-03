@@ -15,7 +15,15 @@ import Admin from './pages/Admin';
 
 function ProtectedRoute({ children, adminOnly = false }) {
   const { participant } = useAuth();
-  if (participant === undefined) return <div className="flex items-center justify-center min-h-screen text-slate-400">Loading...</div>;
+  if (participant === undefined) return (
+    <div className="flex items-center justify-center min-h-screen" role="status" aria-label="Loading">
+      <div className="space-y-3 w-64 animate-fade-in">
+        <div className="skeleton h-8 w-full" />
+        <div className="skeleton h-8 w-4/5" />
+        <div className="skeleton h-8 w-3/5" />
+      </div>
+    </div>
+  );
   if (!participant) return <Navigate to="/join" replace />;
   if (adminOnly && !participant.isAdmin) return <Navigate to="/" replace />;
   return children;

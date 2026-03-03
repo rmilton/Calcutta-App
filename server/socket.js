@@ -160,6 +160,7 @@ function setupSocket(io) {
 
     // Place a bid
     socket.on('auction:bid', (data) => {
+      if (p.is_admin) return socket.emit('auction:error', { message: 'Admin cannot place bids' });
       const { amount } = data;
       if (!amount || isNaN(amount)) return socket.emit('auction:error', { message: 'Invalid bid amount' });
 

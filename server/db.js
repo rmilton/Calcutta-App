@@ -418,7 +418,7 @@ function getAllParticipants(tid) {
     SELECT p.id, p.name, p.color, p.is_admin, p.created_at
     FROM participants p
     JOIN tournament_participants tp ON tp.participant_id = p.id
-    WHERE tp.tournament_id = ?
+    WHERE tp.tournament_id = ? AND p.is_admin = 0
     ORDER BY tp.joined_at
   `).all(_tid);
 }
@@ -506,6 +506,7 @@ function getFullStandings(tid) {
       WHERE tournament_id = ?
       GROUP BY participant_id
     ) e_agg ON e_agg.participant_id = p.id
+    WHERE p.is_admin = 0
     ORDER BY total_earned DESC, total_spent ASC
   `).all(_tid, _tid, _tid);
 }

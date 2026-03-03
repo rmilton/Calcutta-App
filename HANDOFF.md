@@ -387,3 +387,27 @@ Client proxies `/api` and `/socket.io` to `localhost:3001` (configured in `clien
 - **`auction_timer_seconds` and `auction_grace_seconds`** are stored in the `PATCH /admin/settings` allowed list in `routes/admin.js` but were accidentally omitted in the explicit array — check the current state of that file before assuming they're saved.
 - **Bracket round 5 = Final Four, round 6 = Championship** — regions for rounds 5-6 are `'Final Four'` and `'Championship'` strings (not the regional names).
 - **`recalcEarnings` is idempotent** — it deletes all earnings for a tournament and reinserts. Safe to call multiple times.
+
+---
+
+## Refactor Backlog (Captured 2026-03-03)
+
+Status update:
+- Completed: auction start/close/bid logic consolidated into `server/services/auctionService.js`, with focused server tests in `server/tests/auctionService.test.js`.
+
+Remaining refactor TODOs:
+1. Split `server/db.js` into focused modules:
+   - migrations (`init` + column/table upgrades),
+   - repositories (query/read-write functions),
+   - domain services (payout/earnings/bracket helpers).
+2. Refactor `GET /api/standings/participant/:id` query to remove many correlated subqueries and replace with CTE/join-based query blocks for readability and performance.
+3. Move complex auction UI state in `client/src/pages/Auction.jsx` to a reducer/custom hook (`useAuctionRealtime`) so socket event transitions are centralized and easier to test.
+4. Componentize repeated admin settings UI patterns in `client/src/pages/admin/SettingsTab.jsx`:
+   - reusable toggle row component,
+   - reusable async action/message helper hook.
+5. Add request and socket payload validation (for example with Zod) for admin, bracket, auth, and auction socket inputs with a consistent error response format.
+6. Expand automated tests beyond auction service:
+   - bracket advance/unset behavior,
+   - round recap trigger timing,
+   - fixture load/clear behavior,
+   - game schedule metadata assignment/backfill behavior.

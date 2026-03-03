@@ -4,7 +4,7 @@ const {
   db,
   getActiveTournamentId,
   getTournamentSetting, setTournamentSetting,
-  getAuctionItems, getActiveAuctionItem, seedTeamsForTournament, applyAuctionOrder,
+  getAuctionItems, seedTeamsForTournament, applyAuctionOrder,
   recalcEarnings, getPayoutConfig,
   TOURNAMENT_SETTING_KEYS,
 } = require('../db');
@@ -232,49 +232,22 @@ router.post('/auction/pause', requireAdmin, (req, res) => {
 router.post('/auction/next', requireAdmin, (req, res) => {
   const tid = getActiveTournamentId();
   const { teamId } = req.body;
+  const auctionService = req.app.get('auctionService') || req.app.get('auctionModule');
+  if (!auctionService?.startAuction) return res.status(500).json({ error: 'Auction service unavailable' });
 
-  const currentActive = getActiveAuctionItem(tid);
-  if (currentActive) return res.status(400).json({ error: 'An auction is already active. Close it first.' });
-
-  let item;
-  if (teamId) {
-    item = db.prepare(
-      "SELECT * FROM auction_items WHERE team_id = ? AND status = 'pending' AND tournament_id = ?"
-    ).get(teamId, tid);
-  } else {
-    item = db.prepare(
-      "SELECT * FROM auction_items WHERE status = 'pending' AND tournament_id = ? ORDER BY queue_order LIMIT 1"
-    ).get(tid);
-  }
-  if (!item) return res.status(404).json({ error: 'No pending teams' });
-
-  const timerSeconds = parseInt(getTournamentSetting(tid, 'auction_timer_seconds') || '30');
-  const endTime = Date.now() + timerSeconds * 1000;
-
-  db.prepare(
-    "UPDATE auction_items SET status = 'active', bid_end_time = ?, current_price = 0 WHERE id = ?"
-  ).run(endTime, item.id);
-
-  const io = req.app.get('io');
-  if (io) {
-    const auctionModule = req.app.get('auctionModule');
-    if (auctionModule) auctionModule.startTimer(item.id, endTime);
-    io.emit('auction:started', { itemId: item.id, teamId: item.team_id, endTime });
-  }
-
-  res.json({ ok: true, itemId: item.id });
+  const result = auctionService.startAuction({ tid, teamId });
+  if (!result.ok) return res.status(result.status || 400).json({ error: result.error });
+  res.json({ ok: true, itemId: result.itemId });
 });
 
 // POST /api/admin/auction/close
 router.post('/auction/close', requireAdmin, (req, res) => {
   const tid = getActiveTournamentId();
-  const active = getActiveAuctionItem(tid);
-  if (!active) return res.status(400).json({ error: 'No active auction' });
+  const auctionService = req.app.get('auctionService') || req.app.get('auctionModule');
+  if (!auctionService?.closeActiveAuction) return res.status(500).json({ error: 'Auction service unavailable' });
 
-  const io = req.app.get('io');
-  const auctionModule = req.app.get('auctionModule');
-  if (auctionModule) auctionModule.closeAuction(active.id, io);
-
+  const result = auctionService.closeActiveAuction({ tid });
+  if (!result.ok) return res.status(result.status || 400).json({ error: result.error });
   res.json({ ok: true });
 });
 

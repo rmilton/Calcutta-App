@@ -67,3 +67,30 @@ const PORT = process.env.PORT || 3001;
 httpServer.listen(PORT, () => {
   console.log(`Calcutta server running on port ${PORT}`);
 });
+
+let isShuttingDown = false;
+function shutdown(signal) {
+  if (isShuttingDown) return;
+  isShuttingDown = true;
+  console.log(`[shutdown] Received ${signal}, closing server...`);
+
+  io.close(() => {
+    httpServer.close((err) => {
+      if (err) {
+        console.error('[shutdown] Error closing HTTP server', err);
+        process.exit(1);
+      }
+      console.log('[shutdown] Server closed cleanly');
+      process.exit(0);
+    });
+  });
+
+  // Safety timeout in case close hangs due to open handles.
+  setTimeout(() => {
+    console.error('[shutdown] Force exiting after timeout');
+    process.exit(1);
+  }, 10000).unref();
+}
+
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGINT', () => shutdown('SIGINT'));

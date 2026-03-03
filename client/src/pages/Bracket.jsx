@@ -1,15 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useSocketEvent } from '../context/SocketContext';
 import { useTournament } from '../context/TournamentContext';
+import { api, REGION_COLORS, ROUND_NAMES_SHORT } from '../utils';
 
-const REGION_COLORS = {
-  East:    '#ef4444',
-  West:    '#3b82f6',
-  South:   '#22c55e',
-  Midwest: '#f59e0b',
-};
 
-const ROUND_NAMES = ['R64', 'R32', 'S16', 'E8', 'F4', 'Champ'];
 
 function TeamSlot({ teamName, teamSeed, ownerName, ownerColor, isWinner, isEmpty }) {
   if (isEmpty) {
@@ -111,7 +105,7 @@ function RegionBracket({ region, games }) {
           return (
             <div key={round} className="shrink-0 min-w-[160px]">
               <div className="section-label text-center mb-2">
-                {ROUND_NAMES[round - 1]}
+                {ROUND_NAMES_SHORT[round]}
               </div>
               <div className="space-y-2">
                 {roundGames.map((g) => <GameCard key={g.id} game={g} />)}
@@ -131,7 +125,7 @@ export default function Bracket() {
   const [initialized, setInitialized] = useState(false);
 
   const loadGames = useCallback(() => {
-    fetch(`/api/bracket${apiTParam || ''}`, { credentials: 'include' })
+    api(`/bracket${apiTParam || ''}`)
       .then((r) => r.json())
       .then((data) => {
         setGames(data.games || []);

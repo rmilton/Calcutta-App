@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { useTournament } from '../context/TournamentContext';
+import ParticipantAvatar from './ParticipantAvatar';
 
 export default function Nav() {
   const { participant, logout } = useAuth();
@@ -125,13 +126,7 @@ export default function Nav() {
           <div className="flex items-center gap-2">
             {/* Avatar + name (desktop) */}
             <div className="hidden md:flex items-center gap-2.5">
-              <div
-                className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white ring-2 ring-surface-border shrink-0"
-                style={{ backgroundColor: participant?.color }}
-                aria-label={participant?.name}
-              >
-                {participant?.name?.[0]?.toUpperCase()}
-              </div>
+              <ParticipantAvatar name={participant?.name} color={participant?.color} size={32} />
               <span className="text-sm font-medium text-text-primary hidden lg:block">{participant?.name}</span>
             </div>
 
@@ -173,13 +168,7 @@ export default function Nav() {
             >
               {/* User row */}
               <div className="flex items-center gap-2.5 px-3 pb-3 mb-1 border-b border-surface-border">
-                <div
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold text-white ring-2 ring-surface-border"
-                  style={{ backgroundColor: participant?.color }}
-                  aria-hidden="true"
-                >
-                  {participant?.name?.[0]?.toUpperCase()}
-                </div>
+                <ParticipantAvatar name={participant?.name} color={participant?.color} size={32} />
                 <span className="text-sm font-semibold text-text-primary">{participant?.name}</span>
               </div>
 

@@ -2,6 +2,7 @@ const {
   db, getActiveTournamentId,
   getTournamentSetting,
   getParticipantByToken, getActiveAuctionItem, getRecentBids,
+  getTotalPot,
 } = require('./db');
 const { generateAuctionCommentary } = require('./ai');
 
@@ -22,6 +23,59 @@ function startTimer(itemId, endTime) {
       console.error('[closeAuction timer]', e);
     }
   }, delay);
+}
+
+function generateSaleCommentary(item, winner, team, tid, io) {
+  if (getTournamentSetting(tid, 'ai_commentary_enabled') === '0') return;
+
+  const totalPot = getTotalPot(tid);
+  const teamsRemaining = db.prepare(
+    "SELECT COUNT(*) as c FROM auction_items WHERE status = 'pending' AND tournament_id = ?"
+  ).get(tid).c;
+  const winnerStats = db.prepare(
+    'SELECT COUNT(*) as team_count, SUM(purchase_price) as total_spent FROM ownership WHERE participant_id = ? AND tournament_id = ?'
+  ).get(item.current_leader_id, tid);
+
+  generateAuctionCommentary({
+    teamName: team?.name,
+    seed: team?.seed,
+    region: team?.region,
+    price: item.current_price,
+    winnerName: winner?.name,
+    winnerTotalSpent: winnerStats?.total_spent || item.current_price,
+    winnerTeamCount: winnerStats?.team_count || 1,
+    totalPot,
+    teamsRemaining,
+  }, io).catch((e) => console.error('[AI auction]', e.message));
+}
+
+function autoAdvanceToNextItem(tid, io) {
+  if (getTournamentSetting(tid, 'auction_auto_advance') !== '1') return;
+
+  setTimeout(() => {
+    const _tid = getActiveTournamentId();
+    const nextItem = db.prepare(
+      "SELECT * FROM auction_items WHERE status = 'pending' AND tournament_id = ? ORDER BY queue_order LIMIT 1"
+    ).get(_tid);
+    if (nextItem && getTournamentSetting(_tid, 'auction_status') === 'open') {
+      const timerSeconds = parseInt(getTournamentSetting(_tid, 'auction_timer_seconds') || '30');
+      const endTime = Date.now() + timerSeconds * 1000;
+      db.prepare(
+        "UPDATE auction_items SET status = 'active', bid_end_time = ?, current_price = 0 WHERE id = ?"
+      ).run(endTime, nextItem.id);
+      startTimer(nextItem.id, endTime);
+      io.emit('auction:started', { itemId: nextItem.id, teamId: nextItem.team_id, endTime });
+    }
+  }, 3000);
+}
+
+function checkAuctionCompletion(tid, io) {
+  const pending = db.prepare(
+    "SELECT COUNT(*) as c FROM auction_items WHERE status IN ('pending', 'active') AND tournament_id = ?"
+  ).get(tid).c;
+  if (pending === 0) {
+    io.emit('auction:complete');
+  }
 }
 
 function closeAuction(itemId, io) {
@@ -57,49 +111,8 @@ function closeAuction(itemId, io) {
       finalPrice: item.current_price,
     });
 
-    // Fire-and-forget AI commentary (if enabled; default on)
-    if (getTournamentSetting(tid, 'ai_commentary_enabled') !== '0') {
-    const totalPot = db.prepare(
-      'SELECT COALESCE(SUM(purchase_price), 0) as t FROM ownership WHERE tournament_id = ?'
-    ).get(tid).t;
-    const teamsRemaining = db.prepare(
-      "SELECT COUNT(*) as c FROM auction_items WHERE status = 'pending' AND tournament_id = ?"
-    ).get(tid).c;
-    const winnerStats = db.prepare(
-      'SELECT COUNT(*) as team_count, SUM(purchase_price) as total_spent FROM ownership WHERE participant_id = ? AND tournament_id = ?'
-    ).get(item.current_leader_id, tid);
-
-    generateAuctionCommentary({
-      teamName: team?.name,
-      seed: team?.seed,
-      region: team?.region,
-      price: item.current_price,
-      winnerName: winner?.name,
-      winnerTotalSpent: winnerStats?.total_spent || item.current_price,
-      winnerTeamCount: winnerStats?.team_count || 1,
-      totalPot,
-      teamsRemaining,
-    }, io).catch((e) => console.error('[AI auction]', e.message));
-    } // end ai_commentary_enabled
-
-    // Auto-advance: start next pending team after a short delay
-    if (getTournamentSetting(tid, 'auction_auto_advance') === '1') {
-      setTimeout(() => {
-        const _tid = getActiveTournamentId();
-        const nextItem = db.prepare(
-          "SELECT * FROM auction_items WHERE status = 'pending' AND tournament_id = ? ORDER BY queue_order LIMIT 1"
-        ).get(_tid);
-        if (nextItem && getTournamentSetting(_tid, 'auction_status') === 'open') {
-          const timerSeconds = parseInt(getTournamentSetting(_tid, 'auction_timer_seconds') || '30');
-          const endTime = Date.now() + timerSeconds * 1000;
-          db.prepare(
-            "UPDATE auction_items SET status = 'active', bid_end_time = ?, current_price = 0 WHERE id = ?"
-          ).run(endTime, nextItem.id);
-          startTimer(nextItem.id, endTime);
-          io.emit('auction:started', { itemId: nextItem.id, teamId: nextItem.team_id, endTime });
-        }
-      }, 3000);
-    }
+    generateSaleCommentary(item, winner, team, tid, io);
+    autoAdvanceToNextItem(tid, io);
   } else {
     // No bids — mark as skipped/pending again for re-queue
     db.prepare(
@@ -108,13 +121,7 @@ function closeAuction(itemId, io) {
     io.emit('auction:nobids', { itemId });
   }
 
-  // Check if all teams are sold
-  const pending = db.prepare(
-    "SELECT COUNT(*) as c FROM auction_items WHERE status IN ('pending', 'active') AND tournament_id = ?"
-  ).get(tid).c;
-  if (pending === 0) {
-    io.emit('auction:complete');
-  }
+  checkAuctionCompletion(tid, io);
 }
 
 function setupSocket(io) {

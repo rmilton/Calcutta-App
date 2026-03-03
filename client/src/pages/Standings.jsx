@@ -3,7 +3,8 @@ import { useAuth } from '../context/AuthContext';
 import { useSocketEvent } from '../context/SocketContext';
 import { useTournament } from '../context/TournamentContext';
 import TeamLogo from '../components/TeamLogo';
-import { fmt } from '../utils';
+import ParticipantAvatar from '../components/ParticipantAvatar';
+import { fmt, api } from '../utils';
 
 function Medal({ rank }) {
   if (rank === 1) return <span role="img" aria-label="Rank 1 — Gold medal" className="text-yellow-400">🥇</span>;
@@ -23,8 +24,8 @@ export default function Standings() {
 
   const refreshFull = useCallback(() => {
     Promise.all([
-      fetch(`/api/standings${apiTParam || ''}`, { credentials: 'include' }).then((r) => r.json()),
-      fetch(`/api/standings/ownership${apiTParam || ''}`, { credentials: 'include' }).then((r) => r.json()),
+      api(`/standings${apiTParam || ''}`).then((r) => r.json()),
+      api(`/standings/ownership${apiTParam || ''}`).then((r) => r.json()),
     ]).then(([standingsData, ownershipData]) => {
       setStandings(standingsData.standings || []);
       setTotalPot(standingsData.totalPot || 0);
@@ -37,7 +38,7 @@ export default function Standings() {
 
   const refreshStandings = useCallback(() => {
     if (isViewingHistory) return;
-    fetch(`/api/standings${apiTParam || ''}`, { credentials: 'include' }).then((r) => r.json()).then((s) => {
+    api(`/standings${apiTParam || ''}`).then((r) => r.json()).then((s) => {
       setStandings(s.standings || []);
       setTotalPot(s.totalPot || 0);
     });
@@ -112,13 +113,7 @@ export default function Standings() {
                   </div>
 
                   {/* Avatar */}
-                  <div
-                    className="w-9 h-9 rounded-full flex items-center justify-center text-sm font-bold text-white ring-2 ring-surface-border shrink-0"
-                    style={{ backgroundColor: p.color }}
-                    aria-hidden="true"
-                  >
-                    {p.name[0].toUpperCase()}
-                  </div>
+                  <ParticipantAvatar name={p.name} color={p.color} size={36} />
 
                   {/* Name + meta */}
                   <div className="flex-1 min-w-0">

@@ -1,14 +1,24 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export default function Join() {
   const { join, adminLogin } = useAuth();
+  const [searchParams] = useSearchParams();
   const [name, setName] = useState('');
   const [inviteCode, setInviteCode] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
   const [mode, setMode] = useState('join'); // 'join' | 'admin'
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const inviteFromUrl = (searchParams.get('invite') || '').trim().toUpperCase().slice(0, 8);
+
+  useEffect(() => {
+    if (!inviteFromUrl) return;
+    setInviteCode(inviteFromUrl);
+    setMode('join');
+    setError('');
+  }, [inviteFromUrl]);
 
   const handleJoin = async (e) => {
     e.preventDefault();
@@ -103,12 +113,17 @@ export default function Join() {
                 id="join-code"
                 type="text"
                 value={inviteCode}
-                onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
+                onChange={(e) => setInviteCode(e.target.value.toUpperCase().slice(0, 8))}
                 placeholder="XXXXXX"
                 maxLength={8}
                 className="input font-mono tracking-widest"
                 required
               />
+              {inviteFromUrl && (
+                <p className="text-xs text-text-secondary mt-1">
+                  Invite code loaded from your link.
+                </p>
+              )}
             </div>
             {error && (
               <div role="alert" className="badge badge-error w-full justify-start px-3 py-2 rounded-xl text-sm">
@@ -149,7 +164,7 @@ export default function Join() {
         )}
 
         <p className="text-center text-text-secondary text-sm mt-6">
-          Ask your group admin for the invite code
+          Ask your group admin for an invite code or invite link
         </p>
       </div>
     </div>

@@ -15,6 +15,10 @@ export default function SettingsTab() {
   const [settings, setSettings] = useState(null);
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
+  const [testingBusy, setTestingBusy] = useState(false);
+  const [testingMsg, setTestingMsg] = useState('');
+  const [fixtureParticipantCount, setFixtureParticipantCount] = useState(8);
+  const [fixtureSoldTeamCount, setFixtureSoldTeamCount] = useState(24);
 
   useEffect(() => {
     api('/admin/settings').then((r) => r.json()).then(setSettings);
@@ -57,6 +61,48 @@ export default function SettingsTab() {
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+  };
+
+  const loadTestFixture = async () => {
+    if (!confirm('Load test fixture data for this tournament? This replaces current participants, bracket, and auction state.')) return;
+
+    setTestingBusy(true);
+    setTestingMsg('');
+    try {
+      const participantCount = Math.max(2, Math.min(16, parseInt(fixtureParticipantCount, 10) || 8));
+      const soldTeamCount = Math.max(0, Math.min(64, parseInt(fixtureSoldTeamCount, 10) || 0));
+
+      const r = await api('/admin/testing/load-fixture', {
+        method: 'POST',
+        body: JSON.stringify({ participantCount, soldTeamCount }),
+      });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || 'Failed to load fixture');
+      const s = data.summary || {};
+      setTestingMsg(`Loaded fixture: ${s.participantCount || 0} participants, ${s.soldTeamCount || 0} sold teams, ${s.pendingTeamCount || 0} pending.`);
+    } catch (e) {
+      setTestingMsg(e.message || 'Failed to load fixture');
+    } finally {
+      setTestingBusy(false);
+    }
+  };
+
+  const clearTestFixture = async () => {
+    if (!confirm('Clear test data for this tournament? This removes non-admin participants and resets all auction/bracket state.')) return;
+
+    setTestingBusy(true);
+    setTestingMsg('');
+    try {
+      const r = await api('/admin/testing/clear-fixture', { method: 'POST' });
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || 'Failed to clear fixture');
+      const s = data.summary || {};
+      setTestingMsg(`Cleared fixture: ${s.participantCount || 0} participants, ${s.soldTeamCount || 0} sold teams, ${s.pendingTeamCount || 0} pending.`);
+    } catch (e) {
+      setTestingMsg(e.message || 'Failed to clear fixture');
+    } finally {
+      setTestingBusy(false);
+    }
   };
 
   if (!settings) return <div className="text-slate-400 py-8 text-center">Loading...</div>;
@@ -232,6 +278,60 @@ export default function SettingsTab() {
           </svg>
           Download CSV
         </button>
+      </div>
+
+      <div className="border-t border-slate-700 pt-6">
+        <div className="text-sm font-medium text-slate-300 mb-1">Testing Tools</div>
+        <div className="text-xs text-slate-500 mb-3">
+          Load realistic fixture data (participants + assigned teams) or fully clear it for repeated testing.
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+          <div>
+            <label className="block text-xs text-slate-400 mb-1">Fixture Participants</label>
+            <input
+              type="number"
+              min="2"
+              max="16"
+              value={fixtureParticipantCount}
+              onChange={(e) => setFixtureParticipantCount(e.target.value)}
+              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-slate-400 mb-1">Fixture Sold Teams</label>
+            <input
+              type="number"
+              min="0"
+              max="64"
+              value={fixtureSoldTeamCount}
+              onChange={(e) => setFixtureSoldTeamCount(e.target.value)}
+              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={loadTestFixture}
+            disabled={testingBusy}
+            className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-800/60 text-white px-4 py-2 rounded-lg text-sm font-medium"
+          >
+            {testingBusy ? 'Working…' : 'Load Test Fixture'}
+          </button>
+          <button
+            type="button"
+            onClick={clearTestFixture}
+            disabled={testingBusy}
+            className="bg-rose-700 hover:bg-rose-800 disabled:bg-rose-900/60 text-white px-4 py-2 rounded-lg text-sm font-medium"
+          >
+            {testingBusy ? 'Working…' : 'Clear Test Data'}
+          </button>
+        </div>
+        {testingMsg && (
+          <div className="text-xs text-slate-300 mt-2">
+            {testingMsg}
+          </div>
+        )}
       </div>
 
       <button onClick={save} disabled={saving} className="btn-primary">

@@ -37,12 +37,19 @@ function AppRoutes() {
       {participant && <Nav />}
       <main className="min-h-screen">
         <Routes>
-          <Route path="/join" element={participant ? <Navigate to="/" replace /> : <Join />} />
+          <Route path="/join" element={participant ? <Navigate to={participant.isAdmin ? '/admin' : '/'} replace /> : <Join />} />
           <Route path="/" element={<ProtectedRoute><Auction /></ProtectedRoute>} />
           <Route path="/auction" element={<ProtectedRoute><Auction /></ProtectedRoute>} />
           <Route path="/bracket" element={<ProtectedRoute><Bracket /></ProtectedRoute>} />
           <Route path="/standings" element={<ProtectedRoute><Standings /></ProtectedRoute>} />
-          <Route path="/my-teams" element={<ProtectedRoute><MyTeams /></ProtectedRoute>} />
+          <Route
+            path="/my-teams"
+            element={
+              <ProtectedRoute>
+                {participant?.isAdmin ? <Navigate to="/admin" replace /> : <MyTeams />}
+              </ProtectedRoute>
+            }
+          />
           <Route path="/admin" element={<ProtectedRoute adminOnly><Admin /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

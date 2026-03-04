@@ -8,6 +8,9 @@ const {
   updateSeasonSettings,
   getSeasonParticipants,
   getAuctionItems,
+  getDrivers,
+  getEventById,
+  getEventResults,
   getEventPayoutRules,
   getSeasonBonusRules,
 } = require('../db');
@@ -176,11 +179,30 @@ router.patch('/payout-rules', withAdmin, (req, res) => {
 router.post('/results/sync-next', withAdmin, async (req, res) => {
   const seasonId = getActiveSeasonId();
   const provider = req.app.get('resultsProvider');
+  const force = req.query?.force === '1' || req.body?.force === true;
 
   const result = await syncNextEventFromProvider({
     seasonId,
     provider,
     io: req.app.get('io'),
+    includeFuture: force,
+    ignoreLock: force,
+  });
+
+  if (!result.ok) return res.status(result.status || 500).json({ error: result.error });
+  return res.json({ ok: true, ...result });
+});
+
+router.post('/results/advance-next', withAdmin, async (req, res) => {
+  const seasonId = getActiveSeasonId();
+  const provider = req.app.get('resultsProvider');
+
+  const result = await syncNextEventFromProvider({
+    seasonId,
+    provider,
+    io: req.app.get('io'),
+    includeFuture: true,
+    ignoreLock: true,
   });
 
   if (!result.ok) return res.status(result.status || 500).json({ error: result.error });
@@ -191,22 +213,39 @@ router.post('/results/sync-event/:id', withAdmin, async (req, res) => {
   const seasonId = getActiveSeasonId();
   const eventId = parseInt(req.params.id, 10);
   const provider = req.app.get('resultsProvider');
+  const force = req.query?.force === '1' || req.body?.force === true;
 
   const result = await syncEventFromProvider({
     seasonId,
     eventId,
     provider,
     io: req.app.get('io'),
+    ignoreLock: force,
   });
 
   if (!result.ok) return res.status(result.status || 500).json({ error: result.error });
   return res.json({ ok: true, ...result });
 });
 
+router.get('/results/event/:id', withAdmin, (req, res) => {
+  const seasonId = getActiveSeasonId();
+  const eventId = parseInt(req.params.id, 10);
+
+  const event = getEventById(seasonId, eventId);
+  if (!event) return res.status(404).json({ error: 'Event not found' });
+
+  return res.json({
+    event,
+    drivers: getDrivers(seasonId),
+    results: getEventResults(eventId),
+  });
+});
+
 router.patch('/results/event/:id', withAdmin, (req, res) => {
   const seasonId = getActiveSeasonId();
   const eventId = parseInt(req.params.id, 10);
   const rows = req.body?.results;
+  const force = req.query?.force === '1' || req.body?.force === true;
 
   if (!Array.isArray(rows) || rows.length === 0) {
     return res.status(400).json({ error: 'results must be a non-empty array' });
@@ -223,7 +262,7 @@ router.patch('/results/event/:id', withAdmin, (req, res) => {
     return res.status(upsertResult.status || 400).json({ error: upsertResult.error });
   }
 
-  const scoreResult = scoreEvent({ seasonId, eventId });
+  const scoreResult = scoreEvent({ seasonId, eventId, ignoreLock: force });
   if (!scoreResult.ok) {
     return res.status(scoreResult.status || 400).json({ error: scoreResult.error });
   }
@@ -239,6 +278,31 @@ router.post('/results/recalc-season-bonuses', withAdmin, (req, res) => {
   const result = recalcSeasonBonuses({ seasonId });
   req.app.get('io')?.emit('standings:update');
   return res.json({ ok: true, ...result });
+});
+
+router.get('/results/season-bonus-payouts', withAdmin, (req, res) => {
+  const seasonId = getActiveSeasonId();
+  const rows = db.prepare(`
+    SELECT sbp.id, sbp.category, sbp.amount_cents, sbp.tie_count,
+           p.name as participant_name,
+           d.code as driver_code,
+           d.name as driver_name
+    FROM season_bonus_payouts sbp
+    JOIN participants p ON p.id = sbp.participant_id
+    LEFT JOIN drivers d ON d.id = sbp.driver_id
+    WHERE sbp.season_id = ?
+    ORDER BY sbp.category ASC, sbp.amount_cents DESC, p.name ASC
+  `).all(seasonId);
+
+  const totals = db.prepare(`
+    SELECT category, SUM(amount_cents) as total_cents
+    FROM season_bonus_payouts
+    WHERE season_id = ?
+    GROUP BY category
+    ORDER BY category ASC
+  `).all(seasonId);
+
+  return res.json({ rows, totals });
 });
 
 module.exports = router;

@@ -653,6 +653,15 @@ function getEvents(seasonId) {
   `).all(seasonId, seasonId);
 }
 
+function getDrivers(seasonId) {
+  return db.prepare(`
+    SELECT id, external_id, code, name, team_name, active
+    FROM drivers
+    WHERE season_id = ? AND active = 1
+    ORDER BY external_id ASC, id ASC
+  `).all(seasonId);
+}
+
 function getEventById(seasonId, eventId) {
   return db.prepare('SELECT * FROM events WHERE season_id = ? AND id = ?').get(seasonId, eventId);
 }
@@ -727,6 +736,7 @@ module.exports = {
   getStandings,
   getParticipantPortfolio,
   getEvents,
+  getDrivers,
   getEventById,
   getEventResults,
   getEventPayoutRules,

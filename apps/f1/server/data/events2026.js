@@ -1,0 +1,28 @@
+const EVENTS_2026 = [
+  { round_number: 1, name: 'Australian Grand Prix', type: 'grand_prix', starts_at: '2026-02-22T04:00:00Z', lock_at: '2026-02-22T03:50:00Z' },
+  { round_number: 2, name: 'Chinese Grand Prix (Sprint)', type: 'sprint', starts_at: '2026-03-01T03:00:00Z', lock_at: '2026-03-01T02:50:00Z' },
+  { round_number: 3, name: 'Japanese Grand Prix', type: 'grand_prix', starts_at: '2026-04-05T05:00:00Z', lock_at: '2026-04-05T04:50:00Z' },
+  { round_number: 4, name: 'Bahrain Grand Prix', type: 'grand_prix', starts_at: '2026-04-12T15:00:00Z', lock_at: '2026-04-12T14:50:00Z' },
+  { round_number: 5, name: 'Saudi Arabian Grand Prix', type: 'grand_prix', starts_at: '2026-04-19T17:00:00Z', lock_at: '2026-04-19T16:50:00Z' },
+  { round_number: 6, name: 'Miami Grand Prix (Sprint)', type: 'sprint', starts_at: '2026-05-03T19:00:00Z', lock_at: '2026-05-03T18:50:00Z' },
+  { round_number: 7, name: 'Emilia Romagna Grand Prix', type: 'grand_prix', starts_at: '2026-05-17T13:00:00Z', lock_at: '2026-05-17T12:50:00Z' },
+  { round_number: 8, name: 'Monaco Grand Prix', type: 'grand_prix', starts_at: '2026-05-24T13:00:00Z', lock_at: '2026-05-24T12:50:00Z' },
+  { round_number: 9, name: 'Spanish Grand Prix', type: 'grand_prix', starts_at: '2026-05-31T13:00:00Z', lock_at: '2026-05-31T12:50:00Z' },
+  { round_number: 10, name: 'Canadian Grand Prix', type: 'grand_prix', starts_at: '2026-06-14T18:00:00Z', lock_at: '2026-06-14T17:50:00Z' },
+  { round_number: 11, name: 'Austrian Grand Prix', type: 'grand_prix', starts_at: '2026-06-28T13:00:00Z', lock_at: '2026-06-28T12:50:00Z' },
+  { round_number: 12, name: 'British Grand Prix (Sprint)', type: 'sprint', starts_at: '2026-07-05T14:00:00Z', lock_at: '2026-07-05T13:50:00Z' },
+  { round_number: 13, name: 'Belgian Grand Prix', type: 'grand_prix', starts_at: '2026-07-26T13:00:00Z', lock_at: '2026-07-26T12:50:00Z' },
+  { round_number: 14, name: 'Hungarian Grand Prix', type: 'grand_prix', starts_at: '2026-08-02T13:00:00Z', lock_at: '2026-08-02T12:50:00Z' },
+  { round_number: 15, name: 'Dutch Grand Prix', type: 'grand_prix', starts_at: '2026-08-30T13:00:00Z', lock_at: '2026-08-30T12:50:00Z' },
+  { round_number: 16, name: 'Italian Grand Prix', type: 'grand_prix', starts_at: '2026-09-06T13:00:00Z', lock_at: '2026-09-06T12:50:00Z' },
+  { round_number: 17, name: 'Azerbaijan Grand Prix', type: 'grand_prix', starts_at: '2026-09-20T11:00:00Z', lock_at: '2026-09-20T10:50:00Z' },
+  { round_number: 18, name: 'Singapore Grand Prix (Sprint)', type: 'sprint', starts_at: '2026-10-04T12:00:00Z', lock_at: '2026-10-04T11:50:00Z' },
+  { round_number: 19, name: 'United States Grand Prix', type: 'grand_prix', starts_at: '2026-10-18T19:00:00Z', lock_at: '2026-10-18T18:50:00Z' },
+  { round_number: 20, name: 'Mexico City Grand Prix', type: 'grand_prix', starts_at: '2026-10-25T20:00:00Z', lock_at: '2026-10-25T19:50:00Z' },
+  { round_number: 21, name: 'Sao Paulo Grand Prix (Sprint)', type: 'sprint', starts_at: '2026-11-08T17:00:00Z', lock_at: '2026-11-08T16:50:00Z' },
+  { round_number: 22, name: 'Las Vegas Grand Prix', type: 'grand_prix', starts_at: '2026-11-22T06:00:00Z', lock_at: '2026-11-22T05:50:00Z' },
+  { round_number: 23, name: 'Qatar Grand Prix', type: 'grand_prix', starts_at: '2026-11-29T16:00:00Z', lock_at: '2026-11-29T15:50:00Z' },
+  { round_number: 24, name: 'Abu Dhabi Grand Prix', type: 'grand_prix', starts_at: '2026-12-06T13:00:00Z', lock_at: '2026-12-06T12:50:00Z' },
+];
+
+module.exports = { EVENTS_2026 };

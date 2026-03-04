@@ -1,0 +1,9 @@
+[build]
+builder = "nixpacks"
+buildCommand = "npm install --prefix server && npm install --prefix client && npm run build --prefix client"
+
+[deploy]
+startCommand = "DB_PATH=/data/f1-calcutta.db node server/index.js"
+healthcheckPath = "/api/health"
+healthcheckTimeout = 30
+restartPolicyType = "on_failure"

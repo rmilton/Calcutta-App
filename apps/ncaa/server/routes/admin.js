@@ -22,10 +22,10 @@ const FIXTURE_COLORS = [
 ];
 
 const FIXTURE_NAMES = [
-  'Fixture Alpha', 'Fixture Bravo', 'Fixture Charlie', 'Fixture Delta',
-  'Fixture Echo', 'Fixture Foxtrot', 'Fixture Golf', 'Fixture Hotel',
-  'Fixture India', 'Fixture Juliet', 'Fixture Kilo', 'Fixture Lima',
-  'Fixture Mike', 'Fixture November', 'Fixture Oscar', 'Fixture Papa',
+  'Anakin', 'Ahsoka', 'Kenobi', 'Leia',
+  'Han', 'Luke', 'Rey', 'Finn',
+  'Grogu', 'Mando', 'Padme', 'Kylo',
+  'Lando', 'Jyn', 'Cassian', 'Thrawn',
 ];
 
 function fixtureNames(count) {

@@ -1,22 +1,24 @@
 # Dependencies
 node_modules/
-client/node_modules/
-server/node_modules/
+apps/*/node_modules/
+apps/*/client/node_modules/
+apps/*/server/node_modules/
 
 # Build output
-client/dist/
+apps/*/client/dist/
 
 # Database files (never commit live data)
-server/calcutta.db
-server/calcutta.db-shm
-server/calcutta.db-wal
+apps/*/server/*.db
+apps/*/server/*.db-shm
+apps/*/server/*.db-wal
 *.db
 *.db-shm
 *.db-wal
 
 # Environment / secrets (NEVER commit these)
 .env
-server/.env
+apps/*/.env
+apps/*/server/.env
 .env.local
 .env.*.local
 

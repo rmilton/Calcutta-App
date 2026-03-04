@@ -1,9 +1,9 @@
 [build]
 builder = "nixpacks"
-buildCommand = "npm run build:ncaa"
+buildCommand = "npm run build"
 
 [deploy]
-startCommand = "DB_PATH=/data/calcutta.db node apps/ncaa/server/index.js"
+startCommand = "DB_PATH=/data/calcutta.db node server/index.js"
 healthcheckPath = "/api/health"
 healthcheckTimeout = 30
 restartPolicyType = "on_failure"

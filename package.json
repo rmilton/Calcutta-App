@@ -1,13 +1,22 @@
 {
-  "name": "calcutta-app",
+  "name": "calcutta-monorepo",
   "version": "1.0.0",
   "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
-    "dev": "concurrently \"npm run dev:server\" \"npm run dev:client\"",
-    "dev:server": "cd server && npm run dev",
-    "dev:client": "cd client && npm run dev",
-    "build": "npm install --prefix server && npm install --prefix client && npm run build --prefix client",
-    "start": "node server/index.js"
+    "dev:ncaa": "npm --prefix apps/ncaa run dev",
+    "dev:f1": "npm --prefix apps/f1 run dev",
+    "dev": "concurrently \"npm run dev:ncaa\" \"npm run dev:f1\"",
+    "build:ncaa": "npm --prefix apps/ncaa run build",
+    "build:f1": "npm --prefix apps/f1 run build",
+    "build": "npm run build:ncaa && npm run build:f1",
+    "test:ncaa": "npm --prefix apps/ncaa/server test",
+    "test:f1": "npm --prefix apps/f1/server test",
+    "test": "npm run test:ncaa && npm run test:f1",
+    "check:ncaa-style-freeze": "bash ./scripts/check-ncaa-style-freeze.sh"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"

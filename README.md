@@ -1,98 +1,52 @@
-# March Madness Calcutta App
+# Calcutta Monorepo
 
-A real-time web app for running a March Madness Calcutta tournament with your friends — live auctions, bracket tracking, and automatic standings.
+This repository now contains two separate Calcutta products:
 
-## Features
+- `apps/ncaa` - March Madness Calcutta app (styling preserved)
+- `apps/f1` - Formula 1 season Calcutta app with F1-specific domain and UI
+- `packages/core` - shared utilities (money math, auth helpers, auction timing helpers)
 
-- **Live Auction** — Open ascending bidding on all 64 teams with real-time updates via WebSockets
-- **Bracket Tracking** — Admin enters game results; bracket and standings update automatically
-- **Standings** — Leaderboard with earnings, spend, and net per participant
-- **My Teams** — Each participant's portfolio of owned teams
-- **Admin Panel** — Control the auction, enter results, configure payouts, manage participants
-- **2026 Import** — Admin can import the 2026 bracket on Selection Sunday (March 15)
+## Development
 
-## Setup
-
-### Requirements
-- Node.js 18+
-- npm
-
-### Install
+Run NCAA app:
 
 ```bash
-# 1. Install root dependencies
-npm install
-
-# 2. Install server dependencies
-cd server && npm install && cd ..
-
-# 3. Install client dependencies
-cd client && npm install && cd ..
-
-# 4. Configure environment
-cp .env.example server/.env
-# Edit server/.env and set ADMIN_PASSWORD
+npm run dev:ncaa
 ```
 
-### Run (development)
+Run F1 app:
+
+```bash
+npm run dev:f1
+```
+
+Run both:
 
 ```bash
 npm run dev
 ```
 
-- Client: http://localhost:5173
-- Server: http://localhost:3001
+## Ports
 
-### Build for production
+- NCAA client/server: `5173` / `3001`
+- F1 client/server: `5174` / `3002`
+
+Override with env vars:
+
+- `NCAA_PORT`, `NCAA_CLIENT_ORIGIN`
+- `F1_PORT`, `F1_CLIENT_ORIGIN`, `F1_RESULTS_PROVIDER`
+
+## Testing
 
 ```bash
-npm run build
-npm start
+npm run test:ncaa
+npm run test:f1
 ```
 
-The server serves the React build as static files. Set `PORT` env var to change the port.
+## NCAA style freeze
 
-## Deploying to Railway
+A guard script is included to prevent accidental style changes in NCAA UI files:
 
-1. Push to GitHub
-2. Create a new Railway project, connect your repo
-3. Set environment variables: `ADMIN_PASSWORD`, `NODE_ENV=production`
-4. Add a volume mounted at `/app/server` to persist the SQLite database
-5. Set the start command to `npm start`
-
-## Usage
-
-### Admin Flow
-
-1. Go to `/join` → click "Admin Login" → enter your admin password
-2. **Settings tab**: Copy the invite code and share it with participants
-3. **Payouts tab**: Set dollar amounts for each round (R64 → Championship)
-4. **Auction tab**: Click "Open Auction" then use "Start Next Team" to put teams up for bid
-5. After all teams sold: **Bracket tab** → "Initialize Bracket"
-6. Enter game results as games are played
-
-### Participant Flow
-
-1. Go to the app URL → enter name + invite code
-2. Watch the live auction, place bids
-3. Check Standings and My Teams throughout the tournament
-
-## Auction Rules
-
-- Open ascending bids — anyone can outbid at any time
-- Initial timer: 30 seconds (configurable)
-- Grace period: 15 seconds reset on each new bid
-- No bid cap — pot grows from all purchases
-- Admin can manually close any auction or force-start specific teams
-
-## Payout Structure
-
-Configure per round in the Admin → Payouts tab. For example:
-- R64 Win: $5
-- R32 Win: $10
-- Sweet 16: $20
-- Elite 8: $40
-- Final Four: $80
-- Championship: $200
-
-Earnings are calculated automatically when admin records results.
+```bash
+npm run check:ncaa-style-freeze
+```

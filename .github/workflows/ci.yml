@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  ncaa:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci --prefix apps/ncaa
+      - run: npm ci --prefix apps/ncaa/server
+      - run: npm ci --prefix apps/ncaa/client
+      - run: npm test --prefix apps/ncaa/server
+      - run: npm run build --prefix apps/ncaa/client
+
+  f1:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci --prefix apps/f1
+      - run: npm ci --prefix apps/f1/server
+      - run: npm ci --prefix apps/f1/client
+      - run: npm test --prefix apps/f1/server
+      - run: npm run build --prefix apps/f1/client
+
+  ncaa-style-freeze:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check style freeze
+        run: |
+          if [ -n "${GITHUB_BASE_REF}" ]; then
+            BASE="origin/${GITHUB_BASE_REF}"
+          else
+            BASE="HEAD~1"
+          fi
+          bash ./scripts/check-ncaa-style-freeze.sh "$BASE"

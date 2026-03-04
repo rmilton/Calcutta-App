@@ -1,4 +1,6 @@
-require('dotenv').config({ path: require('path').join(__dirname, '..', '.env') });
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+require('dotenv').config({ path: path.join(__dirname, '..', '..', '..', '.env') });
 
 process.on('uncaughtException', (err) => console.error('[uncaughtException]', err));
 process.on('unhandledRejection', (reason) => console.error('[unhandledRejection]', reason));
@@ -7,7 +9,6 @@ const { createServer } = require('http');
 const { Server } = require('socket.io');
 const cookieParser = require('cookie-parser');
 const cors = require('cors');
-const path = require('path');
 
 const { init } = require('./db');
 const { setupSocket } = require('./socket');
@@ -25,7 +26,10 @@ const exportRoutes = require('./routes/export');
 const app = express();
 const httpServer = createServer(app);
 
-const corsConfig = { origin: process.env.CLIENT_ORIGIN || 'http://localhost:5173', credentials: true };
+const corsConfig = {
+  origin: process.env.NCAA_CLIENT_ORIGIN || process.env.CLIENT_ORIGIN || 'http://localhost:5173',
+  credentials: true,
+};
 
 const io = new Server(httpServer, { cors: corsConfig });
 
@@ -66,7 +70,7 @@ app.set('auctionModule', auctionService); // backwards compatibility
 setupSocket(io, auctionService);
 initScheduler(io);
 
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.NCAA_PORT || process.env.PORT || 3001;
 httpServer.listen(PORT, () => {
   console.log(`Calcutta server running on port ${PORT}`);
 });

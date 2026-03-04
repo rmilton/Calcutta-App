@@ -1,0 +1,81 @@
+import React, { useCallback, useEffect, useState } from 'react';
+import { useAuth } from '../context/AuthContext';
+import { api, fmtCents } from '../utils';
+
+export default function MyDrivers() {
+  const { participant } = useAuth();
+  const [drivers, setDrivers] = useState([]);
+  const [totalSpentCents, setTotalSpentCents] = useState(0);
+  const [totalEarnedCents, setTotalEarnedCents] = useState(0);
+
+  const load = useCallback(async () => {
+    if (!participant) return;
+    const response = await api(`/standings/participant/${participant.id}`);
+    const data = await response.json();
+    setDrivers(data.drivers || []);
+    setTotalSpentCents(data.totalSpentCents || 0);
+    setTotalEarnedCents(data.totalEarnedCents || 0);
+  }, [participant]);
+
+  useEffect(() => {
+    load().catch(() => {});
+  }, [load]);
+
+  return (
+    <div className="stack-lg">
+      <section className="panel telemetry-strip stagger-in">
+        <div className="strip-item">
+          <span className="label">Total Spent</span>
+          <strong>{fmtCents(totalSpentCents)}</strong>
+        </div>
+        <div className="strip-item">
+          <span className="label">Total Earned</span>
+          <strong>{fmtCents(totalEarnedCents)}</strong>
+        </div>
+        <div className="strip-item">
+          <span className="label">Net</span>
+          <strong className={totalEarnedCents - totalSpentCents >= 0 ? 'text-pos' : 'text-neg'}>
+            {fmtCents(totalEarnedCents - totalSpentCents)}
+          </strong>
+        </div>
+      </section>
+
+      <section className="panel">
+        <h2>My Drivers</h2>
+        {!drivers.length ? <p className="muted">No drivers purchased yet.</p> : (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Code</th>
+                  <th>Driver</th>
+                  <th>Team</th>
+                  <th>Purchase</th>
+                  <th>Event Earnings</th>
+                  <th>Bonus Earnings</th>
+                  <th>Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {drivers.map((driver) => {
+                  const total = driver.event_earnings_cents + driver.bonus_earnings_cents;
+                  return (
+                    <tr key={driver.driver_id}>
+                      <td>{driver.driver_code}</td>
+                      <td>{driver.driver_name}</td>
+                      <td>{driver.team_name}</td>
+                      <td>{fmtCents(driver.purchase_price_cents)}</td>
+                      <td>{fmtCents(driver.event_earnings_cents)}</td>
+                      <td>{fmtCents(driver.bonus_earnings_cents)}</td>
+                      <td>{fmtCents(total)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}

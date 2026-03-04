@@ -1,6 +1,5 @@
 const {
   amountFromBps,
-  allocateByBps,
   splitCentsEvenly,
 } = require('../lib/core');
 const {
@@ -19,14 +18,6 @@ const SPRINT_POINTS = [8, 7, 6, 5, 4, 3, 2, 1];
 function valueForPosition(pointsTable, pos) {
   if (!pos || pos < 1 || pos > pointsTable.length) return 0;
   return pointsTable[pos - 1] || 0;
-}
-
-function keyByDriver(rows) {
-  const map = new Map();
-  for (const row of rows) {
-    map.set(row.driver_id, row);
-  }
-  return map;
 }
 
 function winnersByFinish(rows, targetPosition) {
@@ -80,8 +71,12 @@ function resolveCategoryWinners(category, rows, event, rankOrder = 1) {
 }
 
 function ensureRandomBonusPosition(event) {
-  if (event.random_bonus_position) return event.random_bonus_position;
-  const drawn = (Math.floor(Math.random() * 20) + 1);
+  const minPosition = event.type === 'grand_prix' ? 4 : 1;
+  const maxPosition = 20;
+  const existing = Number(event.random_bonus_position);
+  if (existing >= minPosition && existing <= maxPosition) return existing;
+
+  const drawn = Math.floor(Math.random() * (maxPosition - minPosition + 1)) + minPosition;
   db.prepare(`
     UPDATE events
     SET random_bonus_position = ?, random_bonus_drawn_at = ?
@@ -90,12 +85,12 @@ function ensureRandomBonusPosition(event) {
   return drawn;
 }
 
-function scoreEvent({ seasonId, eventId, skipSeasonBonuses = false }) {
+function scoreEvent({ seasonId, eventId, skipSeasonBonuses = false, ignoreLock = false }) {
   const event = getEventById(seasonId, eventId);
   if (!event) return { ok: false, status: 404, error: 'Event not found' };
 
   const lockAtMs = event.lock_at ? Date.parse(event.lock_at) : null;
-  if (Number.isFinite(lockAtMs) && Date.now() < lockAtMs) {
+  if (!ignoreLock && Number.isFinite(lockAtMs) && Date.now() < lockAtMs) {
     return { ok: false, status: 400, error: 'Event lock time has not passed yet' };
   }
 
@@ -157,11 +152,28 @@ function scoreEvent({ seasonId, eventId, skipSeasonBonuses = false }) {
 
 function getAllSeasonResultRows(seasonId) {
   return db.prepare(`
-    SELECT e.type, er.driver_id, er.finish_position
+    SELECT e.id as event_id, e.type, er.driver_id, er.finish_position, er.positions_gained
     FROM event_results er
     JOIN events e ON e.id = er.event_id
-    WHERE e.season_id = ?
+    WHERE e.season_id = ? AND e.status = 'scored'
   `).all(seasonId);
+}
+
+function getChampionshipStandings(seasonId, rows) {
+  const points = new Map(
+    db.prepare('SELECT id FROM drivers WHERE season_id = ? ORDER BY id ASC').all(seasonId)
+      .map((driver) => [driver.id, 0])
+  );
+
+  for (const row of rows) {
+    const table = row.type === 'sprint' ? SPRINT_POINTS : GP_POINTS;
+    const earned = valueForPosition(table, row.finish_position);
+    points.set(row.driver_id, (points.get(row.driver_id) || 0) + earned);
+  }
+
+  return Array.from(points.entries())
+    .map(([driver_id, total_points]) => ({ driver_id, total_points }))
+    .sort((a, b) => (b.total_points - a.total_points) || (a.driver_id - b.driver_id));
 }
 
 function getWinnersFromMetric(metricMap, comparator) {
@@ -174,18 +186,33 @@ function getWinnersFromMetric(metricMap, comparator) {
   return entries.filter(([, value]) => value === targetValue).map(([driverId]) => driverId);
 }
 
-function resolveSeasonBonusWinners(category, seasonId) {
-  const rows = getAllSeasonResultRows(seasonId);
-  if (!rows.length) return [];
+function getSeasonRandomBonusPosition(seasonId, standingsCount) {
+  if (standingsCount <= 0) return null;
+  const season = db.prepare(`
+    SELECT season_random_bonus_position
+    FROM seasons
+    WHERE id = ?
+  `).get(seasonId);
+
+  const existing = Number(season?.season_random_bonus_position);
+  if (existing >= 1 && existing <= standingsCount) {
+    return existing;
+  }
+
+  const drawn = Math.floor(Math.random() * standingsCount) + 1;
+  db.prepare(`
+    UPDATE seasons
+    SET season_random_bonus_position = ?, season_random_bonus_drawn_at = ?
+    WHERE id = ?
+  `).run(drawn, Date.now(), seasonId);
+  return drawn;
+}
+
+function resolveSeasonBonusWinners(category, seasonId, context) {
+  const { rows, standings } = context;
 
   if (category === 'drivers_champion') {
-    const points = new Map();
-    for (const row of rows) {
-      const table = row.type === 'sprint' ? SPRINT_POINTS : GP_POINTS;
-      const earned = valueForPosition(table, row.finish_position);
-      points.set(row.driver_id, (points.get(row.driver_id) || 0) + earned);
-    }
-    return getWinnersFromMetric(points, (a, b) => a > b);
+    return standings.length ? [standings[0].driver_id] : [];
   }
 
   if (category === 'most_race_wins') {
@@ -196,32 +223,32 @@ function resolveSeasonBonusWinners(category, seasonId) {
     return getWinnersFromMetric(wins, (a, b) => a > b);
   }
 
-  if (category === 'most_podiums') {
-    const podiums = new Map();
+  if (category === 'most_top10_outside_top4') {
+    const topFour = new Set(standings.slice(0, 4).map((entry) => entry.driver_id));
+    const top10Counts = new Map();
+
     rows
-      .filter((row) => row.type === 'grand_prix' && row.finish_position <= 3)
-      .forEach((row) => podiums.set(row.driver_id, (podiums.get(row.driver_id) || 0) + 1));
-    return getWinnersFromMetric(podiums, (a, b) => a > b);
+      .filter((row) => row.finish_position <= 10 && !topFour.has(row.driver_id))
+      .forEach((row) => top10Counts.set(row.driver_id, (top10Counts.get(row.driver_id) || 0) + 1));
+
+    return getWinnersFromMetric(top10Counts, (a, b) => a > b);
   }
 
-  if (category === 'best_avg_finish') {
-    const sums = new Map();
-    const counts = new Map();
+  if (category === 'season_random_finish_position') {
+    const drawnPosition = getSeasonRandomBonusPosition(seasonId, standings.length);
+    if (!drawnPosition) return [];
+    const winner = standings[drawnPosition - 1];
+    return winner ? [winner.driver_id] : [];
+  }
 
-    rows
-      .filter((row) => row.type === 'grand_prix')
-      .forEach((row) => {
-        sums.set(row.driver_id, (sums.get(row.driver_id) || 0) + row.finish_position);
-        counts.set(row.driver_id, (counts.get(row.driver_id) || 0) + 1);
-      });
-
-    const averages = new Map();
-    for (const [driverId, count] of counts.entries()) {
-      if (count > 0) {
-        averages.set(driverId, Math.round((sums.get(driverId) / count) * 1000) / 1000);
-      }
-    }
-    return getWinnersFromMetric(averages, (a, b) => a < b);
+  if (category === 'biggest_single_race_climb') {
+    if (!rows.length) return [];
+    const bestGain = Math.max(...rows.map((row) => Number(row.positions_gained) || 0));
+    return [...new Set(
+      rows
+        .filter((row) => (Number(row.positions_gained) || 0) === bestGain)
+        .map((row) => row.driver_id)
+    )];
   }
 
   return [];
@@ -234,21 +261,10 @@ function recalcSeasonBonuses({ seasonId }) {
   if (!rules.length) return { ok: true, distributedCents: 0 };
 
   const totalPot = getTotalPotCents(seasonId);
-  const eventDistributed = db.prepare(
-    'SELECT COALESCE(SUM(amount_cents), 0) as total FROM event_payouts WHERE season_id = ?'
-  ).get(seasonId).total;
+  if (totalPot <= 0) return { ok: true, distributedCents: 0 };
 
-  const remainder = Math.max(0, totalPot - eventDistributed);
-  if (remainder <= 0) return { ok: true, distributedCents: 0 };
-
-  const allocations = allocateByBps(
-    remainder,
-    rules.map((rule) => ({
-      rule,
-      bps: rule.bps,
-    }))
-  );
-
+  const rows = getAllSeasonResultRows(seasonId);
+  const standings = getChampionshipStandings(seasonId, rows);
   const ownershipMap = new Map(getOwnershipBySeason(seasonId).map((o) => [o.driver_id, o.participant_id]));
 
   const insert = db.prepare(`
@@ -258,12 +274,12 @@ function recalcSeasonBonuses({ seasonId }) {
   `);
 
   let distributed = 0;
-  allocations.forEach((allocation, idx) => {
-    const rule = rules[idx];
-    const winners = resolveSeasonBonusWinners(rule.category, seasonId);
-    if (!winners.length || allocation.cents <= 0) return;
+  rules.forEach((rule) => {
+    const payoutCents = amountFromBps(totalPot, rule.bps);
+    const winners = resolveSeasonBonusWinners(rule.category, seasonId, { rows, standings });
+    if (!winners.length || payoutCents <= 0) return;
 
-    const shares = splitCentsEvenly(allocation.cents, winners.length);
+    const shares = splitCentsEvenly(payoutCents, winners.length);
     winners.forEach((driverId, shareIdx) => {
       const participantId = ownershipMap.get(driverId);
       if (!participantId) return;
@@ -272,7 +288,43 @@ function recalcSeasonBonuses({ seasonId }) {
     });
   });
 
-  return { ok: true, distributedCents: distributed, remainderCents: remainder };
+  return { ok: true, distributedCents: distributed };
+}
+
+function rescoreSeasonEvents({ seasonId }) {
+  const eventIds = db.prepare(`
+    SELECT e.id
+    FROM events e
+    WHERE e.season_id = ?
+      AND EXISTS (
+        SELECT 1 FROM event_results er WHERE er.event_id = e.id
+      )
+    ORDER BY e.round_number ASC,
+      CASE WHEN e.type = 'sprint' THEN 0 ELSE 1 END ASC
+  `).all(seasonId).map((row) => row.id);
+
+  db.prepare('DELETE FROM event_payouts WHERE season_id = ?').run(seasonId);
+
+  let rescoredEvents = 0;
+  for (const eventId of eventIds) {
+    const result = scoreEvent({
+      seasonId,
+      eventId,
+      skipSeasonBonuses: true,
+      ignoreLock: true,
+    });
+    if (!result.ok) {
+      return result;
+    }
+    rescoredEvents += 1;
+  }
+
+  const seasonBonus = recalcSeasonBonuses({ seasonId });
+  return {
+    ok: true,
+    rescoredEvents,
+    seasonBonusDistributedCents: seasonBonus.distributedCents || 0,
+  };
 }
 
 function upsertEventResults({ seasonId, eventId, rows, manualOverride = false }) {
@@ -380,6 +432,7 @@ async function syncNextEventFromProvider({ seasonId, provider, io }) {
 module.exports = {
   scoreEvent,
   recalcSeasonBonuses,
+  rescoreSeasonEvents,
   upsertEventResults,
   syncEventFromProvider,
   syncNextEventFromProvider,

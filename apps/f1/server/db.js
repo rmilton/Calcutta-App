@@ -4,13 +4,160 @@ const path = require('path');
 const { generateInviteCode } = require('./lib/core');
 const { DRIVERS_2026 } = require('./data/drivers2026');
 const { EVENTS_2026 } = require('./data/events2026');
-const { EVENT_RULES, DEFAULT_SEASON_BONUS_RULES } = require('./data/payoutRules');
+const {
+  EVENT_RULES,
+  DEFAULT_SEASON_BONUS_RULES,
+  DEPRECATED_SEASON_BONUS_CATEGORIES,
+  PAYOUT_MODEL_V2,
+} = require('./data/payoutRules');
 
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'f1-calcutta.db');
 const db = new Database(DB_PATH);
 
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
+
+function columnExists(tableName, columnName) {
+  const rows = db.prepare(`PRAGMA table_info(${tableName})`).all();
+  return rows.some((row) => row.name === columnName);
+}
+
+function drawRandomPosition(min, max) {
+  return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function applyPayoutModelV2Migration(seasonId) {
+  const season = db.prepare('SELECT id, payout_model_version FROM seasons WHERE id = ?').get(seasonId);
+  if (!season || (Number(season.payout_model_version) || 1) >= PAYOUT_MODEL_V2) {
+    return { migrated: false };
+  }
+
+  const now = Date.now();
+
+  const upsertEventRule = db.prepare(`
+    INSERT INTO event_payout_rules
+      (season_id, event_type, category, label, bps, rank_order, active)
+    VALUES (?, ?, ?, ?, ?, ?, 1)
+    ON CONFLICT(season_id, event_type, category, rank_order)
+    DO UPDATE SET
+      label = excluded.label,
+      bps = excluded.bps,
+      active = 1
+  `);
+
+  const upsertSeasonRule = db.prepare(`
+    INSERT INTO season_bonus_rules
+      (season_id, category, label, bps, rank_order, active)
+    VALUES (?, ?, ?, ?, ?, 1)
+    ON CONFLICT(season_id, category, rank_order)
+    DO UPDATE SET
+      label = excluded.label,
+      bps = excluded.bps,
+      active = 1
+  `);
+
+  const deactivateEventRule = db.prepare(`
+    UPDATE event_payout_rules
+    SET active = 0
+    WHERE season_id = ? AND id = ?
+  `);
+
+  const deactivateSeasonRule = db.prepare(`
+    UPDATE season_bonus_rules
+    SET active = 0
+    WHERE season_id = ? AND id = ?
+  `);
+
+  const updateGpRandomDraw = db.prepare(`
+    UPDATE events
+    SET random_bonus_position = ?, random_bonus_drawn_at = ?
+    WHERE id = ? AND season_id = ?
+  `);
+
+  db.transaction(() => {
+    for (const [eventType, rules] of Object.entries(EVENT_RULES)) {
+      rules.forEach((rule) => {
+        upsertEventRule.run(
+          seasonId,
+          eventType,
+          rule.category,
+          rule.label,
+          rule.bps,
+          rule.rank_order || 1
+        );
+      });
+
+      const keepKeys = new Set(rules.map((rule) => `${rule.category}|${rule.rank_order || 1}`));
+      const existing = db.prepare(`
+        SELECT id, category, rank_order
+        FROM event_payout_rules
+        WHERE season_id = ? AND event_type = ?
+      `).all(seasonId, eventType);
+
+      existing.forEach((rule) => {
+        const key = `${rule.category}|${rule.rank_order || 1}`;
+        if (!keepKeys.has(key)) {
+          deactivateEventRule.run(seasonId, rule.id);
+        }
+      });
+    }
+
+    DEFAULT_SEASON_BONUS_RULES.forEach((rule) => {
+      upsertSeasonRule.run(
+        seasonId,
+        rule.category,
+        rule.label,
+        rule.bps,
+        rule.rank_order || 1
+      );
+    });
+
+    const keepSeasonKeys = new Set(DEFAULT_SEASON_BONUS_RULES.map((rule) => `${rule.category}|${rule.rank_order || 1}`));
+    const existingSeasonRules = db.prepare(`
+      SELECT id, category, rank_order
+      FROM season_bonus_rules
+      WHERE season_id = ?
+    `).all(seasonId);
+
+    existingSeasonRules.forEach((rule) => {
+      const key = `${rule.category}|${rule.rank_order || 1}`;
+      if (!keepSeasonKeys.has(key)) {
+        deactivateSeasonRule.run(seasonId, rule.id);
+      }
+    });
+
+    if (DEPRECATED_SEASON_BONUS_CATEGORIES.length) {
+      const placeholders = DEPRECATED_SEASON_BONUS_CATEGORIES.map(() => '?').join(', ');
+      db.prepare(`
+        UPDATE season_bonus_rules
+        SET active = 0
+        WHERE season_id = ?
+          AND category IN (${placeholders})
+      `).run(seasonId, ...DEPRECATED_SEASON_BONUS_CATEGORIES);
+    }
+
+    const gpEvents = db.prepare(`
+      SELECT id, random_bonus_position
+      FROM events
+      WHERE season_id = ? AND type = 'grand_prix' AND status = 'scored'
+    `).all(seasonId);
+
+    gpEvents.forEach((event) => {
+      const pos = Number(event.random_bonus_position);
+      if (!pos || pos < 4 || pos > 20) {
+        updateGpRandomDraw.run(drawRandomPosition(4, 20), now, event.id, seasonId);
+      }
+    });
+
+    db.prepare(`
+      UPDATE seasons
+      SET payout_model_version = ?
+      WHERE id = ?
+    `).run(PAYOUT_MODEL_V2, seasonId);
+  })();
+
+  return { migrated: true };
+}
 
 function init() {
   db.exec(`
@@ -29,6 +176,9 @@ function init() {
       auction_grace_seconds INTEGER NOT NULL DEFAULT 15,
       auction_status TEXT NOT NULL DEFAULT 'waiting',
       auction_auto_advance INTEGER NOT NULL DEFAULT 0,
+      payout_model_version INTEGER NOT NULL DEFAULT 1,
+      season_random_bonus_position INTEGER,
+      season_random_bonus_drawn_at INTEGER,
       created_at INTEGER NOT NULL DEFAULT (unixepoch())
     );
 
@@ -167,6 +317,16 @@ function init() {
     );
   `);
 
+  if (!columnExists('seasons', 'payout_model_version')) {
+    db.exec('ALTER TABLE seasons ADD COLUMN payout_model_version INTEGER NOT NULL DEFAULT 1');
+  }
+  if (!columnExists('seasons', 'season_random_bonus_position')) {
+    db.exec('ALTER TABLE seasons ADD COLUMN season_random_bonus_position INTEGER');
+  }
+  if (!columnExists('seasons', 'season_random_bonus_drawn_at')) {
+    db.exec('ALTER TABLE seasons ADD COLUMN season_random_bonus_drawn_at INTEGER');
+  }
+
   const seasonCount = db.prepare('SELECT COUNT(*) as c FROM seasons').get().c;
   if (seasonCount === 0) {
     const year = new Date().getUTCFullYear();
@@ -182,6 +342,11 @@ function init() {
 
   const activeSeasonId = getActiveSeasonId();
   seedSeasonData(activeSeasonId);
+  const payoutMigration = applyPayoutModelV2Migration(activeSeasonId);
+  return {
+    activeSeasonId,
+    payoutModelMigrated: !!payoutMigration.migrated,
+  };
 }
 
 function seedSeasonData(seasonId) {
@@ -287,7 +452,10 @@ function getSeasonSettings(seasonId) {
   return db.prepare(`
     SELECT id, year, name, invite_code, status,
            auction_timer_seconds, auction_grace_seconds,
-           auction_status, auction_auto_advance
+           auction_status, auction_auto_advance,
+           payout_model_version,
+           season_random_bonus_position,
+           season_random_bonus_drawn_at
     FROM seasons
     WHERE id = ?
   `).get(seasonId);

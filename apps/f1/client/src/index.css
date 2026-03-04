@@ -739,6 +739,38 @@ tbody tr:hover {
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 }
 
+.bps-summary {
+  margin-top: 0.4rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.bps-summary h3 {
+  margin: 0;
+}
+
+.bps-pill {
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.05);
+  padding: 0.26rem 0.58rem;
+}
+
+.bps-pill.ok {
+  border-color: rgba(86, 221, 154, 0.5);
+  color: #b5ffd9;
+}
+
+.bps-pill.warn {
+  border-color: rgba(255, 120, 120, 0.5);
+  color: #ffd2d2;
+}
+
 .checkbox-row {
   flex-direction: row;
   align-items: center;

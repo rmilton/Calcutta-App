@@ -2,6 +2,18 @@ import React, { useMemo } from 'react';
 import { categoryLabel } from '../../utils';
 import useAdminOutletContext from './useAdminOutletContext';
 
+const TARGETS = {
+  grand_prix: 350,
+  sprint: 150,
+  season_bonus: 700,
+};
+
+function totalDelta(total, target) {
+  const delta = total - target;
+  const sign = delta > 0 ? '+' : '';
+  return `${sign}${delta}`;
+}
+
 export default function PayoutRulesPage() {
   const { rules, updateRules, saveRules, loading, hasLoaded } = useAdminOutletContext();
 
@@ -20,9 +32,14 @@ export default function PayoutRulesPage() {
   return (
     <section className="panel stack">
       <h2>Payout Rules</h2>
-      <p className="muted">1% = 100 bps. GP target 300 bps, Sprint target 100 bps, Season bonus target 10,000 bps.</p>
+      <p className="muted">1% = 100 bps. Targets: GP 350 bps, Sprint 150 bps, Season bonus 700 bps.</p>
 
-      <h3>Grand Prix ({gpTotal} bps)</h3>
+      <div className="bps-summary">
+        <h3>Grand Prix</h3>
+        <span className={`bps-pill ${gpTotal === TARGETS.grand_prix ? 'ok' : 'warn'}`}>
+          {gpTotal} bps ({totalDelta(gpTotal, TARGETS.grand_prix)})
+        </span>
+      </div>
       <div className="table-wrap">
         <table>
           <thead><tr><th>Category</th><th>BPS</th></tr></thead>
@@ -42,7 +59,12 @@ export default function PayoutRulesPage() {
         </table>
       </div>
 
-      <h3>Sprint ({sprintTotal} bps)</h3>
+      <div className="bps-summary">
+        <h3>Sprint</h3>
+        <span className={`bps-pill ${sprintTotal === TARGETS.sprint ? 'ok' : 'warn'}`}>
+          {sprintTotal} bps ({totalDelta(sprintTotal, TARGETS.sprint)})
+        </span>
+      </div>
       <div className="table-wrap">
         <table>
           <thead><tr><th>Category</th><th>BPS</th></tr></thead>
@@ -62,7 +84,12 @@ export default function PayoutRulesPage() {
         </table>
       </div>
 
-      <h3>Season Bonuses ({bonusTotal} bps)</h3>
+      <div className="bps-summary">
+        <h3>Season Bonuses</h3>
+        <span className={`bps-pill ${bonusTotal === TARGETS.season_bonus ? 'ok' : 'warn'}`}>
+          {bonusTotal} bps ({totalDelta(bonusTotal, TARGETS.season_bonus)})
+        </span>
+      </div>
       <div className="table-wrap">
         <table>
           <thead><tr><th>Category</th><th>BPS</th></tr></thead>

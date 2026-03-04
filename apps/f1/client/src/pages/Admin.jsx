@@ -192,7 +192,7 @@ export default function Admin() {
             {ADMIN_SECTIONS.map((section) => (
               <NavLink
                 key={section.path}
-                to={section.path}
+                to={`/admin/${section.path}`}
                 className={({ isActive }) => `admin-nav-link ${isActive ? 'active' : ''}`}
               >
                 <span className="admin-nav-label">{section.label}</span>
@@ -207,7 +207,7 @@ export default function Admin() {
             {ADMIN_SECTIONS.map((section) => (
               <NavLink
                 key={section.path}
-                to={section.path}
+                to={`/admin/${section.path}`}
                 className={({ isActive }) => `admin-nav-pill ${isActive ? 'active' : ''}`}
               >
                 {section.label}

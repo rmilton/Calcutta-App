@@ -16,6 +16,7 @@ const { init } = require('./db');
 const { setupSocket } = require('./socket');
 const { createAuctionService } = require('./services/auctionService');
 const { createResultsProvider } = require('./providers');
+const { rescoreSeasonEvents } = require('./services/scoringService');
 
 const authRoutes = require('./routes/auth');
 const auctionRoutes = require('./routes/auction');
@@ -57,12 +58,22 @@ if (process.env.NODE_ENV === 'production') {
   });
 }
 
-init();
+const initResult = init();
 const auctionService = createAuctionService(io);
 auctionService.restoreTimerOnStartup();
 app.set('auctionService', auctionService);
 app.set('resultsProvider', createResultsProvider());
 setupSocket(io, auctionService);
+
+if (initResult?.payoutModelMigrated) {
+  const rescore = rescoreSeasonEvents({ seasonId: initResult.activeSeasonId });
+  if (!rescore.ok) {
+    console.error('[payout-model-v2] Failed to rescore season events', rescore);
+  } else {
+    io.emit('standings:update');
+    console.log(`[payout-model-v2] Rescored ${rescore.rescoredEvents} events for season ${initResult.activeSeasonId}`);
+  }
+}
 
 const PORT = process.env.F1_PORT || process.env.PORT || 3002;
 httpServer.listen(PORT, () => {

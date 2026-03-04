@@ -45,12 +45,12 @@ function AppRoutes() {
           <Route path="/standings" element={<ProtectedRoute><Standings /></ProtectedRoute>} />
           <Route path="/my-drivers" element={<ProtectedRoute><MyDrivers /></ProtectedRoute>} />
           <Route path="/admin" element={<ProtectedRoute adminOnly><Admin /></ProtectedRoute>}>
-            <Route index element={<Navigate to="overview" replace />} />
+            <Route index element={<Navigate to="/admin/overview" replace />} />
             <Route path="overview" element={<OverviewPage />} />
             <Route path="auction" element={<AuctionPage />} />
             <Route path="results" element={<ResultsPage />} />
             <Route path="payouts" element={<PayoutRulesPage />} />
-            <Route path="*" element={<Navigate to="overview" replace />} />
+            <Route path="*" element={<Navigate to="/admin/overview" replace />} />
           </Route>
           <Route path="*" element={<Navigate to="/auction" replace />} />
         </Routes>

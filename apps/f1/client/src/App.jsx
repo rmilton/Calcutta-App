@@ -9,6 +9,10 @@ import Events from './pages/Events';
 import Standings from './pages/Standings';
 import MyDrivers from './pages/MyDrivers';
 import Admin from './pages/Admin';
+import OverviewPage from './pages/admin/OverviewPage';
+import AuctionPage from './pages/admin/AuctionPage';
+import ResultsPage from './pages/admin/ResultsPage';
+import PayoutRulesPage from './pages/admin/PayoutRulesPage';
 
 function ProtectedRoute({ children, adminOnly = false }) {
   const { participant } = useAuth();
@@ -40,7 +44,14 @@ function AppRoutes() {
           <Route path="/events" element={<ProtectedRoute><Events /></ProtectedRoute>} />
           <Route path="/standings" element={<ProtectedRoute><Standings /></ProtectedRoute>} />
           <Route path="/my-drivers" element={<ProtectedRoute><MyDrivers /></ProtectedRoute>} />
-          <Route path="/admin" element={<ProtectedRoute adminOnly><Admin /></ProtectedRoute>} />
+          <Route path="/admin" element={<ProtectedRoute adminOnly><Admin /></ProtectedRoute>}>
+            <Route index element={<Navigate to="overview" replace />} />
+            <Route path="overview" element={<OverviewPage />} />
+            <Route path="auction" element={<AuctionPage />} />
+            <Route path="results" element={<ResultsPage />} />
+            <Route path="payouts" element={<PayoutRulesPage />} />
+            <Route path="*" element={<Navigate to="overview" replace />} />
+          </Route>
           <Route path="*" element={<Navigate to="/auction" replace />} />
         </Routes>
       </main>

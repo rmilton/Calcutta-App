@@ -1,7 +1,7 @@
 const express = require('express');
 const {
   getActiveTournamentId,
-  getAuctionItems, getActiveAuctionItem, getRecentBids, getTournamentSetting,
+  getAuctionItems, getActiveAuctionItem, getRecentBids, getResolvedAuctionStatus, getAuctionCompletionSummary,
 } = require('../db');
 const { requireAuth } = require('./middleware');
 
@@ -19,7 +19,8 @@ router.get('/', requireAuth, (req, res) => {
   const active = getActiveAuctionItem(tid);
   const recentBids = active ? getRecentBids(active.team_id) : [];
   res.json({
-    auctionStatus: getTournamentSetting(tid, 'auction_status'),
+    auctionStatus: getResolvedAuctionStatus(tid),
+    completionSummary: getAuctionCompletionSummary(tid),
     items,
     active,
     recentBids,

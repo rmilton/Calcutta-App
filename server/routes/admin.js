@@ -69,6 +69,7 @@ function clearTournamentState(tid, { removeNonAdminParticipants = false } = {}) 
     setTournamentSetting(tid, 'auction_status', 'waiting');
     setTournamentSetting(tid, 'tournament_started', '0');
     setTournamentSetting(tid, 'auction_scheduled_start', '');
+    db.prepare('UPDATE tournaments SET auction_completion_summary = NULL WHERE id = ?').run(tid);
   })();
 
   applyAuctionOrder(tid, getTournamentSetting(tid, 'auction_order') || 'random');

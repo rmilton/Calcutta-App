@@ -107,4 +107,47 @@ Respond with only the 2-3 sentence intro text. No quotes, no prefix.`;
   }
 }
 
-module.exports = { generateAuctionCommentary, streamRoundRecap };
+async function generateAuctionCompletionSummary({
+  participantSummaries, // [{ participantName, teamsOwned, totalSpent, avgSpend }]
+  totalPot,
+}) {
+  const client = getClient();
+  if (!client) return '';
+  if (!Array.isArray(participantSummaries) || participantSummaries.length === 0) return '';
+
+  const lines = participantSummaries.map((p) => (
+    `${p.participantName}: spent $${p.totalSpent} on ${p.teamsOwned} team${p.teamsOwned === 1 ? '' : 's'} (avg $${p.avgSpend})`
+  )).join('\n');
+
+  const prompt = `You are recapping a March Madness Calcutta auction for a friend group.
+Write a full-auction recap that is edgy, funny, and accurate. Keep it sharp, not corny and not overly punny.
+
+Rules:
+- Write exactly 1 short intro sentence.
+- Then output exactly one bullet per participant using this format:
+  - NAME — spent $X on Y teams: one concise, spicy but factual line
+- Do not invent data.
+- Keep each bullet to one sentence.
+- No markdown headers.
+- Keep the whole response brief.
+
+Auction total pot: $${totalPot}
+Participant results:
+${lines}
+
+Return only the recap text.`;
+
+  try {
+    const message = await client.messages.create({
+      model: 'claude-sonnet-4-5-20250929',
+      max_tokens: 700,
+      messages: [{ role: 'user', content: prompt }],
+    });
+    return (message.content[0]?.text || '').trim();
+  } catch (e) {
+    console.error('[AI auction completion]', e.message);
+    return '';
+  }
+}
+
+module.exports = { generateAuctionCommentary, streamRoundRecap, generateAuctionCompletionSummary };

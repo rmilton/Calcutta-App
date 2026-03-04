@@ -125,6 +125,7 @@ function init() {
       auction_auto_advance  INTEGER NOT NULL DEFAULT 0,
       ai_commentary_enabled   INTEGER NOT NULL DEFAULT 1,
       auction_scheduled_start INTEGER DEFAULT NULL,
+      auction_completion_summary TEXT,
       created_at              INTEGER DEFAULT (unixepoch()),
       archived_at             INTEGER
     );
@@ -136,6 +137,9 @@ function init() {
   }
   if (!columnExists('tournaments', 'auction_scheduled_start')) {
     db.exec('ALTER TABLE tournaments ADD COLUMN auction_scheduled_start INTEGER DEFAULT NULL');
+  }
+  if (!columnExists('tournaments', 'auction_completion_summary')) {
+    db.exec('ALTER TABLE tournaments ADD COLUMN auction_completion_summary TEXT');
   }
 
   // M2: Seed tournament id=1 from existing settings (if tournaments table is empty)
@@ -407,7 +411,13 @@ function seedTeamsForTournament(tid, teams) {
       insertAuction.run(result.lastInsertRowid, i, tid);
     });
 
-    db.prepare("UPDATE tournaments SET auction_status = 'waiting', tournament_started = 0 WHERE id = ?").run(tid);
+    db.prepare(`
+      UPDATE tournaments
+      SET auction_status = 'waiting',
+          tournament_started = 0,
+          auction_completion_summary = NULL
+      WHERE id = ?
+    `).run(tid);
   })();
 
   const order = getTournamentSetting(tid, 'auction_order') || 'random';
@@ -454,6 +464,51 @@ function getAuctionItems(tid) {
     WHERE ai.tournament_id = ?
     ORDER BY ai.queue_order
   `).all(_tid);
+}
+
+function getAuctionCounts(tid) {
+  const _tid = tid ?? getActiveTournamentId();
+  const counts = db.prepare(`
+    SELECT
+      COUNT(*) as total_count,
+      SUM(CASE WHEN status = 'sold' THEN 1 ELSE 0 END) as sold_count,
+      SUM(CASE WHEN status = 'active' THEN 1 ELSE 0 END) as active_count,
+      SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) as pending_count
+    FROM auction_items
+    WHERE tournament_id = ?
+  `).get(_tid);
+
+  return {
+    total_count: counts?.total_count || 0,
+    sold_count: counts?.sold_count || 0,
+    active_count: counts?.active_count || 0,
+    pending_count: counts?.pending_count || 0,
+  };
+}
+
+function getResolvedAuctionStatus(tid) {
+  const _tid = tid ?? getActiveTournamentId();
+  const configured = getTournamentSetting(_tid, 'auction_status') || 'waiting';
+  const counts = getAuctionCounts(_tid);
+  if (
+    counts.total_count > 0 &&
+    counts.sold_count === counts.total_count &&
+    counts.pending_count === 0 &&
+    counts.active_count === 0
+  ) {
+    return 'complete';
+  }
+  return configured;
+}
+
+function getAuctionCompletionSummary(tid) {
+  const _tid = tid ?? getActiveTournamentId();
+  return db.prepare('SELECT auction_completion_summary FROM tournaments WHERE id = ?').get(_tid)?.auction_completion_summary || '';
+}
+
+function setAuctionCompletionSummary(tid, summary) {
+  const _tid = tid ?? getActiveTournamentId();
+  db.prepare('UPDATE tournaments SET auction_completion_summary = ? WHERE id = ?').run(summary || null, _tid);
 }
 
 function getActiveAuctionItem(tid) {
@@ -665,7 +720,11 @@ module.exports = {
   getAllParticipants,
   getTeams,
   getAuctionItems,
+  getAuctionCounts,
   getActiveAuctionItem,
+  getResolvedAuctionStatus,
+  getAuctionCompletionSummary,
+  setAuctionCompletionSummary,
   getRecentBids,
   getOwnership,
   getFullStandings,

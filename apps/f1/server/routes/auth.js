@@ -2,7 +2,7 @@ const express = require('express');
 const { v4: uuidv4 } = require('uuid');
 const {
   sanitizeParticipantName,
-} = require('../../../../packages/core/src');
+} = require('../lib/core');
 const {
   db,
   getActiveSeasonId,

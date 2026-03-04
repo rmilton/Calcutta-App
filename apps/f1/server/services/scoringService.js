@@ -2,7 +2,7 @@ const {
   amountFromBps,
   allocateByBps,
   splitCentsEvenly,
-} = require('../../../../packages/core/src');
+} = require('../lib/core');
 const {
   db,
   getTotalPotCents,

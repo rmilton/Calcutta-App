@@ -1,7 +1,7 @@
 const Database = require('better-sqlite3');
 const path = require('path');
 
-const { generateInviteCode } = require('../../../packages/core/src');
+const { generateInviteCode } = require('./lib/core');
 const { DRIVERS_2026 } = require('./data/drivers2026');
 const { EVENTS_2026 } = require('./data/events2026');
 const { EVENT_RULES, DEFAULT_SEASON_BONUS_RULES } = require('./data/payoutRules');

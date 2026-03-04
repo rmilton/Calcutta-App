@@ -1,7 +1,7 @@
 const {
   computeBidEndTime,
   extendBidEndTime,
-} = require('../../../../packages/core/src');
+} = require('../lib/core');
 const {
   db,
   getActiveSeasonId,

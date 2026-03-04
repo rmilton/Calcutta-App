@@ -1,8 +1,12 @@
 import React from 'react';
+import { fmtWhen } from '../../utils';
 import useAdminOutletContext from './useAdminOutletContext';
 
 export default function OverviewPage() {
   const { settings, participants, events, rules, loading, hasLoaded } = useAdminOutletContext();
+  const drawnAtMs = Number(settings?.season_random_bonus_drawn_at);
+  const drawnAtIso = Number.isFinite(drawnAtMs) ? new Date(drawnAtMs).toISOString() : null;
+  const drawnAt = drawnAtIso ? fmtWhen(drawnAtIso) : 'Not drawn yet';
 
   if (loading && !hasLoaded) {
     return <section className="loading-panel">Loading admin data...</section>;
@@ -39,6 +43,14 @@ export default function OverviewPage() {
           <div className="strip-item">
             <span className="label">Sprint Rule Rows</span>
             <strong>{rules?.sprint?.length || 0}</strong>
+          </div>
+          <div className="strip-item">
+            <span className="label">Season Random Standing Position</span>
+            <strong>{settings?.season_random_bonus_position || 'Not drawn'}</strong>
+          </div>
+          <div className="strip-item">
+            <span className="label">Season Random Drawn At</span>
+            <strong>{drawnAt}</strong>
           </div>
         </div>
       </section>

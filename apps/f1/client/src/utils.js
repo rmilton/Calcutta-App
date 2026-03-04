@@ -39,6 +39,9 @@ export const categoryLabel = (category) => {
     random_finish_bonus: 'Random Position Bonus',
     drivers_champion: 'Drivers Champion',
     most_race_wins: 'Most Race Wins',
+    most_top10_outside_top4: 'Most Top-10 Finishes Outside Top 4',
+    season_random_finish_position: 'Season Random Standing Position',
+    biggest_single_race_climb: 'Biggest Single-Race Climb',
     most_podiums: 'Most Podiums',
     best_avg_finish: 'Best Avg Finish',
   };

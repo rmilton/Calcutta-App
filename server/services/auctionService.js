@@ -2,11 +2,16 @@ const {
   db,
   getActiveTournamentId,
   getTournamentSetting,
+  setTournamentSetting,
   getActiveAuctionItem,
+  getResolvedAuctionStatus,
+  getAuctionCompletionSummary,
+  setAuctionCompletionSummary,
   getRecentBids,
   getTotalPot,
+  getAuctionCounts,
 } = require('../db');
-const { generateAuctionCommentary } = require('../ai');
+const { generateAuctionCommentary, generateAuctionCompletionSummary } = require('../ai');
 
 function createAuctionService(io, options = {}) {
   const autoAdvanceDelayMs = options.autoAdvanceDelayMs ?? 3000;
@@ -14,6 +19,7 @@ function createAuctionService(io, options = {}) {
   const clearTimeoutFn = options.clearTimeoutFn ?? clearTimeout;
   let activeTimer = null;
   let activeItemId = null;
+  let completionSummaryInFlightByTid = new Set();
 
   function clearActiveTimer() {
     if (activeTimer) {
@@ -61,11 +67,76 @@ function createAuctionService(io, options = {}) {
     }, io).catch((e) => console.error('[AI auction]', e.message));
   }
 
+  async function maybeGenerateCompletionSummary(tid) {
+    if (completionSummaryInFlightByTid.has(tid)) return;
+    if (getTournamentSetting(tid, 'ai_commentary_enabled') === '0') return;
+    if (!process.env.ANTHROPIC_API_KEY) return;
+    if (getAuctionCompletionSummary(tid)) return;
+
+    completionSummaryInFlightByTid.add(tid);
+    let emittedStarted = false;
+    try {
+      const participantSummaries = db.prepare(`
+        SELECT
+          p.name as participantName,
+          COALESCE(COUNT(o.team_id), 0) as teamsOwned,
+          COALESCE(SUM(o.purchase_price), 0) as totalSpent
+        FROM tournament_participants tp
+        JOIN participants p ON p.id = tp.participant_id
+        LEFT JOIN ownership o
+          ON o.participant_id = p.id
+         AND o.tournament_id = tp.tournament_id
+        WHERE tp.tournament_id = ?
+          AND p.is_admin = 0
+        GROUP BY p.id, p.name
+        ORDER BY totalSpent DESC, teamsOwned DESC, p.name ASC
+      `).all(tid);
+      if (!participantSummaries.length) return;
+
+      const normalizedParticipants = participantSummaries.map((p) => ({
+        participantName: p.participantName,
+        teamsOwned: p.teamsOwned || 0,
+        totalSpent: Math.round((p.totalSpent || 0) * 100) / 100,
+        avgSpend: p.teamsOwned > 0
+          ? Math.round(((p.totalSpent || 0) / p.teamsOwned) * 100) / 100
+          : 0,
+      }));
+
+      io.emit('auction:summary:started');
+      emittedStarted = true;
+      const text = await generateAuctionCompletionSummary({
+        participantSummaries: normalizedParticipants,
+        totalPot: getTotalPot(tid),
+      });
+      if (!text) {
+        io.emit('auction:summary:done', { text: '' });
+        return;
+      }
+
+      setAuctionCompletionSummary(tid, text);
+      io.emit('auction:summary:done', { text });
+    } catch (e) {
+      console.error('[AI auction completion]', e.message);
+      if (emittedStarted) io.emit('auction:summary:done', { text: '' });
+    } finally {
+      completionSummaryInFlightByTid.delete(tid);
+    }
+  }
+
   function checkAuctionCompletion(tid) {
-    const pending = db.prepare(
-      "SELECT COUNT(*) as c FROM auction_items WHERE status IN ('pending', 'active') AND tournament_id = ?"
-    ).get(tid).c;
-    if (pending === 0) io.emit('auction:complete');
+    const counts = getAuctionCounts(tid);
+    const isComplete = (
+      counts.total_count > 0 &&
+      counts.sold_count === counts.total_count &&
+      counts.pending_count === 0 &&
+      counts.active_count === 0
+    );
+    if (!isComplete) return;
+
+    setTournamentSetting(tid, 'auction_status', 'complete');
+    io.emit('auction:status', { status: 'complete' });
+    io.emit('auction:complete');
+    maybeGenerateCompletionSummary(tid).catch((e) => console.error('[AI auction completion]', e.message));
   }
 
   function startAuction({ tid, teamId } = {}) {
@@ -168,9 +239,10 @@ function createAuctionService(io, options = {}) {
   function emitAuctionState(socket, tid) {
     const tournamentId = tid ?? getActiveTournamentId();
     const active = getActiveAuctionItem(tournamentId);
-    const auctionStatus = getTournamentSetting(tournamentId, 'auction_status');
+    const auctionStatus = getResolvedAuctionStatus(tournamentId);
     const rawScheduled = getTournamentSetting(tournamentId, 'auction_scheduled_start');
     const scheduledStart = rawScheduled ? parseInt(rawScheduled, 10) : null;
+    const completionSummary = getAuctionCompletionSummary(tournamentId);
 
     if (active) {
       const recentBids = getRecentBids(active.team_id);
@@ -179,6 +251,7 @@ function createAuctionService(io, options = {}) {
         recentBids,
         auctionStatus,
         scheduledStart,
+        completionSummary,
       });
       return;
     }
@@ -188,6 +261,7 @@ function createAuctionService(io, options = {}) {
       recentBids: [],
       auctionStatus,
       scheduledStart,
+      completionSummary,
     });
   }
 

@@ -182,6 +182,8 @@ export default function Auction() {
   const [loading, setLoading] = useState(true);
   const [scheduledStart, setScheduledStart] = useState(null);
   const [countdown, setCountdown] = useState('');
+  const [completionSummary, setCompletionSummary] = useState('');
+  const [completionSummaryLoading, setCompletionSummaryLoading] = useState(false);
 
   const refreshItems = useCallback(() => {
     api(`/auction/items${apiTParam || ''}`)
@@ -197,6 +199,8 @@ export default function Auction() {
         setActive(data.active);
         setRecentBids(data.recentBids || []);
         setItems(data.items || []);
+        setCompletionSummary(data.completionSummary || '');
+        if (data.completionSummary) setCompletionSummaryLoading(false);
       });
   }, [apiTParam]);
 
@@ -225,11 +229,15 @@ export default function Auction() {
     return () => clearInterval(id);
   }, [scheduledStart]);
 
-  useSocketEvent('auction:state', useCallback(({ active, recentBids, auctionStatus, scheduledStart: ss }) => {
+  useSocketEvent('auction:state', useCallback(({ active, recentBids, auctionStatus, scheduledStart: ss, completionSummary }) => {
     if (isViewingHistory) return;
     if (active !== undefined) setActive(active);
     if (recentBids) setRecentBids(recentBids);
     if (auctionStatus) setAuctionStatus(auctionStatus);
+    if (completionSummary !== undefined) {
+      setCompletionSummary(completionSummary || '');
+      if (completionSummary) setCompletionSummaryLoading(false);
+    }
     setScheduledStart(ss || null);
   }, [isViewingHistory]));
 
@@ -247,6 +255,7 @@ export default function Auction() {
     setBidInput('');
     setBidError('');
     setSoldMessage(null);
+    setCompletionSummaryLoading(false);
   }, [refreshAll, isViewingHistory]));
 
   useSocketEvent('auction:update', useCallback(({ currentPrice, leaderId, leaderName, leaderColor, endTime, recentBids }) => {
@@ -307,6 +316,16 @@ export default function Auction() {
     if (!isViewingHistory) { setAuctionStatus('complete'); setActive(null); }
   }, [isViewingHistory]));
 
+  useSocketEvent('auction:summary:started', useCallback(() => {
+    if (!isViewingHistory) setCompletionSummaryLoading(true);
+  }, [isViewingHistory]));
+
+  useSocketEvent('auction:summary:done', useCallback(({ text }) => {
+    if (isViewingHistory) return;
+    setCompletionSummary(text || '');
+    setCompletionSummaryLoading(false);
+  }, [isViewingHistory]));
+
   useSocketEvent('auction:error', useCallback(({ message }) => {
     if (!isViewingHistory) setBidError(message);
   }, [isViewingHistory]));
@@ -332,6 +351,14 @@ export default function Auction() {
   const soldCount = items.filter((i) => i.status === 'sold').length;
   const pendingCount = items.filter((i) => i.status === 'pending').length;
   const isLeader = active?.current_leader_id === participant?.id;
+  const recapLines = (completionSummary || '')
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const recapBullets = recapLines.filter((line) => line.startsWith('- '));
+  const recapIntro = recapLines
+    .filter((line) => !line.startsWith('- '))
+    .join(' ');
 
   if (loading) {
     return (
@@ -488,7 +515,44 @@ export default function Auction() {
             <span aria-hidden="true" className="text-3xl leading-none">🏆</span>
           </div>
           <h2 className="text-2xl font-bold text-text-primary mb-2">Auction Complete!</h2>
-          <p className="text-text-secondary">All teams have been sold. Check Standings and My Teams.</p>
+          <p className="text-text-secondary">
+            All teams have been sold. Check Standings{participant?.isAdmin ? '.' : ' and My Teams.'}
+          </p>
+          {(completionSummaryLoading || completionSummary) && (
+            <div className="mt-6 text-left max-w-3xl mx-auto bg-surface-base/50 border border-surface-border rounded-xl p-4">
+              <div className="section-label mb-2">AI Auction Recap</div>
+              {completionSummaryLoading && !completionSummary && (
+                <div className="inline-flex items-center gap-2 text-xs text-text-secondary">
+                  <span className="w-3.5 h-3.5 rounded-full border-2 border-text-muted border-t-brand animate-spin" aria-hidden="true" />
+                  <span>Generating final recap…</span>
+                </div>
+              )}
+              {completionSummary && (
+                <div className="space-y-3">
+                  {recapIntro && (
+                    <p className="text-sm text-text-secondary leading-relaxed">{recapIntro}</p>
+                  )}
+                  {recapBullets.length > 0 ? (
+                    <div className="space-y-2">
+                      {recapBullets.map((line, idx) => (
+                        <div
+                          key={`${line}-${idx}`}
+                          className="text-sm text-text-primary bg-surface-raised/60 border border-surface-border rounded-lg px-3 py-2"
+                          style={{ borderLeftWidth: '3px', borderLeftColor: 'rgba(249, 115, 22, 0.65)' }}
+                        >
+                          {line.slice(2)}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-sm text-text-primary leading-relaxed whitespace-pre-wrap">
+                      {completionSummary}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
       ) : auctionStatus === 'waiting' ? (

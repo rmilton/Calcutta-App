@@ -17,6 +17,11 @@ export default function Nav() {
     ? [...BASE_LINKS, { to: '/admin', label: 'Admin' }]
     : BASE_LINKS;
 
+  const isLinkActive = (to) => {
+    if (to === '/admin') return location.pathname === '/admin' || location.pathname.startsWith('/admin/');
+    return location.pathname === to;
+  };
+
   return (
     <header className="top-nav">
       <div className="top-nav-inner">
@@ -25,7 +30,7 @@ export default function Nav() {
           {links.map((link) => (
             <Link
               key={link.to}
-              className={`nav-link ${location.pathname === link.to ? 'active' : ''}`}
+              className={`nav-link ${isLinkActive(link.to) ? 'active' : ''}`}
               to={link.to}
             >
               {link.label}

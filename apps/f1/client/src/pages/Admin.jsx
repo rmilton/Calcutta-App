@@ -1,5 +1,20 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { api, categoryLabel, fmtCents } from '../utils';
+import React, { useCallback, useMemo, useState, useEffect } from 'react';
+import { NavLink, Outlet } from 'react-router-dom';
+import { api } from '../utils';
+
+const ADMIN_SECTIONS = [
+  { path: 'overview', label: 'Overview', description: 'Season status and pool summary' },
+  { path: 'auction', label: 'Auction', description: 'Controls and timing settings' },
+  { path: 'results', label: 'Results Sync', description: 'Sync event outcomes and payouts' },
+  { path: 'payouts', label: 'Payout Rules', description: 'Adjust basis-point distribution' },
+];
+
+async function readApi(path) {
+  const response = await api(path);
+  const data = await response.json();
+  if (!response.ok) throw new Error(data.error || 'Request failed');
+  return data;
+}
 
 export default function Admin() {
   const [settings, setSettings] = useState(null);
@@ -7,29 +22,40 @@ export default function Admin() {
   const [events, setEvents] = useState([]);
   const [rules, setRules] = useState(null);
   const [message, setMessage] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
 
-  const loadAll = useCallback(async () => {
-    const [s, p, e, r] = await Promise.all([
-      api('/admin/settings').then((res) => res.json()),
-      api('/admin/participants').then((res) => res.json()),
-      api('/events').then((res) => res.json()),
-      api('/admin/payout-rules').then((res) => res.json()),
-    ]);
-    setSettings(s);
-    setParticipants(p);
-    setEvents(e);
-    setRules(r);
+  const loadAll = useCallback(async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
+    try {
+      const [s, p, e, r] = await Promise.all([
+        readApi('/admin/settings'),
+        readApi('/admin/participants'),
+        readApi('/events'),
+        readApi('/admin/payout-rules'),
+      ]);
+      setSettings(s);
+      setParticipants(Array.isArray(p) ? p : []);
+      setEvents(Array.isArray(e) ? e : []);
+      setRules(r);
+      setHasLoaded(true);
+    } catch (error) {
+      setMessage(error.message || 'Failed to load admin data.');
+    } finally {
+      if (!silent) setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
-    loadAll().catch((e) => setMessage(e.message));
+    loadAll();
   }, [loadAll]);
 
-  const setField = (field, value) => {
-    setSettings((prev) => ({ ...prev, [field]: value }));
-  };
+  const setField = useCallback((field, value) => {
+    setSettings((prev) => ({ ...(prev || {}), [field]: value }));
+  }, []);
 
-  const saveSettings = async () => {
+  const saveSettings = useCallback(async () => {
+    if (!settings) return;
     try {
       const response = await api('/admin/settings', {
         method: 'PATCH',
@@ -42,63 +68,66 @@ export default function Admin() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Failed to save settings');
       setMessage('Settings saved.');
-      loadAll().catch(() => {});
+      loadAll({ silent: true });
     } catch (error) {
       setMessage(error.message || 'Failed to save settings.');
     }
-  };
+  }, [loadAll, settings]);
 
-  const runAuctionAction = async (endpoint) => {
+  const runAuctionAction = useCallback(async (endpoint) => {
     try {
       const response = await api(endpoint, { method: 'POST', body: '{}' });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Action failed');
       setMessage('Auction action applied.');
-      loadAll().catch(() => {});
+      loadAll({ silent: true });
     } catch (error) {
       setMessage(error.message || 'Auction action failed.');
     }
-  };
+  }, [loadAll]);
 
-  const syncNext = async () => {
+  const syncNext = useCallback(async () => {
     try {
       const response = await api('/admin/results/sync-next', { method: 'POST', body: '{}' });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Sync failed');
       setMessage('Synced next event.');
-      loadAll().catch(() => {});
+      loadAll({ silent: true });
     } catch (error) {
       setMessage(error.message || 'Sync failed.');
     }
-  };
+  }, [loadAll]);
 
-  const syncEvent = async (eventId) => {
+  const syncEvent = useCallback(async (eventId) => {
     try {
       const response = await api(`/admin/results/sync-event/${eventId}`, { method: 'POST', body: '{}' });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Sync failed');
       setMessage('Event synced.');
-      loadAll().catch(() => {});
+      loadAll({ silent: true });
     } catch (error) {
       setMessage(error.message || 'Event sync failed.');
     }
-  };
+  }, [loadAll]);
 
-  const updateRules = (group, id, field, value) => {
-    setRules((prev) => ({
-      ...prev,
-      [group]: prev[group].map((rule) => (rule.id === id ? { ...rule, [field]: value } : rule)),
-    }));
-  };
+  const updateRules = useCallback((group, id, field, value) => {
+    setRules((prev) => {
+      if (!prev?.[group]) return prev;
+      return {
+        ...prev,
+        [group]: prev[group].map((rule) => (rule.id === id ? { ...rule, [field]: value } : rule)),
+      };
+    });
+  }, []);
 
-  const saveRules = async () => {
+  const saveRules = useCallback(async () => {
+    if (!rules) return;
     try {
       const payload = {
-        grand_prix: rules.grand_prix.map((r) => ({ ...r, bps: Number(r.bps) || 0 })),
-        sprint: rules.sprint.map((r) => ({ ...r, bps: Number(r.bps) || 0 })),
-        season_bonus: rules.season_bonus.map((r) => ({ ...r, bps: Number(r.bps) || 0 })),
+        grand_prix: (rules.grand_prix || []).map((r) => ({ ...r, bps: Number(r.bps) || 0 })),
+        sprint: (rules.sprint || []).map((r) => ({ ...r, bps: Number(r.bps) || 0 })),
+        season_bonus: (rules.season_bonus || []).map((r) => ({ ...r, bps: Number(r.bps) || 0 })),
       };
-
       const response = await api('/admin/payout-rules', {
         method: 'PATCH',
         body: JSON.stringify(payload),
@@ -106,161 +135,88 @@ export default function Admin() {
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Failed to save rules');
       setMessage('Payout rules saved and standings recalculated.');
-      loadAll().catch(() => {});
+      loadAll({ silent: true });
     } catch (error) {
       setMessage(error.message || 'Failed to save payout rules.');
     }
-  };
+  }, [loadAll, rules]);
 
-  const gpTotal = useMemo(() => (rules?.grand_prix || []).reduce((sum, rule) => sum + Number(rule.bps || 0), 0), [rules]);
-  const sprintTotal = useMemo(() => (rules?.sprint || []).reduce((sum, rule) => sum + Number(rule.bps || 0), 0), [rules]);
-  const bonusTotal = useMemo(() => (rules?.season_bonus || []).reduce((sum, rule) => sum + Number(rule.bps || 0), 0), [rules]);
+  const contextValue = useMemo(() => ({
+    settings,
+    participants,
+    events,
+    rules,
+    message,
+    loading,
+    hasLoaded,
+    refresh: () => loadAll(),
+    setField,
+    setMessage,
+    saveSettings,
+    runAuctionAction,
+    syncNext,
+    syncEvent,
+    updateRules,
+    saveRules,
+  }), [
+    settings,
+    participants,
+    events,
+    rules,
+    message,
+    loading,
+    hasLoaded,
+    loadAll,
+    setField,
+    saveSettings,
+    runAuctionAction,
+    syncNext,
+    syncEvent,
+    updateRules,
+    saveRules,
+  ]);
 
   return (
     <div className="stack-lg">
-      <section className="panel telemetry-strip">
-        <div className="strip-item">
-          <span className="label">Invite Code</span>
-          <strong>{settings?.invite_code}</strong>
-        </div>
-        <div className="strip-item">
-          <span className="label">Auction Status</span>
-          <strong className={`status-text status-${settings?.auction_status}`}>{settings?.auction_status}</strong>
-        </div>
-        <div className="strip-item">
-          <span className="label">Participants</span>
-          <strong>{participants.length}</strong>
-        </div>
+      <section className="panel panel-hero admin-header">
+        <div className="hero-kicker">Race Control</div>
+        <h1>Admin Console</h1>
+        <p>Use sectioned controls to run the auction, sync races, and tune payout models.</p>
       </section>
 
       {message ? <section className="panel note-panel">{message}</section> : null}
 
-      <section className="panel stack">
-        <h2>Auction Controls</h2>
-        <div className="row wrap gap-sm">
-          <button className="btn" onClick={() => runAuctionAction('/admin/auction/start')}>Open</button>
-          <button className="btn btn-outline" onClick={() => runAuctionAction('/admin/auction/pause')}>Pause</button>
-          <button className="btn btn-outline" onClick={() => runAuctionAction('/admin/auction/next')}>Start Next Driver</button>
-          <button className="btn btn-outline" onClick={() => runAuctionAction('/admin/auction/close')}>Close Active</button>
-        </div>
-      </section>
+      <div className="admin-layout">
+        <aside className="panel admin-sidebar">
+          <nav className="admin-secondary-nav" aria-label="Admin sections">
+            {ADMIN_SECTIONS.map((section) => (
+              <NavLink
+                key={section.path}
+                to={section.path}
+                className={({ isActive }) => `admin-nav-link ${isActive ? 'active' : ''}`}
+              >
+                <span className="admin-nav-label">{section.label}</span>
+                <span className="admin-nav-desc">{section.description}</span>
+              </NavLink>
+            ))}
+          </nav>
+        </aside>
 
-      <section className="panel stack">
-        <h2>Auction Settings</h2>
-        <div className="grid-3">
-          <label>
-            Timer (sec)
-            <input
-              value={settings?.auction_timer_seconds ?? ''}
-              onChange={(e) => setField('auction_timer_seconds', e.target.value)}
-            />
-          </label>
-          <label>
-            Grace (sec)
-            <input
-              value={settings?.auction_grace_seconds ?? ''}
-              onChange={(e) => setField('auction_grace_seconds', e.target.value)}
-            />
-          </label>
-          <label className="checkbox-row">
-            <input
-              type="checkbox"
-              checked={String(settings?.auction_auto_advance) === '1' || settings?.auction_auto_advance === 1 || settings?.auction_auto_advance === true}
-              onChange={(e) => setField('auction_auto_advance', e.target.checked ? 1 : 0)}
-            />
-            Auto Advance
-          </label>
-        </div>
-        <button className="btn" onClick={saveSettings}>Save Settings</button>
-      </section>
-
-      <section className="panel stack">
-        <div className="row between">
-          <h2>Results Sync</h2>
-          <button className="btn" onClick={syncNext}>Sync Next Event</button>
-        </div>
-        <ul className="list">
-          {events.map((event) => (
-            <li key={event.id}>
-              <div>
-                <strong>R{event.round_number}</strong> {event.name}
-                <div className="muted small">{event.type} • {event.status} • payout {fmtCents(event.total_payout_cents || 0)}</div>
-              </div>
-              <button className="btn btn-outline" onClick={() => syncEvent(event.id)}>Sync</button>
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      <section className="panel stack">
-        <h2>Payout Rules</h2>
-        <p className="muted">1% = 100 bps. GP target 300 bps, Sprint target 100 bps, Season bonus target 10,000 bps.</p>
-
-        {rules ? (
-          <>
-            <h3>Grand Prix ({gpTotal} bps)</h3>
-            <div className="table-wrap">
-              <table>
-                <thead><tr><th>Category</th><th>BPS</th></tr></thead>
-                <tbody>
-                  {rules.grand_prix.map((rule) => (
-                    <tr key={rule.id}>
-                      <td>{categoryLabel(rule.category)}</td>
-                      <td>
-                        <input
-                          value={rule.bps}
-                          onChange={(e) => updateRules('grand_prix', rule.id, 'bps', e.target.value)}
-                        />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <h3>Sprint ({sprintTotal} bps)</h3>
-            <div className="table-wrap">
-              <table>
-                <thead><tr><th>Category</th><th>BPS</th></tr></thead>
-                <tbody>
-                  {rules.sprint.map((rule) => (
-                    <tr key={rule.id}>
-                      <td>{categoryLabel(rule.category)}</td>
-                      <td>
-                        <input
-                          value={rule.bps}
-                          onChange={(e) => updateRules('sprint', rule.id, 'bps', e.target.value)}
-                        />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <h3>Season Bonuses ({bonusTotal} bps)</h3>
-            <div className="table-wrap">
-              <table>
-                <thead><tr><th>Category</th><th>BPS</th></tr></thead>
-                <tbody>
-                  {rules.season_bonus.map((rule) => (
-                    <tr key={rule.id}>
-                      <td>{categoryLabel(rule.category)}</td>
-                      <td>
-                        <input
-                          value={rule.bps}
-                          onChange={(e) => updateRules('season_bonus', rule.id, 'bps', e.target.value)}
-                        />
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <button className="btn" onClick={saveRules}>Save Rules</button>
-          </>
-        ) : null}
-      </section>
+        <section className="admin-main stack-lg">
+          <nav className="admin-secondary-nav-mobile" aria-label="Admin sections">
+            {ADMIN_SECTIONS.map((section) => (
+              <NavLink
+                key={section.path}
+                to={section.path}
+                className={({ isActive }) => `admin-nav-pill ${isActive ? 'active' : ''}`}
+              >
+                {section.label}
+              </NavLink>
+            ))}
+          </nav>
+          <Outlet context={contextValue} />
+        </section>
+      </div>
     </div>
   );
 }

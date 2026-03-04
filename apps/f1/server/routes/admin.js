@@ -1,6 +1,6 @@
 const express = require('express');
 
-const { generateInviteCode } = require('../../../../packages/core/src');
+const { generateInviteCode } = require('../lib/core');
 const {
   db,
   getActiveSeasonId,

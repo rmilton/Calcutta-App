@@ -14,7 +14,7 @@ export default function Nav() {
   const links = [
     { to: '/standings', label: 'Standings' },
     { to: '/bracket', label: 'Bracket' },
-    { to: '/my-teams', label: 'My Teams' },
+    ...(participant?.isAdmin ? [] : [{ to: '/my-teams', label: 'My Teams' }]),
     { to: '/auction', label: 'Auction' },
     ...(participant?.isAdmin ? [{ to: '/admin', label: 'Admin' }] : []),
   ];

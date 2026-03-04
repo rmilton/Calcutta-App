@@ -31,9 +31,11 @@ A real-time March Madness Calcutta auction web app. Players join with an invite 
 ├── server/
 │   ├── index.js          # Express + Socket.io entrypoint
 │   ├── db.js             # ALL database logic, migrations, query helpers
-│   ├── socket.js         # Socket.io event handlers + auction timer logic
-│   ├── ai.js             # Anthropic API calls (auction commentary, game recap)
+│   ├── socket.js         # Socket.io auth + event wiring (uses auction service)
+│   ├── ai.js             # Anthropic API calls (auction commentary, round recap)
 │   ├── scheduler.js      # Scheduled auction auto-start timer
+│   ├── services/
+│   │   └── auctionService.js # Shared auction domain logic (start/close/bid/timers)
 │   ├── routes/
 │   │   ├── auth.js       # /api/auth — join, admin login, logout, /me
 │   │   ├── admin.js      # /api/admin — settings, auction control, bracket, teams
@@ -44,7 +46,10 @@ A real-time March Madness Calcutta auction web app. Players join with an invite 
 │   │   ├── export.js     # /api/admin/export/csv
 │   │   └── middleware.js # requireAuth, requireAdmin
 │   └── data/
-│       └── teams2025.js  # Hard-coded 64-team bracket data for 2025/2026
+│       ├── teams2025.js         # Hard-coded 64-team bracket teams
+│       └── gameSchedule2025.js  # Historical 2025 date/time/network by bracket slot
+│   └── tests/
+│       └── auctionService.test.js # Focused integration tests for auction service
 │
 ├── client/src/
 │   ├── App.jsx           # Router, context providers, ProtectedRoute
@@ -57,7 +62,7 @@ A real-time March Madness Calcutta auction web app. Players join with an invite 
 │   │   └── TournamentContext.jsx # useTournament() — tournament metadata
 │   ├── components/
 │   │   ├── Nav.jsx
-│   │   ├── AiCommentary.jsx  # Overlay that displays AI commentary text
+│   │   ├── AiCommentary.jsx  # Round recap toast (auction sale commentary is in Auction sold card)
 │   │   ├── CountdownTimer.jsx
 │   │   ├── ParticipantAvatar.jsx
 │   │   └── TeamLogo.jsx
@@ -143,7 +148,8 @@ id, tournament_id, team_id, participant_id, purchase_price
 
 **`games`** — bracket matchups and results
 ```
-id, round (1-6), region, position, team1_id, team2_id, winner_id, played_at, tournament_id
+id, round (1-6), region, position, team1_id, team2_id, winner_id,
+tipoff_at, tv_network, played_at, tournament_id
 ```
 
 **`payout_config`** — per round per tournament; UNIQUE(tournament_id, round_number)
@@ -199,11 +205,13 @@ All routes are prefixed with `/api`.
 | POST | `/auth/admin` | none | Admin login with password |
 | POST | `/auth/logout` | none | Clear session cookie |
 | GET | `/auction` | auth | Current auction state + queue |
-| GET | `/auction/queue` | auth | Full auction item list |
+| GET | `/auction/items` | auth | Full auction item list |
 | GET | `/bracket` | auth | Games + payout config |
 | POST | `/bracket/result` | admin | Set a game winner |
 | POST | `/bracket/unset` | admin | Remove a game result |
 | GET | `/standings` | auth | Full leaderboard |
+| GET | `/standings/ownership` | auth | Team ownership list |
+| GET | `/standings/participant/:id` | auth | Participant teams + spend/earn + game metadata |
 | GET | `/admin/settings` | admin | All tournament settings |
 | PATCH | `/admin/settings` | admin | Update settings |
 | POST | `/admin/invite-code/regenerate` | admin | New invite code |
@@ -221,6 +229,8 @@ All routes are prefixed with `/api`.
 | POST | `/admin/bracket/initialize` | admin | Create round 1 matchups |
 | POST | `/admin/bracket/reset` | admin | Wipe bracket + earnings |
 | POST | `/admin/teams/import` | admin | Import 64 teams |
+| POST | `/admin/testing/load-fixture` | admin | Seed fixture participants and mark N teams sold |
+| POST | `/admin/testing/clear-fixture` | admin | Remove fixture participants and reset tournament state |
 | GET | `/admin/export/csv` | admin | Download results CSV |
 | GET | `/tournaments` | admin | List all tournaments |
 | POST | `/tournaments` | admin | Create new tournament |
@@ -237,18 +247,18 @@ All routes are prefixed with `/api`.
 | `auction:state` | `{ active, recentBids, auctionStatus, scheduledStart }` | On connect |
 | `auction:started` | `{ itemId, teamId, endTime }` | New team up for bid |
 | `auction:update` | `{ itemId, teamId, currentPrice, leaderId, leaderName, leaderColor, endTime, recentBids }` | New bid placed |
-| `auction:sold` | `{ itemId, teamId, teamName, winnerId, winnerName, winnerColor, finalPrice }` | Timer expired with bids |
+| `auction:sold` | `{ itemId, teamId, teamName, winnerId, winnerName, winnerColor, finalPrice, aiCommentaryEnabled }` | Timer expired with bids |
 | `auction:nobids` | `{ itemId }` | Timer expired with no bids |
 | `auction:complete` | — | All teams sold |
 | `auction:status` | `{ status }` | Auction opened/paused |
 | `auction:scheduled_start` | `{ ts }` | Schedule set or cleared |
-| `auction:commentary:chunk` | `{ token }` | AI commentary text chunk |
-| `auction:commentary:done` | `{ text }` | AI commentary complete |
+| `auction:commentary:chunk` | `{ token }` | AI sale commentary chunk (rendered inside sold banner) |
+| `auction:commentary:done` | `{ text }` | AI sale commentary complete |
 | `bracket:update` | `{ gameId, winnerId, loserId }` | Game result entered |
 | `bracket:initialized` | — | Bracket created |
 | `bracket:reset` | — | Bracket wiped |
-| `bracket:recap:chunk` | `{ token }` | AI game recap chunk |
-| `bracket:recap:done` | `{ text }` | AI game recap complete |
+| `bracket:recap:chunk` | `{ token }` | AI round recap chunk |
+| `bracket:recap:done` | `{ text }` | AI round recap complete |
 | `standings:update` | — | Earnings/payouts changed |
 | `teams:imported` | — | Teams imported |
 
@@ -260,14 +270,17 @@ All routes are prefixed with `/api`.
 
 ---
 
-## Auction Timer Logic (`server/socket.js`)
+## Auction Flow Logic (`server/services/auctionService.js`)
 
-- `startTimer(itemId, endTime)` — sets a `setTimeout` to call `closeAuction` at `endTime`
-- Only one active timer at a time (`activeTimer` module-level variable)
-- On new bid: grace period resets to `Math.max(now + graceSeconds, currentEndTime)`
-- `closeAuction(itemId, io)` — sells to leader or marks pending; triggers AI commentary and auto-advance
-- `autoAdvanceToNextItem` — if `auction_auto_advance === '1'`, starts the next pending team after 3s
-- Timer is restored on server restart (checks for `status = 'active'` item in DB)
+- Auction business logic is centralized in `auctionService` and reused by both:
+  - admin routes (`/api/admin/auction/next`, `/api/admin/auction/close`)
+  - Socket.io `auction:bid` handling
+- Core methods: `startAuction`, `closeAuction`, `closeActiveAuction`, `placeBid`, `restoreTimerOnStartup`
+- Timer behavior:
+  - one active timer at a time
+  - on bid, timer extends by grace period (`Math.max(now + graceSeconds, currentEndTime)`)
+  - auto-advance starts next item after sale when enabled
+- `server/socket.js` now primarily handles auth and delegates domain logic to the service.
 
 ---
 
@@ -275,11 +288,13 @@ All routes are prefixed with `/api`.
 
 Uses `@anthropic-ai/sdk`. Requires `ANTHROPIC_API_KEY` env var. If absent, AI features are silently skipped.
 
-Two functions:
+Two core functions:
 
-**`generateAuctionCommentary(data, io)`** — called after each team sells. Emits `auction:commentary:chunk` + `auction:commentary:done`. Gated by `ai_commentary_enabled` setting (checked in `socket.js` before calling).
+**`generateAuctionCommentary(data, io)`** — called after each team sells. Emits `auction:commentary:chunk` + `auction:commentary:done`. Gated by `ai_commentary_enabled` in auction service.
+- Client behavior: `Auction.jsx` shows this commentary inside the sold banner (with a loading spinner while streaming) and keeps the sold banner visible until the next `auction:started`.
 
-**`streamGameRecap(data, io)`** — called after each bracket result. Emits `bracket:recap:chunk` + `bracket:recap:done`. Currently always fires when `ANTHROPIC_API_KEY` is set; the `ai_commentary_end_of_round` setting exists in DB and settings UI but the gate check in `bracket.js` has not yet been implemented.
+**`streamRoundRecap(data, io)`** — called at end-of-round (not each game). Emits `bracket:recap:chunk` + `bracket:recap:done`. Gated by `ai_commentary_end_of_round`.
+- Recap payload now includes per-team summaries for that completed round (advanced/eliminated, owner, purchase price, round earnings).
 
 Model used: `claude-sonnet-4-5-20250929`
 
@@ -295,6 +310,11 @@ const r = await api('/admin/settings');        // GET
 await api('/admin/settings', { method: 'PATCH', body: JSON.stringify({...}) });
 ```
 This wraps `fetch('/api' + path, { credentials: 'include', ... })`.
+
+### Invite links
+- Admin Settings exposes both raw invite code and a shareable URL:
+  - `https://<host>/join?invite=CODE`
+- `Join.jsx` reads `invite` query param, uppercases/truncates it, and pre-fills participant join form.
 
 ### Dollar formatting
 Always use `fmt(n)` from `utils.js` for display. Shows no cents for whole numbers.
@@ -336,13 +356,22 @@ Settings stored as `'0'` or `'1'` strings. The canonical toggle pattern:
 
 ## Tournament Lifecycle
 
-1. **Setup** — Admin creates tournament (or uses default id=1), sets invite code
+1. **Setup** — Admin creates tournament (or uses default id=1), sets invite code, and can share `/join?invite=CODE` link
 2. **Waiting** — `auction_status = 'waiting'`. Players join with invite code
 3. **Import** — Admin imports 64 teams via TeamsTab (uses `TEAMS_2025` data or custom)
 4. **Auction** — Admin opens auction (`auction_status = 'open'`), starts teams one at a time
 5. **Bracket** — After all teams sold, admin initializes bracket (creates Round 1 games)
 6. **Play** — Admin enters game results; earnings auto-calculated; AI recaps fire
 7. **Complete** — All 63 games played; standings finalized; CSV export available
+
+Bracket UX note:
+- `client/src/pages/Bracket.jsx` has two views:
+  - desktop board-style bracket (fit-to-width, no horizontal page scroll)
+  - compact fallback for smaller screens
+- game metadata (`tipoff_at`, `tv_network`) is shown on:
+  - bracket cards (`Bracket.jsx`)
+  - my teams cards (`MyTeams.jsx`, next/last game)
+  - admin bracket game rows (`admin/BracketAdminTab.jsx`)
 
 ---
 
@@ -381,12 +410,13 @@ Client proxies `/api` and `/socket.io` to `localhost:3001` (configured in `clien
 ## Known Gotchas
 
 - **Settings are strings** — `getTournamentSetting` always returns a string or null. Compare with `=== '0'`, `=== '1'`, not booleans.
-- **`ai_commentary_end_of_round` UI exists but backend gate is not yet implemented** — the setting is saved to DB and toggleable in Settings, but `server/routes/bracket.js` doesn't yet check it before calling `streamGameRecap`.
 - **Participants are global** — A participant who joins tournament 1 and then joins tournament 2 with the same name gets the same DB record. Their session token is reused.
 - **Admin is not scoped to a tournament** — There is one admin account (`is_admin = 1`). It automatically joins every tournament.
-- **`auction_timer_seconds` and `auction_grace_seconds`** are stored in the `PATCH /admin/settings` allowed list in `routes/admin.js` but were accidentally omitted in the explicit array — check the current state of that file before assuming they're saved.
 - **Bracket round 5 = Final Four, round 6 = Championship** — regions for rounds 5-6 are `'Final Four'` and `'Championship'` strings (not the regional names).
 - **`recalcEarnings` is idempotent** — it deletes all earnings for a tournament and reinserts. Safe to call multiple times.
+- **2025 schedule metadata is explicit; future years are not** — `gameSchedule2025.js` backfills date/time/network by bracket slot. New-year imports (for example 2026) need a new schedule map or games will show blank metadata.
+- **Fixture tools are destructive for active tournament state** — `load-fixture` and `clear-fixture` reset auction/bracket/earnings and remove non-admin participants from the active tournament.
+- **Sold banner behavior is intentional** — it persists after a sale and clears when the next team starts (`auction:started`), not on a timer.
 
 ---
 

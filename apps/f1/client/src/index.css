@@ -556,8 +556,13 @@ button {
 
 .driver-id-row {
   display: flex;
+  align-items: center;
   gap: 0.65rem;
   margin-top: 0.7rem;
+}
+
+.live-driver-logo {
+  flex-shrink: 0;
 }
 
 .driver-code {
@@ -579,7 +584,7 @@ button {
   padding: 0.28rem 0.55rem;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.06);
-  color: var(--muted);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   font-size: 0.8rem;
 }
 
@@ -808,17 +813,6 @@ button {
   min-width: 0;
 }
 
-.sold-driver-name {
-  font-weight: 700;
-  font-size: 0.94rem;
-}
-
-.sold-driver-meta {
-  margin-top: 0.15rem;
-  font-size: 0.78rem;
-  color: #b4bfcd;
-}
-
 .sold-driver-price {
   color: #ffcfce;
   font-family: 'Barlow Condensed', sans-serif;
@@ -861,6 +855,70 @@ button {
   border-radius: 999px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   color: var(--muted);
+}
+
+.team-logo {
+  display: inline-block;
+  object-fit: contain;
+  object-position: center;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+}
+
+.team-logo-fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.driver-identity {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.driver-identity-copy {
+  min-width: 0;
+}
+
+.driver-identity-name {
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.driver-identity-meta {
+  margin-top: 0.12rem;
+  font-size: 0.78rem;
+  color: #bac4d2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.driver-identity-compact .driver-identity-name {
+  font-size: 0.95rem;
+}
+
+.driver-identity-compact .driver-identity-meta {
+  margin-top: 0.08rem;
+}
+
+.sold-driver-identity {
+  width: 100%;
+}
+
+.team-accent-text {
+  text-shadow: 0 0 10px rgba(0, 0, 0, 0.14);
 }
 
 .avatar {

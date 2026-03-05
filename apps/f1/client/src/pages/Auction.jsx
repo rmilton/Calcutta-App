@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { useSocket, useSocketEvent } from '../context/SocketContext';
 import { api, fmtCents } from '../utils';
 
-function ActiveDriverCard({ active }) {
+function ActiveDriverCard({ active, recentBids }) {
   if (!active) return null;
 
   return (
@@ -37,7 +37,40 @@ function ActiveDriverCard({ active }) {
       ) : (
         <div className="leader-row muted">No bids yet</div>
       )}
+
+      <div className="live-bid-feed">
+        <div className="live-bid-feed-head">Bid Activity</div>
+        {!recentBids.length ? (
+          <p className="muted small">Bids will appear here as they come in.</p>
+        ) : (
+          <ul className="list tight live-bid-list">
+            {recentBids.map((bid) => (
+              <li key={bid.id}>
+                <div className="row gap-sm">
+                  <ParticipantAvatar name={bid.participant_name} color={bid.color} />
+                  <span>{bid.participant_name}</span>
+                </div>
+                <strong>{fmtCents(bid.amount_cents)}</strong>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </section>
+  );
+}
+
+function SoldDriverTile({ driver, mine = false }) {
+  return (
+    <article className={`sold-driver-tile ${mine ? 'mine' : ''}`}>
+      <div className="row between">
+        <div>
+          <div className="sold-driver-name">{driver.driver_name}</div>
+          <div className="sold-driver-meta">{driver.driver_code} • {driver.team_name}</div>
+        </div>
+        <strong className="sold-driver-price">{fmtCents(driver.final_price_cents)}</strong>
+      </div>
+    </article>
   );
 }
 
@@ -64,6 +97,22 @@ export default function Auction() {
 
   useEffect(() => {
     refresh().catch(() => {});
+  }, [refresh]);
+
+  useEffect(() => {
+    if (!socket) return undefined;
+    const onConnect = () => {
+      refresh().catch(() => {});
+    };
+    socket.on('connect', onConnect);
+    return () => socket.off('connect', onConnect);
+  }, [socket, refresh]);
+
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      refresh().catch(() => {});
+    }, 15000);
+    return () => clearInterval(intervalId);
   }, [refresh]);
 
   useSocketEvent('auction:state', useCallback((payload) => {
@@ -94,11 +143,45 @@ export default function Auction() {
 
   useSocketEvent('auction:sold', useCallback((payload) => {
     setSoldMessage(`${payload.driverCode} sold to ${payload.winnerName} for ${fmtCents(payload.finalPriceCents)}`);
+    setActive(null);
+    setRecentBids([]);
+    setItems((prev) => prev.map((item) => (
+      item.id === payload.itemId
+        ? {
+            ...item,
+            status: 'sold',
+            winner_id: payload.winnerId,
+            winner_name: payload.winnerName,
+            winner_color: payload.winnerColor,
+            final_price_cents: payload.finalPriceCents,
+            current_leader_id: payload.winnerId,
+            current_price_cents: payload.finalPriceCents,
+            bid_end_time: null,
+          }
+        : item
+    )));
     refresh().catch(() => {});
   }, [refresh]));
 
-  useSocketEvent('auction:nobids', useCallback(() => {
+  useSocketEvent('auction:nobids', useCallback((payload) => {
     setSoldMessage('No bids. Driver returned to queue.');
+    setActive(null);
+    setRecentBids([]);
+    setItems((prev) => prev.map((item) => (
+      item.id === payload.itemId
+        ? {
+            ...item,
+            status: 'pending',
+            current_price_cents: 0,
+            current_leader_id: null,
+            final_price_cents: null,
+            winner_id: null,
+            winner_name: null,
+            winner_color: null,
+            bid_end_time: null,
+          }
+        : item
+    )));
     refresh().catch(() => {});
   }, [refresh]));
 
@@ -133,8 +216,31 @@ export default function Auction() {
       group.totalCents += item.final_price_cents || 0;
       group.drivers.push(item);
     });
-    return [...map.values()].sort((a, b) => b.totalCents - a.totalCents);
+    return [...map.values()]
+      .map((owner) => ({
+        ...owner,
+        drivers: [...owner.drivers].sort((a, b) => (b.final_price_cents || 0) - (a.final_price_cents || 0)),
+      }))
+      .sort((a, b) => b.totalCents - a.totalCents);
   }, [items]);
+
+  const myOwnerId = participant?.id || null;
+  const mySoldGroup = useMemo(
+    () => soldByOwner.find((owner) => owner.ownerId === myOwnerId) || null,
+    [soldByOwner, myOwnerId]
+  );
+  const otherSoldGroups = useMemo(
+    () => soldByOwner.filter((owner) => owner.ownerId !== myOwnerId),
+    [soldByOwner, myOwnerId]
+  );
+  const soldCount = useMemo(
+    () => soldByOwner.reduce((sum, owner) => sum + owner.drivers.length, 0),
+    [soldByOwner]
+  );
+  const auctionPurseCents = useMemo(
+    () => soldByOwner.reduce((sum, owner) => sum + owner.totalCents, 0),
+    [soldByOwner]
+  );
 
   const submitBid = (event) => {
     event.preventDefault();
@@ -159,12 +265,12 @@ export default function Auction() {
           <strong>{pendingCount}</strong>
         </div>
         <div className="strip-item">
-          <span className="label">You</span>
-          <strong>{participant?.name}</strong>
+          <span className="label">Auction Purse</span>
+          <strong>{fmtCents(auctionPurseCents)}</strong>
         </div>
       </section>
 
-      {active ? <ActiveDriverCard active={active} /> : (
+      {active ? <ActiveDriverCard active={active} recentBids={recentBids} /> : (
         <section className="panel">
           <h2>No live driver currently</h2>
           <p className="muted">Admin can open the next driver when ready.</p>
@@ -192,47 +298,61 @@ export default function Auction() {
         <section className="panel note-panel">{soldMessage}</section>
       ) : null}
 
-      <section className="two-col">
-        <div className="panel">
-          <h3>Recent Bids</h3>
-          {!recentBids.length ? <p className="muted">No bids yet.</p> : (
-            <ul className="list">
-              {recentBids.map((bid) => (
-                <li key={bid.id}>
-                  <div className="row gap-sm">
-                    <ParticipantAvatar name={bid.participant_name} color={bid.color} />
-                    <span>{bid.participant_name}</span>
-                  </div>
-                  <strong>{fmtCents(bid.amount_cents)}</strong>
-                </li>
-              ))}
-            </ul>
-          )}
+      <section className="panel sold-showcase">
+        <div className="row between wrap gap-sm">
+          <h2>Sold Drivers</h2>
+          <div className="row wrap gap-sm">
+            <span className="sold-kpi">{soldCount} sold</span>
+            <span className="sold-kpi mine">My spend {fmtCents(mySoldGroup?.totalCents || 0)}</span>
+          </div>
         </div>
 
-        <div className="panel">
-          <h3>Sold Drivers</h3>
-          {!soldByOwner.length ? <p className="muted">No sales yet.</p> : (
-            <div className="stack">
-              {soldByOwner.map((owner) => (
-                <article key={owner.ownerId} className="owner-card">
-                  <div className="row between">
-                    <div className="row gap-sm">
-                      <ParticipantAvatar name={owner.ownerName} color={owner.ownerColor} />
-                      <strong>{owner.ownerName}</strong>
-                    </div>
-                    <strong>{fmtCents(owner.totalCents)}</strong>
-                  </div>
-                  <ul className="chip-list">
-                    {owner.drivers.map((driver) => (
-                      <li key={driver.id}>{driver.driver_code} {fmtCents(driver.final_price_cents)}</li>
-                    ))}
-                  </ul>
-                </article>
-              ))}
-            </div>
-          )}
-        </div>
+        {!soldByOwner.length ? <p className="muted">No sales yet.</p> : (
+          <div className="sold-lanes">
+            <section className="sold-lane mine">
+              <div className="sold-lane-head">
+                <h3>Your Garage</h3>
+                <span>{mySoldGroup?.drivers.length || 0} drivers</span>
+              </div>
+              {mySoldGroup?.drivers?.length ? (
+                <div className="sold-driver-grid">
+                  {mySoldGroup.drivers.map((driver) => (
+                    <SoldDriverTile key={driver.id} driver={driver} mine />
+                  ))}
+                </div>
+              ) : (
+                <p className="muted small">You have not won a driver yet.</p>
+              )}
+            </section>
+
+            <section className="sold-lane">
+              <div className="sold-lane-head">
+                <h3>Other Participants</h3>
+                <span>{otherSoldGroups.length} owners</span>
+              </div>
+              {!otherSoldGroups.length ? <p className="muted small">No other owners yet.</p> : (
+                <div className="stack">
+                  {otherSoldGroups.map((owner) => (
+                    <article key={owner.ownerId} className="owner-card sold-owner-block">
+                      <div className="row between">
+                        <div className="row gap-sm">
+                          <ParticipantAvatar name={owner.ownerName} color={owner.ownerColor} />
+                          <strong>{owner.ownerName}</strong>
+                        </div>
+                        <strong>{fmtCents(owner.totalCents)}</strong>
+                      </div>
+                      <div className="sold-driver-grid">
+                        {owner.drivers.map((driver) => (
+                          <SoldDriverTile key={driver.id} driver={driver} />
+                        ))}
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </section>
+          </div>
+        )}
       </section>
     </div>
   );

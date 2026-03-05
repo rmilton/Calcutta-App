@@ -86,27 +86,44 @@ export default function Admin() {
     }
   }, [loadAll]);
 
-  const syncNext = useCallback(async () => {
+  const syncNext = useCallback(async ({ force = false } = {}) => {
     try {
-      const response = await api('/admin/results/sync-next', { method: 'POST', body: '{}' });
+      const endpoint = force ? '/admin/results/advance-next' : '/admin/results/sync-next';
+      const response = await api(endpoint, { method: 'POST', body: '{}' });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Sync failed');
-      setMessage('Synced next event.');
+      setMessage(force ? 'Advanced and synced next event.' : 'Synced next event.');
       loadAll({ silent: true });
     } catch (error) {
       setMessage(error.message || 'Sync failed.');
     }
   }, [loadAll]);
 
-  const syncEvent = useCallback(async (eventId) => {
+  const syncEvent = useCallback(async (eventId, { force = false } = {}) => {
     try {
-      const response = await api(`/admin/results/sync-event/${eventId}`, { method: 'POST', body: '{}' });
+      const payload = force ? { force: true } : {};
+      const response = await api(`/admin/results/sync-event/${eventId}`, {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Sync failed');
-      setMessage('Event synced.');
+      setMessage(force ? 'Event force-synced.' : 'Event synced.');
       loadAll({ silent: true });
     } catch (error) {
       setMessage(error.message || 'Event sync failed.');
+    }
+  }, [loadAll]);
+
+  const recalcSeasonBonuses = useCallback(async () => {
+    try {
+      const response = await api('/admin/results/recalc-season-bonuses', { method: 'POST', body: '{}' });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Recalculation failed');
+      setMessage('Season bonuses recalculated.');
+      loadAll({ silent: true });
+    } catch (error) {
+      setMessage(error.message || 'Recalculation failed.');
     }
   }, [loadAll]);
 
@@ -156,6 +173,7 @@ export default function Admin() {
     runAuctionAction,
     syncNext,
     syncEvent,
+    recalcSeasonBonuses,
     updateRules,
     saveRules,
   }), [
@@ -172,6 +190,7 @@ export default function Admin() {
     runAuctionAction,
     syncNext,
     syncEvent,
+    recalcSeasonBonuses,
     updateRules,
     saveRules,
   ]);

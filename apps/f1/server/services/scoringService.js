@@ -388,7 +388,7 @@ function upsertEventResults({ seasonId, eventId, rows, manualOverride = false })
   return { ok: true, rowCount: parsedRows.length };
 }
 
-function syncEventFromProvider({ seasonId, eventId, provider, io }) {
+function syncEventFromProvider({ seasonId, eventId, provider, io, ignoreLock = false }) {
   const event = getEventById(seasonId, eventId);
   if (!event) return { ok: false, status: 404, error: 'Event not found' };
 
@@ -400,7 +400,7 @@ function syncEventFromProvider({ seasonId, eventId, provider, io }) {
       const rows = await provider.fetchEventResults({ event, drivers });
       const upsert = upsertEventResults({ seasonId, eventId, rows, manualOverride: false });
       if (!upsert.ok) return upsert;
-      const scored = scoreEvent({ seasonId, eventId });
+      const scored = scoreEvent({ seasonId, eventId, ignoreLock });
       if (!scored.ok) return scored;
       io?.emit('event:scored', { eventId, roundNumber: event.round_number, name: event.name });
       io?.emit('standings:update');
@@ -413,20 +413,40 @@ function syncEventFromProvider({ seasonId, eventId, provider, io }) {
     });
 }
 
-async function syncNextEventFromProvider({ seasonId, provider, io }) {
-  const event = db.prepare(`
-    SELECT *
-    FROM events
-    WHERE season_id = ?
-      AND (status = 'pending' OR status = 'results_loaded')
-      AND (starts_at IS NULL OR starts_at <= ?)
-    ORDER BY round_number ASC,
-      CASE WHEN type = 'sprint' THEN 0 ELSE 1 END ASC
-    LIMIT 1
-  `).get(seasonId, new Date().toISOString());
+async function syncNextEventFromProvider({
+  seasonId,
+  provider,
+  io,
+  includeFuture = false,
+  ignoreLock = false,
+}) {
+  const query = includeFuture
+    ? `
+      SELECT *
+      FROM events
+      WHERE season_id = ?
+        AND (status = 'pending' OR status = 'results_loaded')
+      ORDER BY round_number ASC,
+        CASE WHEN type = 'sprint' THEN 0 ELSE 1 END ASC
+      LIMIT 1
+    `
+    : `
+      SELECT *
+      FROM events
+      WHERE season_id = ?
+        AND (status = 'pending' OR status = 'results_loaded')
+        AND (starts_at IS NULL OR starts_at <= ?)
+      ORDER BY round_number ASC,
+        CASE WHEN type = 'sprint' THEN 0 ELSE 1 END ASC
+      LIMIT 1
+    `;
+
+  const event = includeFuture
+    ? db.prepare(query).get(seasonId)
+    : db.prepare(query).get(seasonId, new Date().toISOString());
 
   if (!event) return { ok: false, status: 404, error: 'No events pending sync' };
-  return syncEventFromProvider({ seasonId, eventId: event.id, provider, io });
+  return syncEventFromProvider({ seasonId, eventId: event.id, provider, io, ignoreLock });
 }
 
 module.exports = {

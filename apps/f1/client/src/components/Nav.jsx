@@ -6,16 +6,16 @@ const BASE_LINKS = [
   { to: '/auction', label: 'Auction' },
   { to: '/events', label: 'Events' },
   { to: '/standings', label: 'Standings' },
-  { to: '/my-drivers', label: 'My Drivers' },
 ];
 
 export default function Nav() {
   const location = useLocation();
   const { participant, logout } = useAuth();
+  const participantInitial = (participant?.name || '?').trim().charAt(0).toUpperCase() || '?';
 
   const links = participant?.isAdmin
     ? [...BASE_LINKS, { to: '/admin', label: 'Admin' }]
-    : BASE_LINKS;
+    : [...BASE_LINKS, { to: '/my-drivers', label: 'My Drivers' }];
 
   const isLinkActive = (to) => {
     if (to === '/admin') return location.pathname === '/admin' || location.pathname.startsWith('/admin/');
@@ -37,7 +37,22 @@ export default function Nav() {
             </Link>
           ))}
         </nav>
-        <button className="btn btn-outline" onClick={logout}>Logout</button>
+        <div className="top-nav-actions">
+          <div className="nav-user-chip">
+            <span
+              className="avatar nav-user-avatar"
+              style={{
+                backgroundColor: `${participant?.color || '#e10600'}22`,
+                borderColor: `${participant?.color || '#e10600'}66`,
+                color: participant?.color || '#e10600',
+              }}
+            >
+              {participantInitial}
+            </span>
+            <span className="nav-user-name">{participant?.name || 'Participant'}</span>
+          </div>
+          <button className="btn btn-outline" onClick={logout}>Logout</button>
+        </div>
       </div>
     </header>
   );

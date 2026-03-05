@@ -129,6 +129,32 @@ button {
   gap: 0.45rem;
 }
 
+.top-nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.nav-user-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.42rem;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  background: rgba(12, 17, 26, 0.85);
+  padding: 0.3rem 0.55rem 0.3rem 0.35rem;
+}
+
+.nav-user-avatar {
+  width: 24px;
+  height: 24px;
+}
+
+.nav-user-name {
+  font-size: 0.82rem;
+  color: #d6dee9;
+}
+
 .nav-link {
   color: var(--muted);
   border: 1px solid transparent;
@@ -622,9 +648,9 @@ button {
 .bid-form {
   margin-top: 0.65rem;
   display: grid;
-  grid-template-columns: 40px 1fr auto;
+  grid-template-columns: 40px minmax(0, 1fr) auto auto;
   gap: 0.55rem;
-  align-items: center;
+  align-items: stretch;
 }
 
 .currency-prefix {
@@ -635,6 +661,24 @@ button {
   display: grid;
   place-items: center;
   color: var(--muted);
+}
+
+.bid-form input {
+  min-width: 0;
+}
+
+.bid-form .btn {
+  white-space: nowrap;
+}
+
+.quick-bid-btn {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(14, 20, 31, 0.9);
+}
+
+.quick-bid-btn:hover {
+  border-color: rgba(225, 6, 0, 0.45);
+  background: rgba(225, 6, 0, 0.12);
 }
 
 .list {
@@ -1071,12 +1115,19 @@ tbody tr:hover {
     width: 100%;
   }
 
+  .top-nav-actions {
+    width: 100%;
+    justify-content: space-between;
+  }
+
   .bid-form {
-    grid-template-columns: 30px 1fr;
+    grid-template-columns: 30px minmax(0, 1fr) auto auto;
   }
 
   .bid-form .btn {
-    grid-column: 1 / -1;
+    grid-column: auto;
+    padding: 0.48rem 0.62rem;
+    font-size: 0.83rem;
   }
 
   .page-shell {

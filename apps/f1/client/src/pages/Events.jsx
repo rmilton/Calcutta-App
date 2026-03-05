@@ -1,6 +1,19 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, categoryLabel, eventTypeLabel, fmtCents, fmtWhen } from '../utils';
 
+function ordinal(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num) || num < 1) return '';
+  const mod100 = num % 100;
+  if (mod100 >= 11 && mod100 <= 13) return `${num}th`;
+  switch (num % 10) {
+    case 1: return `${num}st`;
+    case 2: return `${num}nd`;
+    case 3: return `${num}rd`;
+    default: return `${num}th`;
+  }
+}
+
 export default function Events() {
   const [events, setEvents] = useState([]);
   const [selectedEvent, setSelectedEvent] = useState(null);
@@ -94,7 +107,14 @@ export default function Events() {
               <ul className="list tight">
                 {eventDetail.payouts.map((payout) => (
                   <li key={payout.id}>
-                    <span>{payout.participant_name} • {categoryLabel(payout.category)}</span>
+                    <span>
+                      {payout.participant_name}
+                      {' • '}
+                      {categoryLabel(payout.category)}
+                      {payout.category === 'random_finish_bonus' && eventDetail.event?.random_bonus_position
+                        ? ` (${ordinal(eventDetail.event.random_bonus_position)})`
+                        : ''}
+                    </span>
                     <strong>{fmtCents(payout.amount_cents)}</strong>
                   </li>
                 ))}

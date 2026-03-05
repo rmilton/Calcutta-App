@@ -60,17 +60,17 @@ function ActiveDriverCard({ active, recentBids }) {
   );
 }
 
-function SoldDriverTile({ driver, mine = false }) {
+function SoldDriverRow({ driver, mine = false }) {
   return (
-    <article className={`sold-driver-tile ${mine ? 'mine' : ''}`}>
-      <div className="row between">
+    <li className={`sold-driver-row ${mine ? 'mine' : ''}`}>
+      <div className="sold-driver-main">
         <div>
           <div className="sold-driver-name">{driver.driver_name}</div>
-          <div className="sold-driver-meta">{driver.driver_code} • {driver.team_name}</div>
+          <div className="sold-driver-meta">{driver.driver_code} - {driver.team_name}</div>
         </div>
-        <strong className="sold-driver-price">{fmtCents(driver.final_price_cents)}</strong>
       </div>
-    </article>
+      <strong className="sold-driver-price">{fmtCents(driver.final_price_cents)}</strong>
+    </li>
   );
 }
 
@@ -243,6 +243,7 @@ export default function Auction() {
     () => soldByOwner.reduce((sum, owner) => sum + owner.totalCents, 0),
     [soldByOwner]
   );
+  const auctionComplete = auctionStatus === 'complete';
 
   const submitBid = (event) => {
     event.preventDefault();
@@ -290,8 +291,17 @@ export default function Auction() {
 
       {active ? <ActiveDriverCard active={active} recentBids={recentBids} /> : (
         <section className="panel">
-          <h2>No live driver currently</h2>
-          <p className="muted">Admin can open the next driver when ready.</p>
+          {auctionComplete ? (
+            <>
+              <h2>Auction Complete</h2>
+              <p className="muted">All drivers are sold. Final purse: {fmtCents(auctionPurseCents)} across {soldCount} drivers.</p>
+            </>
+          ) : (
+            <>
+              <h2>No live driver currently</h2>
+              <p className="muted">Admin can open the next driver when ready.</p>
+            </>
+          )}
         </section>
       )}
 
@@ -323,7 +333,9 @@ export default function Auction() {
         </section>
       ) : null}
 
-      {soldMessage ? (
+      {auctionComplete ? (
+        <section className="panel note-panel">Auction complete. All drivers have been sold.</section>
+      ) : soldMessage ? (
         <section className="panel note-panel">{soldMessage}</section>
       ) : null}
 
@@ -344,11 +356,11 @@ export default function Auction() {
                 <span>{mySoldGroup?.drivers.length || 0} drivers</span>
               </div>
               {mySoldGroup?.drivers?.length ? (
-                <div className="sold-driver-grid">
+                <ul className="sold-driver-list mine">
                   {mySoldGroup.drivers.map((driver) => (
-                    <SoldDriverTile key={driver.id} driver={driver} mine />
+                    <SoldDriverRow key={driver.id} driver={driver} mine />
                   ))}
-                </div>
+                </ul>
               ) : (
                 <p className="muted small">You have not won a driver yet.</p>
               )}
@@ -370,11 +382,11 @@ export default function Auction() {
                         </div>
                         <strong>{fmtCents(owner.totalCents)}</strong>
                       </div>
-                      <div className="sold-driver-grid">
+                      <ul className="sold-driver-list">
                         {owner.drivers.map((driver) => (
-                          <SoldDriverTile key={driver.id} driver={driver} />
+                          <SoldDriverRow key={driver.id} driver={driver} />
                         ))}
-                      </div>
+                      </ul>
                     </article>
                   ))}
                 </div>

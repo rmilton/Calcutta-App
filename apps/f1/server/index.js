@@ -65,7 +65,7 @@ app.set('auctionService', auctionService);
 app.set('resultsProvider', createResultsProvider());
 setupSocket(io, auctionService);
 
-if (initResult?.payoutModelMigrated) {
+if (initResult?.payoutModelMigrated || initResult?.payoutRandomAdjusted) {
   const rescore = rescoreSeasonEvents({ seasonId: initResult.activeSeasonId });
   if (!rescore.ok) {
     console.error('[payout-model-v2] Failed to rescore season events', rescore);

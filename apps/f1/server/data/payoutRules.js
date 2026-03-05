@@ -15,7 +15,7 @@ const EVENT_RULES = {
     { category: 'sprint_winner', label: 'Sprint Winner', bps: 25, rank_order: 1 },
     { category: 'best_p6_or_lower', label: 'Best Finisher P6 or Lower', bps: 25, rank_order: 1 },
     { category: 'most_positions_gained', label: 'Most Positions Gained', bps: 25, rank_order: 1 },
-    { category: 'random_finish_bonus', label: 'Random Finishing Position Bonus', bps: 75, rank_order: 1 },
+    { category: 'random_finish_bonus', label: 'Random Finishing Position Bonus (P4+)', bps: 75, rank_order: 1 },
   ],
 };
 

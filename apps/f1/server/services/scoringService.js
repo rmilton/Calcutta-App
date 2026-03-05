@@ -71,7 +71,7 @@ function resolveCategoryWinners(category, rows, event, rankOrder = 1) {
 }
 
 function ensureRandomBonusPosition(event) {
-  const minPosition = event.type === 'grand_prix' ? 4 : 1;
+  const minPosition = 4;
   const maxPosition = 20;
   const existing = Number(event.random_bonus_position);
   if (existing >= minPosition && existing <= maxPosition) return existing;

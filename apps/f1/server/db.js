@@ -28,9 +28,10 @@ function drawRandomPosition(min, max) {
 
 function applyPayoutModelV2Migration(seasonId) {
   const season = db.prepare('SELECT id, payout_model_version FROM seasons WHERE id = ?').get(seasonId);
-  if (!season || (Number(season.payout_model_version) || 1) >= PAYOUT_MODEL_V2) {
+  if (!season) {
     return { migrated: false };
   }
+  const currentVersion = Number(season.payout_model_version) || 1;
 
   const now = Date.now();
 
@@ -68,11 +69,12 @@ function applyPayoutModelV2Migration(seasonId) {
     WHERE season_id = ? AND id = ?
   `);
 
-  const updateGpRandomDraw = db.prepare(`
+  const updateEventRandomDraw = db.prepare(`
     UPDATE events
     SET random_bonus_position = ?, random_bonus_drawn_at = ?
     WHERE id = ? AND season_id = ?
   `);
+  let adjustedRandomDraws = 0;
 
   db.transaction(() => {
     for (const [eventType, rules] of Object.entries(EVENT_RULES)) {
@@ -136,16 +138,17 @@ function applyPayoutModelV2Migration(seasonId) {
       `).run(seasonId, ...DEPRECATED_SEASON_BONUS_CATEGORIES);
     }
 
-    const gpEvents = db.prepare(`
+    const scoredEvents = db.prepare(`
       SELECT id, random_bonus_position
       FROM events
-      WHERE season_id = ? AND type = 'grand_prix' AND status = 'scored'
+      WHERE season_id = ? AND status = 'scored' AND type IN ('grand_prix', 'sprint')
     `).all(seasonId);
 
-    gpEvents.forEach((event) => {
+    scoredEvents.forEach((event) => {
       const pos = Number(event.random_bonus_position);
       if (!pos || pos < 4 || pos > 20) {
-        updateGpRandomDraw.run(drawRandomPosition(4, 20), now, event.id, seasonId);
+        updateEventRandomDraw.run(drawRandomPosition(4, 20), now, event.id, seasonId);
+        adjustedRandomDraws += 1;
       }
     });
 
@@ -156,7 +159,10 @@ function applyPayoutModelV2Migration(seasonId) {
     `).run(PAYOUT_MODEL_V2, seasonId);
   })();
 
-  return { migrated: true };
+  return {
+    migrated: currentVersion < PAYOUT_MODEL_V2,
+    adjustedRandomDraws,
+  };
 }
 
 function init() {
@@ -346,6 +352,7 @@ function init() {
   return {
     activeSeasonId,
     payoutModelMigrated: !!payoutMigration.migrated,
+    payoutRandomAdjusted: (Number(payoutMigration.adjustedRandomDraws) || 0) > 0,
   };
 }
 

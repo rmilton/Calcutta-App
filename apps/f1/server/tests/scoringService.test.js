@@ -102,7 +102,7 @@ test('random bonus position is immutable after first scoring', () => {
   scoreEvent({ seasonId, eventId: event.id });
 
   const firstDraw = db.prepare('SELECT random_bonus_position FROM events WHERE id = ?').get(event.id).random_bonus_position;
-  assert.ok(firstDraw >= 1 && firstDraw <= 20);
+  assert.ok(firstDraw >= 4 && firstDraw <= 20);
 
   upsertEventResults({
     seasonId,
@@ -195,7 +195,7 @@ test('random bonus draw ranges follow payout model v2 bounds by event type', () 
   const gpDraw = db.prepare('SELECT random_bonus_position FROM events WHERE id = ?').get(gpEvent.id).random_bonus_position;
   const sprintDraw = db.prepare('SELECT random_bonus_position FROM events WHERE id = ?').get(sprintEvent.id).random_bonus_position;
   assert.ok(gpDraw >= 4 && gpDraw <= 20);
-  assert.ok(sprintDraw >= 1 && sprintDraw <= 20);
+  assert.ok(sprintDraw >= 4 && sprintDraw <= 20);
 });
 
 test('season bonus winners and allocations follow payout model v2', () => {

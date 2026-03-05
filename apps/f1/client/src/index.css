@@ -743,7 +743,9 @@ button {
   border-radius: 14px;
   padding: 0.72rem;
   background: rgba(7, 10, 17, 0.76);
-  display: grid;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
   gap: 0.7rem;
 }
 
@@ -770,22 +772,40 @@ button {
   letter-spacing: 0.08em;
 }
 
-.sold-driver-grid {
-  display: grid;
-  gap: 0.55rem;
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-}
-
-.sold-driver-tile {
-  border: 1px solid rgba(255, 255, 255, 0.11);
+.sold-driver-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
   background: rgba(14, 20, 31, 0.92);
-  padding: 0.6rem 0.68rem;
+  overflow: hidden;
 }
 
-.sold-driver-tile.mine {
+.sold-driver-list.mine {
   border-color: rgba(225, 6, 0, 0.5);
-  background: linear-gradient(150deg, rgba(225, 6, 0, 0.15), transparent 50%), rgba(14, 20, 31, 0.95);
+  background: linear-gradient(150deg, rgba(225, 6, 0, 0.08), transparent 45%), rgba(14, 20, 31, 0.95);
+}
+
+.sold-driver-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.62rem 0.75rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.sold-driver-row:last-child {
+  border-bottom: 0;
+}
+
+.sold-driver-row.mine {
+  background: rgba(225, 6, 0, 0.08);
+}
+
+.sold-driver-main {
+  min-width: 0;
 }
 
 .sold-driver-name {
@@ -805,7 +825,7 @@ button {
   font-size: 1.15rem;
 }
 
-.sold-owner-block .sold-driver-grid {
+.sold-owner-block .sold-driver-list {
   margin-top: 0.58rem;
 }
 

@@ -34,6 +34,8 @@ export default function TestDataPage() {
   const {
     events,
     recalcSeasonBonuses,
+    clearAllTestData,
+    loadHistoricalSeasonData,
     refresh,
     setMessage,
     loading,
@@ -169,12 +171,78 @@ export default function TestDataPage() {
     }
   }, [selectedEventId, manualRows, setMessage, refresh, loadSeasonBonusBreakdown, loadManualEvent]);
 
+  const onClearAllTestData = useCallback(async () => {
+    const confirmed = window.confirm(
+      'Clear all F1 test data for the active season? This removes auction activity, non-admin participants, results, and payouts.'
+    );
+    if (!confirmed) return;
+
+    await clearAllTestData();
+    setSelectedEventId('');
+    setManualRows([]);
+    setManualMeta(null);
+    setBonusRows([]);
+    setBonusTotals([]);
+    await refresh();
+    await loadSeasonBonusBreakdown();
+  }, [clearAllTestData, refresh, loadSeasonBonusBreakdown]);
+
+  const onLoad2025Data = useCallback(async () => {
+    const confirmed = window.confirm(
+      'Load 2025 OpenF1 drivers and events into the active season for testing? This clears current auction data, results, payouts, and replaces the current season metadata.'
+    );
+    if (!confirmed) return;
+
+    await loadHistoricalSeasonData(2025);
+    setSelectedEventId('');
+    setManualRows([]);
+    setManualMeta(null);
+    setBonusRows([]);
+    setBonusTotals([]);
+    await refresh();
+    await loadSeasonBonusBreakdown();
+  }, [loadHistoricalSeasonData, refresh, loadSeasonBonusBreakdown]);
+
   if (loading && !hasLoaded) {
     return <AdminLoadingState />;
   }
 
   return (
     <div className="stack-lg">
+      <section className="panel note-panel stack">
+        <div className="row between wrap gap-sm">
+          <div className="stack-xs">
+            <h2>Load Historical Test Data</h2>
+            <p className="muted small">
+              Replaces the active season drivers and events with a 2025 OpenF1 dataset so you can test auction and payout flows before 2026 real data is complete.
+            </p>
+          </div>
+          <button
+            className="btn btn-outline"
+            onClick={onLoad2025Data}
+          >
+            Load 2025 Drivers + Events
+          </button>
+        </div>
+      </section>
+
+      <section className="panel note-panel stack">
+        <div className="row between wrap gap-sm">
+          <div className="stack-xs">
+            <h2>Reset Test Data</h2>
+            <p className="muted small">
+              Clears auction activity, non-admin participants, manual results, event payouts, season bonus payouts, and provider sync state for the active F1 season.
+            </p>
+          </div>
+          <button
+            className="btn btn-danger"
+            onClick={onClearAllTestData}
+          >
+            Clear All Test Data
+          </button>
+        </div>
+      </section>
+
       <section className="panel stack">
         <div className="row between wrap gap-sm">
           <h2>Manual Results Editor</h2>

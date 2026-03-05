@@ -1,10 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  clearAllTestData as clearAllTestDataApi,
+  loadHistoricalSeasonData as loadHistoricalSeasonDataApi,
   normalizeRulesPayload,
   normalizeSettingsPayload,
   patchSettings,
   readApi,
+  readProviderStatus,
   recalcSeasonBonuses as recalcSeasonBonusesApi,
+  refreshDrivers as refreshDriversApi,
+  refreshSchedule as refreshScheduleApi,
   runAuctionAction as runAuctionActionApi,
   savePayoutRules,
   syncEvent as syncEventApi,
@@ -16,6 +21,7 @@ export default function useAdminData() {
   const [participants, setParticipants] = useState([]);
   const [events, setEvents] = useState([]);
   const [rules, setRules] = useState(null);
+  const [providerStatus, setProviderStatus] = useState(null);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [hasLoaded, setHasLoaded] = useState(false);
@@ -23,16 +29,18 @@ export default function useAdminData() {
   const loadAll = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
     try {
-      const [settingsData, participantsData, eventsData, rulesData] = await Promise.all([
+      const [settingsData, participantsData, eventsData, rulesData, providerStatusData] = await Promise.all([
         readApi('/admin/settings'),
         readApi('/admin/participants'),
         readApi('/events'),
         readApi('/admin/payout-rules'),
+        readProviderStatus(),
       ]);
       setSettings(settingsData);
       setParticipants(Array.isArray(participantsData) ? participantsData : []);
       setEvents(Array.isArray(eventsData) ? eventsData : []);
       setRules(rulesData);
+      setProviderStatus(providerStatusData);
       setHasLoaded(true);
     } catch (error) {
       setMessage(error.message || 'Failed to load admin data.');
@@ -90,6 +98,26 @@ export default function useAdminData() {
     }
   }, [loadAll]);
 
+  const refreshDrivers = useCallback(async () => {
+    try {
+      const result = await refreshDriversApi();
+      setMessage(result.message || 'Drivers refreshed.');
+      await loadAll({ silent: true });
+    } catch (error) {
+      setMessage(error.message || 'Driver refresh failed.');
+    }
+  }, [loadAll]);
+
+  const refreshSchedule = useCallback(async () => {
+    try {
+      const result = await refreshScheduleApi();
+      setMessage(result.message || 'Schedule refreshed.');
+      await loadAll({ silent: true });
+    } catch (error) {
+      setMessage(error.message || 'Schedule refresh failed.');
+    }
+  }, [loadAll]);
+
   const recalcSeasonBonuses = useCallback(async () => {
     try {
       await recalcSeasonBonusesApi();
@@ -97,6 +125,26 @@ export default function useAdminData() {
       await loadAll({ silent: true });
     } catch (error) {
       setMessage(error.message || 'Recalculation failed.');
+    }
+  }, [loadAll]);
+
+  const clearAllTestData = useCallback(async () => {
+    try {
+      const result = await clearAllTestDataApi();
+      setMessage(result.message || 'Test data cleared.');
+      await loadAll({ silent: true });
+    } catch (error) {
+      setMessage(error.message || 'Failed to clear test data.');
+    }
+  }, [loadAll]);
+
+  const loadHistoricalSeasonData = useCallback(async (year) => {
+    try {
+      const result = await loadHistoricalSeasonDataApi(year);
+      setMessage(result.message || `Loaded ${year} historical season data.`);
+      await loadAll({ silent: true });
+    } catch (error) {
+      setMessage(error.message || 'Failed to load historical season data.');
     }
   }, [loadAll]);
 
@@ -126,6 +174,7 @@ export default function useAdminData() {
     participants,
     events,
     rules,
+    providerStatus,
     message,
     loading,
     hasLoaded,
@@ -134,6 +183,10 @@ export default function useAdminData() {
     setMessage,
     saveSettings,
     runAuctionAction,
+    refreshDrivers,
+    refreshSchedule,
+    clearAllTestData,
+    loadHistoricalSeasonData,
     syncNext,
     syncEvent,
     recalcSeasonBonuses,
@@ -144,6 +197,7 @@ export default function useAdminData() {
     participants,
     events,
     rules,
+    providerStatus,
     message,
     loading,
     hasLoaded,
@@ -151,6 +205,10 @@ export default function useAdminData() {
     setField,
     saveSettings,
     runAuctionAction,
+    refreshDrivers,
+    refreshSchedule,
+    clearAllTestData,
+    loadHistoricalSeasonData,
     syncNext,
     syncEvent,
     recalcSeasonBonuses,

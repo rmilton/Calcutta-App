@@ -269,6 +269,7 @@ function createAuctionService(io, options = {}) {
     startAuction,
     closeAuction,
     closeActiveAuction,
+    clearActiveTimer,
     placeBid,
     emitAuctionState,
     restoreTimerOnStartup,

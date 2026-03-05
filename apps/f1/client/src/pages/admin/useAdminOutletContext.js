@@ -6,6 +6,7 @@ import { useOutletContext } from 'react-router-dom';
  * @property {Array<Object>} participants
  * @property {Array<Object>} events
  * @property {Object|null} rules
+ * @property {Object|null} providerStatus
  * @property {string} message
  * @property {boolean} loading
  * @property {boolean} hasLoaded
@@ -14,6 +15,10 @@ import { useOutletContext } from 'react-router-dom';
  * @property {(value: string) => void} setMessage
  * @property {() => Promise<void>} saveSettings
  * @property {(endpoint: string) => Promise<void>} runAuctionAction
+ * @property {() => Promise<void>} refreshDrivers
+ * @property {() => Promise<void>} refreshSchedule
+ * @property {() => Promise<void>} clearAllTestData
+ * @property {(year: number) => Promise<void>} loadHistoricalSeasonData
  * @property {(options?: {force?: boolean}) => Promise<void>} syncNext
  * @property {(eventId: number, options?: {force?: boolean}) => Promise<void>} syncEvent
  * @property {() => Promise<void>} recalcSeasonBonuses

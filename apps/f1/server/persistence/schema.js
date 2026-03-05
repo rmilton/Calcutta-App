@@ -159,6 +159,17 @@ function ensureSchema(db) {
       tie_count INTEGER NOT NULL DEFAULT 1,
       created_at INTEGER NOT NULL DEFAULT (unixepoch())
     );
+
+    CREATE TABLE IF NOT EXISTS provider_sync_state (
+      season_id INTEGER NOT NULL REFERENCES seasons(id),
+      scope TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      status TEXT NOT NULL,
+      message TEXT,
+      meta_json TEXT,
+      updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
+      PRIMARY KEY (season_id, scope)
+    );
   `);
 
   if (!columnExists(db, 'seasons', 'payout_model_version')) {

@@ -258,6 +258,11 @@ button {
   color: var(--text);
 }
 
+.btn-danger {
+  border-color: rgba(159, 63, 67, 0.62);
+  background: linear-gradient(135deg, #6a2628, #521a1d);
+}
+
 .panel {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 35%), var(--panel);
   border: 1px solid var(--border);
@@ -340,15 +345,26 @@ button {
 
 .join-live-pill {
   align-self: flex-start;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  font-size: 0.68rem;
-  font-weight: 700;
   border: 1px solid rgba(159, 63, 67, 0.62);
   color: #d2a4a8;
   background: rgba(16, 21, 31, 0.74);
-  padding: 0.26rem 0.58rem;
+  padding: 0.3rem 0.58rem 0.34rem;
   border-radius: var(--radius-sm);
+  display: grid;
+  gap: 0.08rem;
+}
+
+.join-live-pill-label {
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.62rem;
+  font-weight: 700;
+}
+
+.join-live-pill-value {
+  font-size: 0.84rem;
+  color: #f0cfd2;
+  line-height: 1.1;
 }
 
 .join-title-accent {
@@ -1568,6 +1584,11 @@ tbody tr:hover {
   display: grid;
   gap: var(--space-3);
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.results-provider-grid .strip-item {
+  align-content: start;
+  min-height: 112px;
 }
 
 .bps-summary {

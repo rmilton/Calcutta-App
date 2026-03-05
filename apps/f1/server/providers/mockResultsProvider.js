@@ -7,6 +7,10 @@ function seededHash(input) {
 }
 
 class MockResultsProvider {
+  constructor() {
+    this.name = 'mock';
+  }
+
   async fetchDrivers() {
     return DRIVERS_2026;
   }
@@ -40,6 +44,13 @@ class MockResultsProvider {
       finish_position: idx + 1,
       start_position: startPos.get(driver.external_id),
     }));
+  }
+
+  getStatus() {
+    return {
+      provider: this.name,
+      mode: 'mock',
+    };
   }
 }
 

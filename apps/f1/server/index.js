@@ -81,23 +81,38 @@ httpServer.listen(PORT, () => {
 });
 
 let isShuttingDown = false;
+let forceExitTimer = null;
 function shutdown(signal) {
   if (isShuttingDown) return;
   isShuttingDown = true;
 
   console.log(`[shutdown] Received ${signal}, closing server...`);
 
-  io.close(() => {
-    httpServer.close((err) => {
-      if (err) {
+  const finish = (code) => {
+    if (forceExitTimer) clearTimeout(forceExitTimer);
+    process.exit(code);
+  };
+
+  const closeHttpServer = () => {
+    if (!httpServer.listening) {
+      console.log('[shutdown] HTTP server already stopped');
+      return finish(0);
+    }
+
+    return httpServer.close((err) => {
+      if (err && err.code !== 'ERR_SERVER_NOT_RUNNING') {
         console.error('[shutdown] HTTP close failed', err);
-        process.exit(1);
+        return finish(1);
       }
-      process.exit(0);
+      return finish(0);
     });
+  };
+
+  io.close(() => {
+    closeHttpServer();
   });
 
-  setTimeout(() => process.exit(1), 10000).unref();
+  forceExitTimer = setTimeout(() => process.exit(1), 10000).unref();
 }
 
 process.on('SIGTERM', () => shutdown('SIGTERM'));

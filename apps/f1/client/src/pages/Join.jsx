@@ -39,54 +39,16 @@ export default function Join() {
   return (
     <div className="join-landing fade-in">
       <div className="join-bg-graphic" aria-hidden="true">
-        <svg viewBox="0 0 1200 700" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <linearGradient id="trackStroke" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="rgba(255,255,255,0.06)" />
-              <stop offset="50%" stopColor="rgba(225,6,0,0.55)" />
-              <stop offset="100%" stopColor="rgba(255,255,255,0.06)" />
-            </linearGradient>
-            <linearGradient id="carFill" x1="0%" y1="0%" x2="100%" y2="0%">
-              <stop offset="0%" stopColor="#960000" />
-              <stop offset="55%" stopColor="#e10600" />
-              <stop offset="100%" stopColor="#7a0000" />
-            </linearGradient>
-          </defs>
-          <path
-            className="track-line"
-            d="M-80 530 C 240 435, 390 615, 695 470 S 1230 355, 1330 430"
-            stroke="url(#trackStroke)"
-            strokeWidth="26"
-            fill="none"
-            strokeLinecap="round"
-          />
-          <path
-            className="track-line-alt"
-            d="M-120 600 C 210 500, 420 690, 735 550 S 1230 450, 1370 520"
-            stroke="rgba(255,255,255,0.08)"
-            strokeWidth="10"
-            fill="none"
-            strokeLinecap="round"
-          />
-          <g className="join-car">
-            <path
-              d="M220 338 L318 300 L570 300 L670 338 L800 338 L854 374 L800 410 L670 410 L570 450 L318 450 L220 410 L145 410 L96 374 L145 338 Z"
-              fill="url(#carFill)"
-            />
-            <rect x="394" y="272" width="102" height="29" rx="8" fill="#f6f7fb" opacity="0.8" />
-            <path d="M245 326 L140 357 L140 390 L245 390 Z" fill="#d9dbe3" opacity="0.85" />
-            <rect x="580" y="326" width="124" height="18" rx="8" fill="#0f131a" opacity="0.65" />
-            <circle cx="246" cy="432" r="42" fill="#0e1219" />
-            <circle cx="246" cy="432" r="21" fill="#2f3a4f" />
-            <circle cx="642" cy="432" r="42" fill="#0e1219" />
-            <circle cx="642" cy="432" r="21" fill="#2f3a4f" />
-          </g>
-        </svg>
+        <img src="/cadillac-f1-hero.jpg" alt="" />
       </div>
 
-      <section className="panel panel-hero join-hero">
-        <div className="hero-kicker">Telemetry Dark</div>
-        <h1>F1 Season Calcutta</h1>
+      <section className="join-hero">
+        <div className="join-live-pill">2026 Season Live</div>
+        <h1>
+          F1 Season
+          <br />
+          <span className="join-title-accent">Calcutta</span>
+        </h1>
         <p>
           Own drivers, track every race weekend, and cash in on category payouts from the shared pool.
         </p>

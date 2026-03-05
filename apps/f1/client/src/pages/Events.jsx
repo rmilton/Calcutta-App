@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import DriverIdentity from '../components/DriverIdentity';
 import { api, categoryLabel, eventTypeLabel, fmtCents, fmtWhen } from '../utils';
 
 function ordinal(value) {
@@ -95,7 +96,17 @@ export default function Events() {
               <ul className="list tight">
                 {eventDetail.results.map((result) => (
                   <li key={result.id}>
-                    <span>#{result.finish_position} {result.driver_code} ({result.driver_name})</span>
+                    <span className="row gap-sm">
+                      <strong>#{result.finish_position}</strong>
+                      <DriverIdentity
+                        driverName={result.driver_name}
+                        driverCode={result.driver_code}
+                        teamName={result.team_name}
+                        compact
+                        showCode={false}
+                        showTeam
+                      />
+                    </span>
                     <span className="muted">Started {result.start_position ?? 'N/A'}</span>
                   </li>
                 ))}

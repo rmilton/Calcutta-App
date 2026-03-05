@@ -1,9 +1,12 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import CountdownTimer from '../components/CountdownTimer';
+import DriverIdentity from '../components/DriverIdentity';
 import ParticipantAvatar from '../components/ParticipantAvatar';
+import TeamLogo from '../components/TeamLogo';
 import { useAuth } from '../context/AuthContext';
 import { useSocket, useSocketEvent } from '../context/SocketContext';
 import { api, fmtCents } from '../utils';
+import { getTeamColorStyle } from '../teamMeta';
 
 function ActiveDriverCard({ active, recentBids }) {
   if (!active) return null;
@@ -15,10 +18,27 @@ function ActiveDriverCard({ active, recentBids }) {
         <span>Live Auction</span>
       </div>
       <div className="driver-id-row">
+        <TeamLogo
+          teamName={active.team_name}
+          driverCode={active.driver_code}
+          size={34}
+          className="live-driver-logo"
+          critical
+        />
         <span className="driver-code">{active.driver_code}</span>
-        <span className="team-chip">{active.team_name}</span>
+        <span
+          className="team-chip team-accent-text"
+          style={getTeamColorStyle({ teamName: active.team_name, driverCode: active.driver_code })}
+        >
+          {active.team_name}
+        </span>
       </div>
-      <h2 className="driver-name">{active.driver_name}</h2>
+      <h2
+        className="driver-name team-accent-text"
+        style={getTeamColorStyle({ teamName: active.team_name, driverCode: active.driver_code })}
+      >
+        {active.driver_name}
+      </h2>
       <div className="live-grid">
         <div>
           <div className="label">Current Price</div>
@@ -64,10 +84,13 @@ function SoldDriverRow({ driver, mine = false }) {
   return (
     <li className={`sold-driver-row ${mine ? 'mine' : ''}`}>
       <div className="sold-driver-main">
-        <div>
-          <div className="sold-driver-name">{driver.driver_name}</div>
-          <div className="sold-driver-meta">{driver.driver_code} - {driver.team_name}</div>
-        </div>
+        <DriverIdentity
+          driverName={driver.driver_name}
+          driverCode={driver.driver_code}
+          teamName={driver.team_name}
+          compact
+          className="sold-driver-identity"
+        />
       </div>
       <strong className="sold-driver-price">{fmtCents(driver.final_price_cents)}</strong>
     </li>
@@ -85,7 +108,7 @@ export default function Auction() {
   const [recentBids, setRecentBids] = useState([]);
   const [bidInput, setBidInput] = useState('');
   const [bidError, setBidError] = useState('');
-  const [soldMessage, setSoldMessage] = useState('');
+  const [soldNotice, setSoldNotice] = useState(null);
 
   const refresh = useCallback(async () => {
     const response = await api('/auction');
@@ -124,7 +147,7 @@ export default function Auction() {
   }, []));
 
   useSocketEvent('auction:started', useCallback(() => {
-    setSoldMessage('');
+    setSoldNotice(null);
     refresh().catch(() => {});
   }, [refresh]));
 
@@ -143,8 +166,14 @@ export default function Auction() {
   }, []));
 
   useSocketEvent('auction:sold', useCallback((payload) => {
-    const driverDisplay = payload.driverName || payload.driverCode || 'Driver';
-    setSoldMessage(`${driverDisplay} sold to ${payload.winnerName} for ${fmtCents(payload.finalPriceCents)}`);
+    setSoldNotice({
+      kind: 'sold',
+      driverName: payload.driverName || payload.driverCode || 'Driver',
+      driverCode: payload.driverCode || '',
+      teamName: payload.teamName || '',
+      winnerName: payload.winnerName || 'Unknown',
+      finalPriceCents: payload.finalPriceCents || 0,
+    });
     setActive(null);
     setRecentBids([]);
     setItems((prev) => prev.map((item) => (
@@ -166,7 +195,7 @@ export default function Auction() {
   }, [refresh]));
 
   useSocketEvent('auction:nobids', useCallback((payload) => {
-    setSoldMessage('No bids. Driver returned to queue.');
+    setSoldNotice({ kind: 'nobids', message: 'No bids. Driver returned to queue.' });
     setActive(null);
     setRecentBids([]);
     setItems((prev) => prev.map((item) => (
@@ -335,8 +364,23 @@ export default function Auction() {
 
       {auctionComplete ? (
         <section className="panel note-panel">Auction complete. All drivers have been sold.</section>
-      ) : soldMessage ? (
-        <section className="panel note-panel">{soldMessage}</section>
+      ) : soldNotice ? (
+        <section className="panel note-panel">
+          {soldNotice.kind === 'sold' ? (
+            <>
+              <span
+                className="team-accent-text"
+                style={getTeamColorStyle({ teamName: soldNotice.teamName, driverCode: soldNotice.driverCode })}
+              >
+                {soldNotice.driverName}
+              </span>
+              {' sold to '}
+              <span>{soldNotice.winnerName}</span>
+              {' for '}
+              <strong>{fmtCents(soldNotice.finalPriceCents)}</strong>
+            </>
+          ) : soldNotice.message}
+        </section>
       ) : null}
 
       <section className="panel sold-showcase">

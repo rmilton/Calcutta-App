@@ -1,6 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import DriverIdentity from '../components/DriverIdentity';
 import { useAuth } from '../context/AuthContext';
 import { api, fmtCents } from '../utils';
+import { getTeamColorStyle } from '../teamMeta';
 
 export default function MyDrivers() {
   const { participant } = useAuth();
@@ -61,9 +63,32 @@ export default function MyDrivers() {
                   const total = driver.event_earnings_cents + driver.bonus_earnings_cents;
                   return (
                     <tr key={driver.driver_id}>
-                      <td>{driver.driver_code}</td>
-                      <td>{driver.driver_name}</td>
-                      <td>{driver.team_name}</td>
+                      <td>
+                        <span
+                          className="team-accent-text"
+                          style={getTeamColorStyle({ teamName: driver.team_name, driverCode: driver.driver_code })}
+                        >
+                          {driver.driver_code}
+                        </span>
+                      </td>
+                      <td>
+                        <DriverIdentity
+                          driverName={driver.driver_name}
+                          driverCode={driver.driver_code}
+                          teamName={driver.team_name}
+                          compact
+                          showCode={false}
+                          showTeam={false}
+                        />
+                      </td>
+                      <td>
+                        <span
+                          className="team-accent-text"
+                          style={getTeamColorStyle({ teamName: driver.team_name, driverCode: driver.driver_code })}
+                        >
+                          {driver.team_name}
+                        </span>
+                      </td>
                       <td>{fmtCents(driver.purchase_price_cents)}</td>
                       <td>{fmtCents(driver.event_earnings_cents)}</td>
                       <td>{fmtCents(driver.bonus_earnings_cents)}</td>

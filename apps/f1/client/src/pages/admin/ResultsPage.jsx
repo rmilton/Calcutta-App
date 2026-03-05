@@ -5,6 +5,7 @@ import {
   eventTypeLabel,
   fmtCents,
 } from '../../utils';
+import { getTeamColorStyle } from '../../teamMeta';
 import useAdminOutletContext from './useAdminOutletContext';
 
 function parsePositiveInt(value) {
@@ -21,6 +22,7 @@ function buildManualRows(drivers, results) {
       driver_id: driver.id,
       driver_code: driver.code,
       driver_name: driver.name,
+      team_name: driver.team_name,
       finish_position: existing?.finish_position ?? '',
       start_position: existing?.start_position ?? '',
     };
@@ -278,7 +280,14 @@ export default function ResultsPage() {
                   const gain = finish != null && start != null ? (start - finish) : null;
                   return (
                     <tr key={row.driver_id}>
-                      <td>{row.driver_code} - {row.driver_name}</td>
+                      <td>
+                        <span
+                          className="team-accent-text"
+                          style={getTeamColorStyle({ teamName: row.team_name, driverCode: row.driver_code })}
+                        >
+                          {row.driver_code} - {row.driver_name}
+                        </span>
+                      </td>
                       <td>
                         <input
                           type="number"
@@ -345,7 +354,16 @@ export default function ResultsPage() {
                   <tr key={row.id}>
                     <td>{categoryLabel(row.category)}</td>
                     <td>{row.participant_name}</td>
-                    <td>{row.driver_code ? `${row.driver_code} - ${row.driver_name}` : '—'}</td>
+                    <td>
+                      {row.driver_code ? (
+                        <span
+                          className="team-accent-text"
+                          style={getTeamColorStyle({ driverCode: row.driver_code })}
+                        >
+                          {row.driver_code} - {row.driver_name}
+                        </span>
+                      ) : '—'}
+                    </td>
                     <td>{fmtCents(row.amount_cents)}</td>
                     <td>{row.tie_count}</td>
                   </tr>

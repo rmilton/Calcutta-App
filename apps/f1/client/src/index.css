@@ -530,6 +530,30 @@ button {
   gap: var(--space-3);
 }
 
+.guide-table-panel .table-wrap {
+  overflow: hidden;
+}
+
+.guide-table-panel table {
+  min-width: 0;
+  table-layout: fixed;
+}
+
+.guide-table-panel th:first-child,
+.guide-table-panel td:first-child {
+  width: 68%;
+}
+
+.guide-table-panel th:nth-child(2),
+.guide-table-panel td:nth-child(2) {
+  width: 14%;
+}
+
+.guide-table-panel th:nth-child(3),
+.guide-table-panel td:nth-child(3) {
+  width: 18%;
+}
+
 .guide-table-head {
   display: flex;
   align-items: baseline;

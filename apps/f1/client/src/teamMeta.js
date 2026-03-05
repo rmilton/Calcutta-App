@@ -119,6 +119,51 @@ function canonicalize(value) {
     .replace(/\s+/g, ' ');
 }
 
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function parseHexColor(hex) {
+  const normalized = String(hex || '').trim().replace('#', '');
+  if (normalized.length === 3) {
+    return {
+      r: parseInt(normalized[0] + normalized[0], 16),
+      g: parseInt(normalized[1] + normalized[1], 16),
+      b: parseInt(normalized[2] + normalized[2], 16),
+    };
+  }
+  if (normalized.length !== 6) return null;
+  return {
+    r: parseInt(normalized.slice(0, 2), 16),
+    g: parseInt(normalized.slice(2, 4), 16),
+    b: parseInt(normalized.slice(4, 6), 16),
+  };
+}
+
+function toHexColor({ r, g, b }) {
+  const parts = [r, g, b].map((channel) => clamp(Math.round(channel), 0, 255).toString(16).padStart(2, '0'));
+  return `#${parts.join('')}`;
+}
+
+function temperColor(
+  color,
+  {
+    blendWith = '#a7afba',
+    blend = 0.48,
+    minChannel = 88,
+    maxChannel = 212,
+  } = {}
+) {
+  const rgb = parseHexColor(color);
+  const blendRgb = parseHexColor(blendWith);
+  if (!rgb || !blendRgb) return color;
+  return toHexColor({
+    r: clamp((1 - blend) * rgb.r + blend * blendRgb.r, minChannel, maxChannel),
+    g: clamp((1 - blend) * rgb.g + blend * blendRgb.g, minChannel, maxChannel),
+    b: clamp((1 - blend) * rgb.b + blend * blendRgb.b, minChannel, maxChannel),
+  });
+}
+
 const TEAM_LOOKUP = new Map();
 const DRIVER_LOOKUP = new Map();
 
@@ -145,8 +190,17 @@ export function resolveTeamMeta({ teamName, driverCode } = {}) {
 export function getTeamColorStyle(input, options = {}) {
   const meta = resolveTeamMeta(input);
   if (meta.isFallback) return {};
-  if (options.forBorder) return { borderColor: `${meta.primaryColor}66` };
-  return { color: meta.textColor };
+  if (options.forBorder) {
+    const tonedBorder = temperColor(meta.primaryColor, {
+      blendWith: '#798292',
+      blend: 0.42,
+      minChannel: 70,
+      maxChannel: 176,
+    });
+    return { borderColor: `${tonedBorder}88` };
+  }
+  const tonedText = temperColor(meta.textColor || meta.primaryColor);
+  return { color: tonedText };
 }
 
 export function getFallbackTeamMeta() {

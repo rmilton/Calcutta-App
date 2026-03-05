@@ -9,7 +9,7 @@ A dedicated Formula 1 Calcutta app for a full season pool.
 - Grand Prix and Sprint scoring categories
 - Auto-drawn random finishing position bonus per event
 - Season bonus payouts from remaining pool
-- Results sync via provider adapter (`mock` provider included)
+- Results sync via provider adapter (`openf1` for real data, `mock` for local/dev/test)
 - Admin controls for auction, sync, payout rules, and settings
 
 ## Run
@@ -28,8 +28,20 @@ Server: `http://localhost:3002`
 - `GET /api/events/:id/payouts`
 - `POST /api/admin/results/sync-next`
 - `POST /api/admin/results/sync-event/:id`
+- `POST /api/admin/results/refresh-drivers`
+- `POST /api/admin/results/refresh-schedule`
+- `GET /api/admin/results/provider-status`
 - `PATCH /api/admin/results/event/:id`
 - `PATCH /api/admin/payout-rules`
+
+## Runtime Notes
+
+- Production provider: `F1_RESULTS_PROVIDER=openf1`
+- Optional auto-poll:
+  - `F1_AUTO_POLL_ENABLED=1`
+  - `F1_AUTO_POLL_INTERVAL_SECONDS=<seconds>`
+- Local/dev/test may continue using `mock`
+- Admin Test Data page can load a 2025 OpenF1 driver/event dataset for pre-2026 flow testing
 
 ## Engineering Docs
 

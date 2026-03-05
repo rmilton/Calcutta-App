@@ -6,6 +6,7 @@ const { requireAuth, requireAdmin } = require('./middleware');
 const auctionAdminService = require('../services/admin/auctionAdminService');
 const payoutRulesAdminService = require('../services/admin/payoutRulesAdminService');
 const resultsAdminService = require('../services/admin/resultsAdminService');
+const { OpenF1ResultsProvider } = require('../providers/openF1ResultsProvider');
 const {
   parseForceFlag,
   parseIntegerParam,
@@ -125,6 +126,54 @@ router.post('/results/sync-next', withAdmin, async (req, res) => {
     io: req.app.get('io'),
     force: parseForceFlag(req),
   });
+  return runAndRespond(res, result, (payload) => ({ ok: true, ...payload }));
+});
+
+router.get('/results/provider-status', withAdmin, (req, res) => {
+  const seasonId = getActiveSeasonId();
+  const provider = req.app.get('resultsProvider');
+  const autoPollService = req.app.get('resultsAutoPollService');
+  return res.json(resultsAdminService.getProviderStatus({
+    seasonId,
+    provider,
+    autoPollService,
+  }));
+});
+
+router.post('/test-data/clear-all', withAdmin, (req, res) => {
+  const seasonId = getActiveSeasonId();
+  const result = resultsAdminService.clearTestDataForSeason({
+    seasonId,
+    io: req.app.get('io'),
+    auctionService: req.app.get('auctionService'),
+  });
+  return runAndRespond(res, result, (payload) => ({ ok: true, ...payload }));
+});
+
+router.post('/test-data/load-openf1-year', withAdmin, async (req, res) => {
+  const seasonId = getActiveSeasonId();
+  const provider = new OpenF1ResultsProvider({ baseUrl: process.env.OPENF1_BASE_URL });
+  const result = await resultsAdminService.loadHistoricalSeasonMetadata({
+    seasonId,
+    provider,
+    year: req.body?.year,
+    io: req.app.get('io'),
+    auctionService: req.app.get('auctionService'),
+  });
+  return runAndRespond(res, result, (payload) => ({ ok: true, ...payload }));
+});
+
+router.post('/results/refresh-drivers', withAdmin, async (req, res) => {
+  const seasonId = getActiveSeasonId();
+  const provider = req.app.get('resultsProvider');
+  const result = await resultsAdminService.refreshDriversFromProvider({ seasonId, provider });
+  return runAndRespond(res, result, (payload) => ({ ok: true, ...payload }));
+});
+
+router.post('/results/refresh-schedule', withAdmin, async (req, res) => {
+  const seasonId = getActiveSeasonId();
+  const provider = req.app.get('resultsProvider');
+  const result = await resultsAdminService.refreshScheduleFromProvider({ seasonId, provider });
   return runAndRespond(res, result, (payload) => ({ ok: true, ...payload }));
 });
 

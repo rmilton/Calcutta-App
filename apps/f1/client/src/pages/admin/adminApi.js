@@ -51,6 +51,42 @@ export async function syncNext({ force = false } = {}) {
   return parseApiResponse(response, 'Sync failed');
 }
 
+export async function readProviderStatus() {
+  return readApi('/admin/results/provider-status');
+}
+
+export async function refreshDrivers() {
+  const response = await api('/admin/results/refresh-drivers', {
+    method: 'POST',
+    body: '{}',
+  });
+  return parseApiResponse(response, 'Driver refresh failed');
+}
+
+export async function refreshSchedule() {
+  const response = await api('/admin/results/refresh-schedule', {
+    method: 'POST',
+    body: '{}',
+  });
+  return parseApiResponse(response, 'Schedule refresh failed');
+}
+
+export async function clearAllTestData() {
+  const response = await api('/admin/test-data/clear-all', {
+    method: 'POST',
+    body: '{}',
+  });
+  return parseApiResponse(response, 'Failed to clear test data');
+}
+
+export async function loadHistoricalSeasonData(year) {
+  const response = await api('/admin/test-data/load-openf1-year', {
+    method: 'POST',
+    body: JSON.stringify({ year }),
+  });
+  return parseApiResponse(response, 'Failed to load historical season data');
+}
+
 export async function syncEvent(eventId, { force = false } = {}) {
   const response = await api(`/admin/results/sync-event/${eventId}`, {
     method: 'POST',

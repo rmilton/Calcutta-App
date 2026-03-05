@@ -44,6 +44,7 @@ Both have:
 - Separate service per app.
 - Health endpoint: `/api/health`.
 - Persistent volume-backed SQLite paths via `DB_PATH`.
+- F1 may run an optional server-side result auto-poll loop when explicitly enabled.
 
 ## Runtime Reliability Requirements
 
@@ -61,6 +62,11 @@ Both have:
   - `persistence/repositories/*`
 - F1 `db.js` remains compatibility facade.
 - F1 admin routing decomposed into domain services.
+- F1 results ingestion uses a provider adapter:
+  - `mock` for local/dev/test
+  - `openf1` for real driver, schedule, and event-result data
+- F1 provider sync state is persisted in `provider_sync_state`.
+- F1 event scoring remains admin-triggered by default; optional auto-poll calls the same sync path and does not override manual edits.
 
 ## Evolution Model
 

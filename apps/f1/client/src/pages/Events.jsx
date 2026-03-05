@@ -98,14 +98,13 @@ export default function Events() {
     const now = Date.now();
     const enriched = events.map((event) => {
       const startsAtMs = toTimestampMs(event.starts_at);
-      const isUpcoming = startsAtMs != null && startsAtMs > now;
       const isScored = event.status === 'scored' || Number(event.result_count || 0) > 0;
+      const isUpcomingByClock = startsAtMs != null && startsAtMs > now;
       return {
         ...event,
         startsAtMs,
-        isUpcoming,
-        isPast: !isUpcoming,
         isScored,
+        isUpcomingByClock,
         displayLocation: getEventLocation(event.name),
       };
     });
@@ -115,16 +114,22 @@ export default function Events() {
     ));
 
     const upcomingEvents = sortedBySchedule
-      .filter((event) => event.isUpcoming)
+      .filter((event) => !event.isScored)
       .sort((a, b) => {
-        if (a.startsAtMs == null && b.startsAtMs == null) return 0;
+        const aFuture = a.startsAtMs != null && a.startsAtMs > now;
+        const bFuture = b.startsAtMs != null && b.startsAtMs > now;
+        if (aFuture !== bFuture) return aFuture ? -1 : 1;
+        if (a.startsAtMs == null && b.startsAtMs == null) {
+          return (a.round_number - b.round_number) || (typeOrder(a.type) - typeOrder(b.type));
+        }
         if (a.startsAtMs == null) return 1;
         if (b.startsAtMs == null) return -1;
-        return a.startsAtMs - b.startsAtMs;
+        if (a.startsAtMs !== b.startsAtMs) return a.startsAtMs - b.startsAtMs;
+        return (a.round_number - b.round_number) || (typeOrder(a.type) - typeOrder(b.type));
       });
 
     const pastEvents = sortedBySchedule
-      .filter((event) => !event.isUpcoming)
+      .filter((event) => event.isScored)
       .sort((a, b) => {
         if (a.startsAtMs == null && b.startsAtMs == null) {
           return (b.round_number - a.round_number) || (typeOrder(a.type) - typeOrder(b.type));
@@ -135,7 +140,7 @@ export default function Events() {
         return (b.round_number - a.round_number) || (typeOrder(a.type) - typeOrder(b.type));
       });
 
-    const nextUpcomingEvent = upcomingEvents[0] || null;
+    const nextUpcomingEvent = upcomingEvents.find((event) => event.isUpcomingByClock) || null;
     const mostRecentScoredEvent = [...pastEvents].find((event) => event.isScored) || null;
 
     const selectUpcomingWindow = (

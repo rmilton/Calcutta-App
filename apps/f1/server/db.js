@@ -7,6 +7,7 @@ const seasonRepo = require('./persistence/repositories/seasonRepo');
 const auctionRepo = require('./persistence/repositories/auctionRepo');
 const eventRepo = require('./persistence/repositories/eventRepo');
 const standingsRepo = require('./persistence/repositories/standingsRepo');
+const providerSyncRepo = require('./persistence/repositories/providerSyncRepo');
 
 function init() {
   ensureSchema(db);
@@ -118,6 +119,14 @@ function getEventPayouts(seasonId, eventId) {
   return eventRepo.getEventPayouts(db, seasonId, eventId);
 }
 
+function getProviderSyncStates(seasonId) {
+  return providerSyncRepo.getProviderSyncStates(db, seasonId);
+}
+
+function upsertProviderSyncState(seasonId, scope, payload) {
+  return providerSyncRepo.upsertProviderSyncState(db, seasonId, scope, payload);
+}
+
 module.exports = {
   db,
   init,
@@ -145,4 +154,6 @@ module.exports = {
   getEventPayoutRules,
   getSeasonBonusRules,
   getEventPayouts,
+  getProviderSyncStates,
+  upsertProviderSyncState,
 };

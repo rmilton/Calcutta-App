@@ -1,6 +1,20 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+
+const AUSTRALIAN_GP_START_ISO = '2026-02-22T04:00:00Z';
+
+function formatCountdown(targetMs, nowMs) {
+  const remainingMs = targetMs - nowMs;
+  if (!Number.isFinite(remainingMs) || remainingMs <= 0) return null;
+
+  const totalSeconds = Math.floor(remainingMs / 1000);
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+
+  return `${days}d ${hours}h ${minutes}m`;
+}
 
 export default function Join() {
   const { join, adminLogin } = useAuth();
@@ -10,6 +24,17 @@ export default function Join() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [nowMs, setNowMs] = useState(Date.now());
+
+  useEffect(() => {
+    const id = setInterval(() => setNowMs(Date.now()), 30000);
+    return () => clearInterval(id);
+  }, []);
+
+  const countdownText = useMemo(() => {
+    const targetMs = Date.parse(AUSTRALIAN_GP_START_ISO);
+    return formatCountdown(targetMs, nowMs);
+  }, [nowMs]);
 
   const handleJoin = async (event) => {
     event.preventDefault();
@@ -45,7 +70,12 @@ export default function Join() {
         </div>
 
         <section className="join-hero">
-          <div className="join-live-pill">2026 Season Live</div>
+          {countdownText ? (
+            <div className="join-live-pill">
+              <span className="join-live-pill-label">Australian GP Countdown</span>
+              <strong className="join-live-pill-value">{countdownText}</strong>
+            </div>
+          ) : null}
           <h1>
             F1 Season
             <br />

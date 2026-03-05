@@ -32,7 +32,14 @@ Operational guide for deploying, validating, and recovering NCAA/F1 services.
 - `ADMIN_PASSWORD`
 - `NODE_ENV=production`
 - `DB_PATH=/data/f1-calcutta.db`
-- optional: `F1_CLIENT_ORIGIN`, `F1_RESULTS_PROVIDER`
+- optional: `F1_CLIENT_ORIGIN`, `F1_RESULTS_PROVIDER`, `F1_AUTO_POLL_ENABLED`, `F1_AUTO_POLL_INTERVAL_SECONDS`, `OPENF1_BASE_URL`
+
+## F1 Provider Defaults
+
+1. Production should use `F1_RESULTS_PROVIDER=openf1`.
+2. `mock` is intended for local/dev/test only.
+3. Do not set `F1_PORT` in Railway.
+4. Keep `F1_AUTO_POLL_ENABLED=0` until one successful manual OpenF1 verification pass is complete.
 
 ## Deploy Validation
 
@@ -70,6 +77,13 @@ After deploy:
 1. Verify volume attachment.
 2. Verify `DB_PATH` under `/data`.
 3. Verify no accidental path changes in config.
+
+### D) F1 Provider Sync Failing
+
+1. Check `GET /api/admin/results/provider-status`.
+2. Verify `F1_RESULTS_PROVIDER=openf1` in production.
+3. Run admin `Refresh Drivers` and `Refresh Schedule` before syncing event results.
+4. If provider responses are incomplete or unmapped, use manual results entry and do not force-score partial provider data.
 
 ## Rollback Procedure
 

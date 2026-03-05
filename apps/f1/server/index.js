@@ -15,6 +15,7 @@ const cors = require('cors');
 const { init } = require('./db');
 const { setupSocket } = require('./socket');
 const { createAuctionService } = require('./services/auctionService');
+const { createResultsAutoPollService } = require('./services/resultsAutoPollService');
 const { createResultsProvider } = require('./providers');
 const { rescoreSeasonEvents } = require('./services/scoringService');
 
@@ -62,7 +63,11 @@ const initResult = init();
 const auctionService = createAuctionService(io);
 auctionService.restoreTimerOnStartup();
 app.set('auctionService', auctionService);
-app.set('resultsProvider', createResultsProvider());
+const resultsProvider = createResultsProvider();
+app.set('resultsProvider', resultsProvider);
+const resultsAutoPollService = createResultsAutoPollService({ provider: resultsProvider, io });
+resultsAutoPollService.start();
+app.set('resultsAutoPollService', resultsAutoPollService);
 setupSocket(io, auctionService);
 
 if (initResult?.payoutModelMigrated || initResult?.payoutRandomAdjusted) {
@@ -89,6 +94,7 @@ let forceExitTimer = null;
 function shutdown(signal) {
   if (isShuttingDown) return;
   isShuttingDown = true;
+  resultsAutoPollService.stop();
 
   console.log(`[shutdown] Received ${signal}, closing server...`);
 

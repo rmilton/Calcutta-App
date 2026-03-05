@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 export default function Join() {
@@ -52,6 +53,9 @@ export default function Join() {
         <p>
           Own drivers, track every race weekend, and cash in on category payouts from the shared pool.
         </p>
+        <div className="join-guide-links">
+          <Link className="btn btn-outline" to="/guide">How It Works</Link>
+        </div>
         <div className="join-hero-cards">
           <div>
             <span className="label">Format</span>
@@ -136,6 +140,9 @@ export default function Join() {
           </form>
         )}
         {error ? <p className="error-text">{error}</p> : null}
+        <p className="small muted join-guide-secondary">
+          New here? <Link className="join-guide-link-inline" to="/guide">Read the F1 Calcutta guide</Link> before joining.
+        </p>
       </section>
     </div>
   );

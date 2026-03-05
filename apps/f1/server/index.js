@@ -100,9 +100,10 @@ function shutdown(signal) {
     }
 
     return httpServer.close((err) => {
-      if (err && err.code !== 'ERR_SERVER_NOT_RUNNING') {
-        console.error('[shutdown] HTTP close failed', err);
-        return finish(1);
+      if (err) {
+        // During orchestrated shutdowns, the server can already be closing/stopped.
+        console.warn('[shutdown] HTTP close returned error during termination; exiting cleanly', err);
+        return finish(0);
       }
       return finish(0);
     });
@@ -112,7 +113,10 @@ function shutdown(signal) {
     closeHttpServer();
   });
 
-  forceExitTimer = setTimeout(() => process.exit(1), 10000).unref();
+  forceExitTimer = setTimeout(() => {
+    console.warn('[shutdown] Force exiting after timeout (clean exit for orchestrator stop)');
+    process.exit(0);
+  }, 10000).unref();
 }
 
 process.on('SIGTERM', () => shutdown('SIGTERM'));

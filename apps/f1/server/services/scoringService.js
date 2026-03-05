@@ -2,6 +2,7 @@ const {
   amountFromBps,
   splitCentsEvenly,
 } = require('../lib/core');
+const { resolveCategoryWinners } = require('./payoutRuleResolvers');
 const {
   db,
   getTotalPotCents,
@@ -18,56 +19,6 @@ const SPRINT_POINTS = [8, 7, 6, 5, 4, 3, 2, 1];
 function valueForPosition(pointsTable, pos) {
   if (!pos || pos < 1 || pos > pointsTable.length) return 0;
   return pointsTable[pos - 1] || 0;
-}
-
-function winnersByFinish(rows, targetPosition) {
-  return rows.filter((r) => r.finish_position === targetPosition).map((r) => r.driver_id);
-}
-
-function bestFinisherAtOrBelow(rows, floorPosition) {
-  const eligible = rows.filter((r) => r.finish_position >= floorPosition);
-  if (!eligible.length) return [];
-  const best = Math.min(...eligible.map((r) => r.finish_position));
-  return eligible.filter((r) => r.finish_position === best).map((r) => r.driver_id);
-}
-
-function mostPositionsGained(rows, denseRank) {
-  if (!rows.length) return [];
-  const values = [...new Set(rows.map((r) => r.positions_gained || 0))].sort((a, b) => b - a);
-  const target = values[denseRank - 1];
-  if (target == null) return [];
-  return rows
-    .filter((r) => (r.positions_gained || 0) === target)
-    .map((r) => r.driver_id);
-}
-
-function randomPositionWinners(rows, randomPosition) {
-  if (!randomPosition) return [];
-  return rows.filter((r) => r.finish_position === randomPosition).map((r) => r.driver_id);
-}
-
-function resolveCategoryWinners(category, rows, event, rankOrder = 1) {
-  switch (category) {
-    case 'race_winner':
-    case 'sprint_winner':
-      return winnersByFinish(rows, 1);
-    case 'second_place':
-      return winnersByFinish(rows, 2);
-    case 'third_place':
-      return winnersByFinish(rows, 3);
-    case 'best_p6_or_lower':
-      return bestFinisherAtOrBelow(rows, 6);
-    case 'best_p11_or_lower':
-      return bestFinisherAtOrBelow(rows, 11);
-    case 'most_positions_gained':
-      return mostPositionsGained(rows, 1);
-    case 'second_most_positions_gained':
-      return mostPositionsGained(rows, rankOrder || 2);
-    case 'random_finish_bonus':
-      return randomPositionWinners(rows, event.random_bonus_position);
-    default:
-      return [];
-  }
 }
 
 function ensureRandomBonusPosition(event) {

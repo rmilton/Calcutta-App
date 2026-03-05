@@ -60,6 +60,15 @@ The server serves the React build as static files. Set `PORT` env var to change 
 4. Add a volume mounted at `/app/server` to persist the SQLite database
 5. Set the start command to `npm start`
 
+## Engineering Docs
+
+For current architecture, operations, and agent workflows, use repo-root docs:
+
+- `/AGENTS.md`
+- `/ARCHITECTURE.md`
+- `/RUNBOOK.md`
+- `/docs/apps/ncaa.md`
+
 ## Usage
 
 ### Admin Flow

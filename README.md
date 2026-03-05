@@ -43,6 +43,18 @@ npm run test:ncaa
 npm run test:f1
 ```
 
+## Documentation
+
+Core engineering docs live at repository root:
+
+- `AGENTS.md` (execution policy)
+- `SOUL.md` (principles and decision compass)
+- `HEARTBEAT.md` (current state)
+- `ARCHITECTURE.md` (system map)
+- `DESIGN.md` (design process)
+- `RUNBOOK.md` (operations)
+- `docs/` (ADRs, app snapshots, templates)
+
 ## NCAA style freeze
 
 A guard script is included to prevent accidental style changes in NCAA UI files:

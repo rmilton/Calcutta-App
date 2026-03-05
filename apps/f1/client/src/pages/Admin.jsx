@@ -7,6 +7,7 @@ const ADMIN_SECTIONS = [
   { path: 'auction', label: 'Auction', description: 'Controls and timing settings' },
   { path: 'results', label: 'Results Sync', description: 'Sync event outcomes and payouts' },
   { path: 'test-data', label: 'Test Data', description: 'Manual edits and payout testing' },
+  { path: 'payout-audit', label: 'Payout Audit', description: 'Per-event payout math and winners' },
   { path: 'payouts', label: 'Payout Rules', description: 'Adjust basis-point distribution' },
 ];
 
@@ -30,7 +31,7 @@ export default function Admin() {
             {ADMIN_SECTIONS.map((section) => (
               <NavLink
                 key={section.path}
-                to={`/admin/${section.path}`}
+                to={section.path}
                 className={({ isActive }) => `admin-nav-link ${isActive ? 'active' : ''}`}
               >
                 <span className="admin-nav-label">{section.label}</span>
@@ -45,7 +46,7 @@ export default function Admin() {
             {ADMIN_SECTIONS.map((section) => (
               <NavLink
                 key={section.path}
-                to={`/admin/${section.path}`}
+                to={section.path}
                 className={({ isActive }) => `admin-nav-pill ${isActive ? 'active' : ''}`}
               >
                 {section.label}

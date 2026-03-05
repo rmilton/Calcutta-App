@@ -3,6 +3,7 @@ import DriverIdentity from '../components/DriverIdentity';
 import { getEventLocation } from '../eventLocations';
 import {
   api,
+  auditRuleSummary,
   categoryLabel,
   eventTypeLabel,
   fmtCents,
@@ -43,6 +44,20 @@ function pctOfTotal(amountCents, totalPotCents) {
   return `${pct.toFixed(2)}%`;
 }
 
+function fmtPct(value) {
+  const num = Number(value);
+  if (!Number.isFinite(num)) return '0.00%';
+  return `${num.toFixed(2)}%`;
+}
+
+function winnerResultSummary(winner) {
+  const finish = winner?.finish_position ?? 'N/A';
+  const start = winner?.start_position ?? 'N/A';
+  const gain = winner?.positions_gained;
+  const gainText = gain == null || gain === '' ? 'N/A' : String(gain);
+  return `Finished ${finish}, started ${start}, gained ${gainText}.`;
+}
+
 export default function Events() {
   const [events, setEvents] = useState([]);
   const [selectedEventId, setSelectedEventId] = useState(null);
@@ -52,6 +67,7 @@ export default function Events() {
   const [eventDetail, setEventDetail] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('payouts');
+  const [expandedPayoutId, setExpandedPayoutId] = useState(null);
 
   const loadEvents = useCallback(async () => {
     const response = await api('/events');
@@ -161,6 +177,7 @@ export default function Events() {
     setSelectedEventId(eventView.recommendedEventId);
     if (!hasUserListModeChoice) setRaceListMode(eventView.recommendedListMode);
     setActiveTab('payouts');
+    setExpandedPayoutId(null);
   }, [eventView, selectedEventId, hasUserSelection, hasUserListModeChoice]);
 
   useEffect(() => {
@@ -177,7 +194,22 @@ export default function Events() {
     setSelectedEventId(eventId);
     setHasUserSelection(true);
     setActiveTab('payouts');
+    setExpandedPayoutId(null);
   }, []);
+
+  const findAuditRuleForPayout = useCallback((payout) => {
+    const auditRules = eventDetail?.payout_audit?.rules || [];
+    const categoryMatches = auditRules.filter((rule) => rule.category === payout.category);
+    if (!categoryMatches.length) return null;
+
+    const directMatch = categoryMatches.find((rule) => (rule.winners || []).some((winner) => (
+      Number(winner.driver_id) === Number(payout.driver_id)
+      && Number(winner.owner_participant_id) === Number(payout.participant_id)
+      && Number(winner.received_cents) === Number(payout.amount_cents)
+    )));
+
+    return directMatch || categoryMatches[0];
+  }, [eventDetail]);
 
   const visibleEvents = raceListMode === 'upcoming'
     ? eventView.upcomingEvents
@@ -314,19 +346,86 @@ export default function Events() {
                   {eventDetail.payouts?.length ? (
                     <ul className="list tight">
                       {eventDetail.payouts.map((payout) => (
-                        <li key={payout.id}>
-                          <span>
-                            {payout.participant_name}
-                            {' • '}
-                            {categoryLabel(payout.category)}
-                            {payout.category === 'random_finish_bonus' && eventDetail.event?.random_bonus_position
-                              ? ` (${ordinal(eventDetail.event.random_bonus_position)})`
-                              : ''}
-                          </span>
-                          <span className="events-payout-amount">
-                            <strong>{fmtCents(payout.amount_cents)}</strong>
-                            <span className="muted small">{pctOfTotal(payout.amount_cents, eventDetail.total_pot_cents)} of pot</span>
-                          </span>
+                        <li key={payout.id} className={`events-payout-row ${expandedPayoutId === payout.id ? 'expanded' : ''}`}>
+                          <div className="events-payout-row-head">
+                            <span>
+                              {payout.participant_name}
+                              {' • '}
+                              {categoryLabel(payout.category)}
+                              {payout.category === 'random_finish_bonus' && eventDetail.event?.random_bonus_position
+                                ? ` (${ordinal(eventDetail.event.random_bonus_position)})`
+                                : ''}
+                            </span>
+                            <div className="events-payout-controls">
+                              <span className="events-payout-amount">
+                                <strong>{fmtCents(payout.amount_cents)}</strong>
+                                <span className="muted small">{pctOfTotal(payout.amount_cents, eventDetail.total_pot_cents)} of pot</span>
+                              </span>
+                              <button
+                                type="button"
+                                className="btn btn-outline events-why-btn"
+                                onClick={() => setExpandedPayoutId((prev) => (prev === payout.id ? null : payout.id))}
+                              >
+                                {expandedPayoutId === payout.id ? 'Hide Why' : 'Why'}
+                              </button>
+                            </div>
+                          </div>
+
+                          {expandedPayoutId === payout.id ? (
+                            (() => {
+                              const rule = findAuditRuleForPayout(payout);
+                              if (!rule) {
+                                return <p className="muted small events-payout-audit-inline">Audit details unavailable for this payout.</p>;
+                              }
+
+                              const isCurrentWinner = (winner) => (
+                                Number(winner.driver_id) === Number(payout.driver_id)
+                                && Number(winner.owner_participant_id) === Number(payout.participant_id)
+                                && Number(winner.received_cents) === Number(payout.amount_cents)
+                              );
+
+                              return (
+                                <div className="events-payout-audit-inline stack">
+                                  <div className="row wrap gap-sm">
+                                    <span className="bps-pill">{rule.bps} bps</span>
+                                    <span className="bps-pill">Rule pot {fmtCents(rule.category_pot_cents)}</span>
+                                    <span className="bps-pill">{fmtPct(rule.category_pct_of_pot)} of total pot</span>
+                                    <span className={`audit-status-pill audit-status-${rule.status}`}>{rule.status.replace('_', ' ')}</span>
+                                  </div>
+                                  <p className="muted small">
+                                    {auditRuleSummary(rule.category, { randomBonusPosition: eventDetail?.event?.random_bonus_position })}
+                                  </p>
+                                  <p className="muted small">{rule.status_reason}</p>
+                                  {rule.winners?.length ? (
+                                    <ul className="events-audit-winners">
+                                      {rule.winners.map((winner) => (
+                                        <li
+                                          key={`${rule.category}:${rule.rank_order}:${winner.driver_id}:${winner.owner_participant_id || 'none'}`}
+                                          className={isCurrentWinner(winner) ? 'current' : ''}
+                                        >
+                                          <div>
+                                            <strong>{winner.driver_name || winner.driver_code || 'Driver'}</strong>
+                                            <div className="muted small">
+                                              {winner.team_name || 'Team N/A'}
+                                              {' • '}
+                                              Owner {winner.owner_participant_name || 'Unowned'}
+                                            </div>
+                                            <div className="muted small">{winnerResultSummary(winner)}</div>
+                                          </div>
+                                          <div className="events-audit-winner-values">
+                                            <span className="muted small">Share {fmtCents(winner.split_share_cents)}</span>
+                                            <strong>{fmtCents(winner.received_cents)}</strong>
+                                          </div>
+                                        </li>
+                                      ))}
+                                    </ul>
+                                  ) : (
+                                    <p className="muted small">No winners resolved for this rule.</p>
+                                  )}
+                                </div>
+                              );
+                            })()
+                          ) : null}
                         </li>
                       ))}
                     </ul>

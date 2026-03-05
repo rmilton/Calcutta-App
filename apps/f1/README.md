@@ -30,3 +30,12 @@ Server: `http://localhost:3002`
 - `POST /api/admin/results/sync-event/:id`
 - `PATCH /api/admin/results/event/:id`
 - `PATCH /api/admin/payout-rules`
+
+## Engineering Docs
+
+For current architecture, operations, and agent workflows, use repo-root docs:
+
+- `/AGENTS.md`
+- `/ARCHITECTURE.md`
+- `/RUNBOOK.md`
+- `/docs/apps/f1.md`

@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { categoryLabel } from '../../utils';
 import AdminLoadingState from './AdminLoadingState';
 import useAdminOutletContext from './useAdminOutletContext';
@@ -17,6 +17,7 @@ function totalDelta(total, target) {
 
 export default function PayoutRulesPage() {
   const { rules, updateRules, saveRules, loading, hasLoaded } = useAdminOutletContext();
+  const [isLocked, setIsLocked] = useState(true);
 
   const gpTotal = useMemo(() => (rules?.grand_prix || []).reduce((sum, rule) => sum + Number(rule.bps || 0), 0), [rules]);
   const sprintTotal = useMemo(() => (rules?.sprint || []).reduce((sum, rule) => sum + Number(rule.bps || 0), 0), [rules]);
@@ -32,8 +33,29 @@ export default function PayoutRulesPage() {
 
   return (
     <section className="panel stack">
-      <h2>Payout Rules</h2>
-      <p className="muted">1% = 100 bps. Targets: GP 350 bps, Sprint 150 bps, Season bonus 700 bps.</p>
+      <div className="row between wrap gap-sm">
+        <div>
+          <h2>Payout Rules</h2>
+          <p className="muted">1% = 100 bps. Targets: GP 350 bps, Sprint 150 bps, Season bonus 700 bps.</p>
+        </div>
+        <div className="row wrap gap-sm payout-lock-controls">
+          <span className={`bps-lock-pill ${isLocked ? 'locked' : 'unlocked'}`}>
+            {isLocked ? 'Locked' : 'Unlocked'}
+          </span>
+          <button
+            type="button"
+            className={`btn ${isLocked ? '' : 'btn-outline'}`}
+            onClick={() => setIsLocked((prev) => !prev)}
+          >
+            {isLocked ? 'Unlock BPS Editing' : 'Lock BPS Editing'}
+          </button>
+        </div>
+      </div>
+      <p className="muted small">
+        {isLocked
+          ? 'Editing is locked to prevent accidental rule changes.'
+          : 'Editing is enabled. Save your changes, then lock editing again.'}
+      </p>
 
       <div className="bps-summary">
         <h3>Grand Prix</h3>
@@ -51,6 +73,7 @@ export default function PayoutRulesPage() {
                 <td>
                   <input
                     value={rule.bps}
+                    disabled={isLocked}
                     onChange={(e) => updateRules('grand_prix', rule.id, 'bps', e.target.value)}
                   />
                 </td>
@@ -76,6 +99,7 @@ export default function PayoutRulesPage() {
                 <td>
                   <input
                     value={rule.bps}
+                    disabled={isLocked}
                     onChange={(e) => updateRules('sprint', rule.id, 'bps', e.target.value)}
                   />
                 </td>
@@ -101,6 +125,7 @@ export default function PayoutRulesPage() {
                 <td>
                   <input
                     value={rule.bps}
+                    disabled={isLocked}
                     onChange={(e) => updateRules('season_bonus', rule.id, 'bps', e.target.value)}
                   />
                 </td>
@@ -110,7 +135,7 @@ export default function PayoutRulesPage() {
         </table>
       </div>
 
-      <button className="btn" onClick={saveRules}>Save Rules</button>
+      <button className="btn" onClick={saveRules} disabled={isLocked}>Save Rules</button>
     </section>
   );
 }

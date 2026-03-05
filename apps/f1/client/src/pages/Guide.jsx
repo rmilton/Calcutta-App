@@ -136,6 +136,9 @@ export default function Guide() {
           <Link className="btn btn-outline" to="/join">Go to Login</Link>
         </div>
       </section>
+      <footer className="page-copyright">
+        © 2026 Ryan Milton.
+      </footer>
     </div>
   );
 }

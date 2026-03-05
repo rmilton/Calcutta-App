@@ -6,6 +6,7 @@ import {
   fmtCents,
 } from '../../utils';
 import { getTeamColorStyle } from '../../teamMeta';
+import AdminLoadingState from './AdminLoadingState';
 import useAdminOutletContext from './useAdminOutletContext';
 
 function parsePositiveInt(value) {
@@ -169,7 +170,7 @@ export default function TestDataPage() {
   }, [selectedEventId, manualRows, setMessage, refresh, loadSeasonBonusBreakdown, loadManualEvent]);
 
   if (loading && !hasLoaded) {
-    return <section className="loading-panel">Loading admin data...</section>;
+    return <AdminLoadingState />;
   }
 
   return (

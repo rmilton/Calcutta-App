@@ -1,11 +1,12 @@
 import React from 'react';
+import AdminLoadingState from './AdminLoadingState';
 import useAdminOutletContext from './useAdminOutletContext';
 
 export default function AuctionPage() {
   const { settings, setField, saveSettings, runAuctionAction, loading, hasLoaded } = useAdminOutletContext();
 
   if (loading && !hasLoaded) {
-    return <section className="loading-panel">Loading admin data...</section>;
+    return <AdminLoadingState />;
   }
 
   return (

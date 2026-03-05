@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { SocketProvider } from './context/SocketContext';
 import Nav from './components/Nav';
 import Join from './pages/Join';
+import Guide from './pages/Guide';
 import Auction from './pages/Auction';
 import Events from './pages/Events';
 import Standings from './pages/Standings';
@@ -42,6 +43,7 @@ function AppRoutes() {
       <main className="page-shell">
         <Routes>
           <Route path="/join" element={participant ? <Navigate to={participant.isAdmin ? '/admin' : '/auction'} replace /> : <Join />} />
+          <Route path="/guide" element={<Guide />} />
           <Route path="/" element={<Navigate to="/auction" replace />} />
           <Route path="/auction" element={<ProtectedRoute><Auction /></ProtectedRoute>} />
           <Route path="/events" element={<ProtectedRoute><Events /></ProtectedRoute>} />

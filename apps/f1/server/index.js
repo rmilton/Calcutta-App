@@ -75,7 +75,11 @@ if (initResult?.payoutModelMigrated || initResult?.payoutRandomAdjusted) {
   }
 }
 
-const PORT = process.env.F1_PORT || process.env.PORT || 3002;
+// In production (Railway), always prefer platform-assigned PORT.
+// In local dev, keep F1_PORT override behavior.
+const PORT = process.env.NODE_ENV === 'production'
+  ? (process.env.PORT || process.env.F1_PORT || 3002)
+  : (process.env.F1_PORT || process.env.PORT || 3002);
 httpServer.listen(PORT, () => {
   console.log(`F1 Calcutta server running on port ${PORT}`);
 });

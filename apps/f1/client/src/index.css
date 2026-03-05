@@ -791,6 +791,67 @@ button {
   gap: 0.02rem;
 }
 
+.list li.events-payout-row {
+  display: grid;
+  gap: var(--space-2);
+  align-items: stretch;
+  justify-content: stretch;
+}
+
+.events-payout-row-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.events-payout-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.events-why-btn {
+  padding: 0.25rem 0.55rem;
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
+
+.events-payout-audit-inline {
+  border-top: 1px dashed rgba(255, 255, 255, 0.14);
+  padding-top: var(--space-2);
+}
+
+.events-audit-winners {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-1);
+}
+
+.events-audit-winners li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-2);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(12, 17, 26, 0.68);
+  padding: 0.34rem 0.5rem;
+}
+
+.events-audit-winners li.current {
+  border-color: rgba(159, 63, 67, 0.5);
+  background: rgba(159, 63, 67, 0.11);
+}
+
+.events-audit-winner-values {
+  display: grid;
+  justify-items: end;
+  text-align: right;
+}
+
 .muted {
   color: var(--muted);
 }
@@ -1333,6 +1394,88 @@ tbody tr:hover {
   color: #dcb2b4;
 }
 
+.audit-status-pill {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--muted);
+  padding: 0.2rem 0.45rem;
+}
+
+.audit-status-paid {
+  border-color: rgba(127, 184, 157, 0.52);
+  color: #b2d2c1;
+}
+
+.audit-status-no_winners,
+.audit-status-pending_results {
+  border-color: rgba(199, 164, 113, 0.5);
+  color: #d8c098;
+}
+
+.audit-status-unowned_winners {
+  border-color: rgba(198, 125, 129, 0.5);
+  color: #d7b1b4;
+}
+
+.audit-rule-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.audit-rule-card {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-md);
+  background: rgba(11, 16, 24, 0.78);
+  padding: 0.56rem 0.64rem;
+  display: grid;
+  gap: var(--space-2);
+}
+
+.audit-rule-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.audit-rule-detail {
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  padding-top: var(--space-2);
+}
+
+.audit-winner-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--space-1);
+}
+
+.audit-winner-list li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: var(--space-3);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-sm);
+  padding: 0.4rem 0.5rem;
+  background: rgba(14, 20, 30, 0.78);
+}
+
+.audit-winner-values {
+  display: grid;
+  justify-items: end;
+  text-align: right;
+  gap: 0.05rem;
+}
+
 .payout-lock-controls {
   justify-content: flex-end;
 }
@@ -1558,6 +1701,20 @@ tbody tr:hover {
 
   .bid-form {
     grid-template-columns: 30px minmax(0, 1fr) auto auto;
+  }
+
+  .events-payout-row-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .events-payout-controls {
+    justify-content: space-between;
+  }
+
+  .events-audit-winners li,
+  .audit-winner-list li {
+    grid-template-columns: 1fr;
   }
 
   .bid-form .btn {

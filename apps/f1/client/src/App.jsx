@@ -14,6 +14,7 @@ import AuctionPage from './pages/admin/AuctionPage';
 import ResultsPage from './pages/admin/ResultsPage';
 import TestDataPage from './pages/admin/TestDataPage';
 import PayoutRulesPage from './pages/admin/PayoutRulesPage';
+import PayoutAuditPage from './pages/admin/PayoutAuditPage';
 
 function ProtectedRoute({ children, adminOnly = false, nonAdminOnly = false }) {
   const { participant } = useAuth();
@@ -52,6 +53,8 @@ function AppRoutes() {
             <Route path="auction" element={<AuctionPage />} />
             <Route path="results" element={<ResultsPage />} />
             <Route path="test-data" element={<TestDataPage />} />
+            <Route path="payout-audit" element={<PayoutAuditPage />} />
+            <Route path="audit" element={<Navigate to="/admin/payout-audit" replace />} />
             <Route path="payouts" element={<PayoutRulesPage />} />
             <Route path="*" element={<Navigate to="/admin/overview" replace />} />
           </Route>

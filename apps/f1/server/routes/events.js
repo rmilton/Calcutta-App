@@ -7,6 +7,7 @@ const {
   getEventPayouts,
   getTotalPotCents,
 } = require('../db');
+const { buildEventPayoutAudit } = require('../services/payoutAuditService');
 const { requireAuth } = require('./middleware');
 
 const router = express.Router();
@@ -26,6 +27,7 @@ router.get('/:id/payouts', requireAuth, (req, res) => {
   const payouts = getEventPayouts(seasonId, eventId);
   const totalPotCents = getTotalPotCents(seasonId);
   const eventPayoutCents = payouts.reduce((sum, payout) => sum + Number(payout.amount_cents || 0), 0);
+  const payoutAudit = buildEventPayoutAudit({ seasonId, eventId });
 
   return res.json({
     event: {
@@ -36,6 +38,7 @@ router.get('/:id/payouts', requireAuth, (req, res) => {
     payouts,
     total_pot_cents: totalPotCents,
     event_payout_cents: eventPayoutCents,
+    payout_audit: payoutAudit,
   });
 });
 

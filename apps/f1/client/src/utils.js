@@ -60,3 +60,20 @@ export const categoryLabel = (category) => {
   };
   return map[category] || category;
 };
+
+export const auditRuleSummary = (category, { randomBonusPosition } = {}) => {
+  const map = {
+    race_winner: 'Pays the driver who finished 1st.',
+    sprint_winner: 'Pays the driver who won the sprint.',
+    second_place: 'Pays the driver who finished 2nd.',
+    third_place: 'Pays the driver who finished 3rd.',
+    best_p6_or_lower: 'Pays the best finisher from positions 6 through 20.',
+    best_p11_or_lower: 'Pays the best finisher from positions 11 through 20.',
+    most_positions_gained: 'Pays the driver with the most positions gained.',
+    second_most_positions_gained: 'Pays the driver with the second-most positions gained.',
+    random_finish_bonus: randomBonusPosition
+      ? `Pays the driver who finished in random position ${randomBonusPosition}.`
+      : 'Pays the driver in the random finishing position draw.',
+  };
+  return map[category] || 'Rule details unavailable.';
+};

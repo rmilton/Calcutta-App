@@ -3,6 +3,7 @@ import {
   eventTypeLabel,
   fmtCents,
 } from '../../utils';
+import AdminLoadingState from './AdminLoadingState';
 import useAdminOutletContext from './useAdminOutletContext';
 
 export default function ResultsPage() {
@@ -21,7 +22,7 @@ export default function ResultsPage() {
   }, [refresh]);
 
   if (loading && !hasLoaded) {
-    return <section className="loading-panel">Loading admin data...</section>;
+    return <AdminLoadingState />;
   }
 
   return (

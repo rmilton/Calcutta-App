@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { categoryLabel } from '../../utils';
+import AdminLoadingState from './AdminLoadingState';
 import useAdminOutletContext from './useAdminOutletContext';
 
 const TARGETS = {
@@ -22,7 +23,7 @@ export default function PayoutRulesPage() {
   const bonusTotal = useMemo(() => (rules?.season_bonus || []).reduce((sum, rule) => sum + Number(rule.bps || 0), 0), [rules]);
 
   if (loading && !hasLoaded) {
-    return <section className="loading-panel">Loading admin data...</section>;
+    return <AdminLoadingState />;
   }
 
   if (!rules) {

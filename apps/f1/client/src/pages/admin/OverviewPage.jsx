@@ -1,5 +1,6 @@
 import React from 'react';
 import { fmtWhen } from '../../utils';
+import AdminLoadingState from './AdminLoadingState';
 import useAdminOutletContext from './useAdminOutletContext';
 
 export default function OverviewPage() {
@@ -9,7 +10,7 @@ export default function OverviewPage() {
   const drawnAt = drawnAtIso ? fmtWhen(drawnAtIso) : 'Not drawn yet';
 
   if (loading && !hasLoaded) {
-    return <section className="loading-panel">Loading admin data...</section>;
+    return <AdminLoadingState />;
   }
 
   return (

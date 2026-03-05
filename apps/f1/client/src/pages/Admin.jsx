@@ -6,6 +6,7 @@ const ADMIN_SECTIONS = [
   { path: 'overview', label: 'Overview', description: 'Season status and pool summary' },
   { path: 'auction', label: 'Auction', description: 'Controls and timing settings' },
   { path: 'results', label: 'Results Sync', description: 'Sync event outcomes and payouts' },
+  { path: 'test-data', label: 'Test Data', description: 'Manual edits and payout testing' },
   { path: 'payouts', label: 'Payout Rules', description: 'Adjust basis-point distribution' },
 ];
 

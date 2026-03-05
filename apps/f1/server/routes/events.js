@@ -5,6 +5,7 @@ const {
   getEventById,
   getEventResults,
   getEventPayouts,
+  getTotalPotCents,
 } = require('../db');
 const { requireAuth } = require('./middleware');
 
@@ -22,10 +23,19 @@ router.get('/:id/payouts', requireAuth, (req, res) => {
   const event = getEventById(seasonId, eventId);
   if (!event) return res.status(404).json({ error: 'Event not found' });
 
+  const payouts = getEventPayouts(seasonId, eventId);
+  const totalPotCents = getTotalPotCents(seasonId);
+  const eventPayoutCents = payouts.reduce((sum, payout) => sum + Number(payout.amount_cents || 0), 0);
+
   return res.json({
-    event,
+    event: {
+      ...event,
+      total_payout_cents: eventPayoutCents,
+    },
     results: getEventResults(eventId),
-    payouts: getEventPayouts(seasonId, eventId),
+    payouts,
+    total_pot_cents: totalPotCents,
+    event_payout_cents: eventPayoutCents,
   });
 });
 

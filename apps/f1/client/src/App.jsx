@@ -12,6 +12,7 @@ import Admin from './pages/Admin';
 import OverviewPage from './pages/admin/OverviewPage';
 import AuctionPage from './pages/admin/AuctionPage';
 import ResultsPage from './pages/admin/ResultsPage';
+import TestDataPage from './pages/admin/TestDataPage';
 import PayoutRulesPage from './pages/admin/PayoutRulesPage';
 
 function ProtectedRoute({ children, adminOnly = false, nonAdminOnly = false }) {
@@ -50,6 +51,7 @@ function AppRoutes() {
             <Route path="overview" element={<OverviewPage />} />
             <Route path="auction" element={<AuctionPage />} />
             <Route path="results" element={<ResultsPage />} />
+            <Route path="test-data" element={<TestDataPage />} />
             <Route path="payouts" element={<PayoutRulesPage />} />
             <Route path="*" element={<Navigate to="/admin/overview" replace />} />
           </Route>

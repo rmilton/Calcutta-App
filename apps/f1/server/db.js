@@ -684,13 +684,43 @@ function getEventResults(eventId) {
   `).all(eventId);
 }
 
+const EVENT_CATEGORY_ORDER = {
+  grand_prix: [
+    'race_winner',
+    'second_place',
+    'third_place',
+    'best_p6_or_lower',
+    'best_p11_or_lower',
+    'most_positions_gained',
+    'second_most_positions_gained',
+    'random_finish_bonus',
+  ],
+  sprint: [
+    'sprint_winner',
+    'best_p6_or_lower',
+    'most_positions_gained',
+    'random_finish_bonus',
+  ],
+};
+
+function categorySortIndex(eventType, category) {
+  const order = EVENT_CATEGORY_ORDER[eventType] || [];
+  const index = order.indexOf(category);
+  return index === -1 ? 999 : index;
+}
+
 function getEventPayoutRules(seasonId, eventType) {
-  return db.prepare(`
+  const rows = db.prepare(`
     SELECT *
     FROM event_payout_rules
     WHERE season_id = ? AND event_type = ? AND active = 1
-    ORDER BY bps DESC, rank_order ASC, category ASC
   `).all(seasonId, eventType);
+
+  return rows.sort((a, b) => (
+    (categorySortIndex(eventType, a.category) - categorySortIndex(eventType, b.category))
+    || (Number(a.rank_order || 1) - Number(b.rank_order || 1))
+    || (a.category || '').localeCompare(b.category || '')
+  ));
 }
 
 function getSeasonBonusRules(seasonId) {
@@ -703,15 +733,22 @@ function getSeasonBonusRules(seasonId) {
 }
 
 function getEventPayouts(seasonId, eventId) {
-  return db.prepare(`
+  const rows = db.prepare(`
     SELECT ep.*, p.name as participant_name, p.color as participant_color,
            d.code as driver_code, d.name as driver_name
     FROM event_payouts ep
     JOIN participants p ON p.id = ep.participant_id
     LEFT JOIN drivers d ON d.id = ep.driver_id
     WHERE ep.season_id = ? AND ep.event_id = ?
-    ORDER BY ep.amount_cents DESC, p.name ASC
   `).all(seasonId, eventId);
+
+  const eventType = getEventById(seasonId, eventId)?.type || null;
+
+  return rows.sort((a, b) => (
+    (categorySortIndex(eventType, a.category) - categorySortIndex(eventType, b.category))
+    || ((Number(b.amount_cents) || 0) - (Number(a.amount_cents) || 0))
+    || (a.participant_name || '').localeCompare(b.participant_name || '')
+  ));
 }
 
 function getOwnershipBySeason(seasonId) {

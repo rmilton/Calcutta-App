@@ -24,6 +24,19 @@ export const fmtWhen = (iso) => {
   }).format(date);
 };
 
+export const toTimestampMs = (iso) => {
+  if (!iso) return null;
+  const date = new Date(iso);
+  const ms = date.getTime();
+  return Number.isFinite(ms) ? ms : null;
+};
+
+export const normalizeEventName = (name) => String(name || '')
+  .replace(/\s*\(sprint\)\s*/ig, '')
+  .replace(/\s+/g, ' ')
+  .trim()
+  .toLowerCase();
+
 export const eventTypeLabel = (type) => (type === 'sprint' ? 'Sprint' : 'Grand Prix');
 
 export const categoryLabel = (category) => {

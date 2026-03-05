@@ -3,9 +3,9 @@ import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 const BASE_LINKS = [
-  { to: '/auction', label: 'Auction' },
-  { to: '/events', label: 'Events' },
   { to: '/standings', label: 'Standings' },
+  { to: '/events', label: 'Events' },
+  { to: '/auction', label: 'Auction' },
 ];
 
 export default function Nav() {
@@ -15,7 +15,12 @@ export default function Nav() {
 
   const links = participant?.isAdmin
     ? [...BASE_LINKS, { to: '/admin', label: 'Admin' }]
-    : [...BASE_LINKS, { to: '/my-drivers', label: 'My Drivers' }];
+    : [
+        BASE_LINKS[0],
+        BASE_LINKS[1],
+        { to: '/my-drivers', label: 'My Drivers' },
+        BASE_LINKS[2],
+      ];
 
   const isLinkActive = (to) => {
     if (to === '/admin') return location.pathname === '/admin' || location.pathname.startsWith('/admin/');

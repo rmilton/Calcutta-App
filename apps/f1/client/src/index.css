@@ -442,6 +442,34 @@ button {
 .join-guide-links {
   display: flex;
   align-items: center;
+  margin-top: 0.1rem;
+  margin-bottom: 0.15rem;
+}
+
+.join-guide-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+  padding: 0.54rem 0.88rem;
+  border-color: rgba(159, 63, 67, 0.76);
+  background: linear-gradient(135deg, #964045, #7a3135);
+  color: #fff;
+  font-weight: 700;
+  box-shadow: 0 10px 24px rgba(54, 18, 20, 0.36);
+}
+
+.join-guide-cta::after {
+  content: '→';
+  font-size: 0.84em;
+}
+
+.join-guide-cta:hover {
+  filter: brightness(1.06);
+  border-color: rgba(195, 111, 116, 0.82);
+}
+
+.join-entry-page {
+  gap: var(--space-3);
 }
 
 .join-guide-secondary {
@@ -609,6 +637,14 @@ button {
 
 .guide-footer-cta p {
   margin: 0;
+}
+
+.page-copyright {
+  margin: 0;
+  text-align: center;
+  color: #9ca8b8;
+  font-size: var(--text-xs);
+  letter-spacing: 0.04em;
 }
 
 .admin-header p {

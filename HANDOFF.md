@@ -98,18 +98,28 @@ Suggested request format:
 ### F1
 
 - Auction + ownership + standings implemented
-- Event results sync implemented via provider adapter (`mock` provider default)
-- Deterministic scoring engine implemented:
-  - GP payouts total `300 bps` (3%)
-  - Sprint payouts total `100 bps` (1%)
+- Admin center split into routed subpages:
+  - `/admin/overview`
+  - `/admin/auction`
+  - `/admin/results`
+  - `/admin/test-data`
+  - `/admin/payouts`
+- Event results sync implemented via provider adapter (`mock` provider default), triggered by admin actions
+- Deterministic scoring engine implemented with payout model V2:
+  - GP payouts total `350 bps` (3.5%)
+  - Sprint payouts total `150 bps` (1.5%)
+  - Season bonuses total `700 bps` (7.0%)
   - Ties split evenly in cents
-  - Random finish bonus position drawn once per event and persisted
-  - Season bonus allocations from remainder based on configured bps
+  - Random finish bonus draw constrained to positions `4-20` (no podium)
+  - Season random standing-position bonus persisted on season record
+- Events page supports upcoming/past toggle, payouts/results tabs, race pot + total pot, and per-line payout percentage
+- Team logos and team-color identity system integrated across core F1 screens
 
 ## App-specific docs
 
 - NCAA deep-dive: `apps/ncaa/HANDOFF.md`
 - F1 deep-dive: `apps/f1/HANDOFF.md`
+- F1 roadmap ideas (including AI features): see `apps/f1/HANDOFF.md` section `Next Feature Ideas (Prioritized)`
 
 ## Operator Runbook
 

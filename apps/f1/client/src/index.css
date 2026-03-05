@@ -97,9 +97,40 @@ input {
 }
 
 input:focus-visible,
+select:focus-visible,
 button:focus-visible {
   outline: 2px solid rgba(159, 63, 67, 0.65);
   outline-offset: 2px;
+}
+
+.admin-event-select {
+  appearance: none;
+  -webkit-appearance: none;
+  min-width: min(420px, 48vw);
+  background-color: rgba(13, 18, 26, 0.95);
+  color: var(--text);
+  border: 1px solid rgba(159, 63, 67, 0.44);
+  border-radius: var(--radius-sm);
+  padding: 0.42rem 2.3rem 0.42rem 0.62rem;
+  font-size: var(--text-md);
+  line-height: 1.2;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  background-image:
+    linear-gradient(45deg, transparent 50%, #9eaab9 50%),
+    linear-gradient(135deg, #9eaab9 50%, transparent 50%),
+    linear-gradient(to right, rgba(255, 255, 255, 0.1), rgba(255, 255, 255, 0.1));
+  background-position:
+    calc(100% - 14px) calc(50% - 2px),
+    calc(100% - 9px) calc(50% - 2px),
+    calc(100% - 2rem) 50%;
+  background-size: 5px 5px, 5px 5px, 1px 56%;
+  background-repeat: no-repeat;
+  transition: border-color 140ms ease, background-color 140ms ease, color 140ms ease;
+}
+
+.admin-event-select:hover {
+  border-color: rgba(159, 63, 67, 0.6);
+  background-color: rgba(16, 22, 31, 0.98);
 }
 
 button {
@@ -1300,6 +1331,41 @@ tbody tr:hover {
 .bps-pill.warn {
   border-color: rgba(255, 120, 120, 0.5);
   color: #dcb2b4;
+}
+
+.payout-lock-controls {
+  justify-content: flex-end;
+}
+
+.bps-lock-pill {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  padding: 0.22rem 0.52rem;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--muted);
+}
+
+.bps-lock-pill.locked {
+  border-color: rgba(159, 63, 67, 0.52);
+  color: #d2aeb0;
+  background: rgba(159, 63, 67, 0.15);
+}
+
+.bps-lock-pill.unlocked {
+  border-color: rgba(127, 184, 157, 0.56);
+  color: #b2d2c1;
+  background: rgba(127, 184, 157, 0.14);
+}
+
+.table-wrap input:disabled {
+  opacity: 0.62;
+  color: var(--muted);
+  background: rgba(14, 19, 28, 0.8);
+  border-color: rgba(255, 255, 255, 0.12);
+  cursor: not-allowed;
 }
 
 .checkbox-row {

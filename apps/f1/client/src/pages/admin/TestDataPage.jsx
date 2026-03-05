@@ -182,6 +182,7 @@ export default function TestDataPage() {
             <label>
               Event
               <select
+                className="admin-event-select"
                 value={selectedEventId}
                 onChange={(e) => setSelectedEventId(e.target.value)}
               >

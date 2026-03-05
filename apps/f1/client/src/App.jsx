@@ -14,7 +14,7 @@ import AuctionPage from './pages/admin/AuctionPage';
 import ResultsPage from './pages/admin/ResultsPage';
 import PayoutRulesPage from './pages/admin/PayoutRulesPage';
 
-function ProtectedRoute({ children, adminOnly = false }) {
+function ProtectedRoute({ children, adminOnly = false, nonAdminOnly = false }) {
   const { participant } = useAuth();
 
   if (participant === undefined) {
@@ -27,6 +27,7 @@ function ProtectedRoute({ children, adminOnly = false }) {
 
   if (!participant) return <Navigate to="/join" replace />;
   if (adminOnly && !participant.isAdmin) return <Navigate to="/auction" replace />;
+  if (nonAdminOnly && participant.isAdmin) return <Navigate to="/auction" replace />;
   return children;
 }
 
@@ -43,7 +44,7 @@ function AppRoutes() {
           <Route path="/auction" element={<ProtectedRoute><Auction /></ProtectedRoute>} />
           <Route path="/events" element={<ProtectedRoute><Events /></ProtectedRoute>} />
           <Route path="/standings" element={<ProtectedRoute><Standings /></ProtectedRoute>} />
-          <Route path="/my-drivers" element={<ProtectedRoute><MyDrivers /></ProtectedRoute>} />
+          <Route path="/my-drivers" element={<ProtectedRoute nonAdminOnly><MyDrivers /></ProtectedRoute>} />
           <Route path="/admin" element={<ProtectedRoute adminOnly><Admin /></ProtectedRoute>}>
             <Route index element={<Navigate to="/admin/overview" replace />} />
             <Route path="overview" element={<OverviewPage />} />

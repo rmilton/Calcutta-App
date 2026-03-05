@@ -77,6 +77,7 @@ function SoldDriverTile({ driver, mine = false }) {
 export default function Auction() {
   const { participant } = useAuth();
   const { socket } = useSocket();
+  const canPlaceBid = !!participant && !participant.isAdmin;
 
   const [auctionStatus, setAuctionStatus] = useState('waiting');
   const [active, setActive] = useState(null);
@@ -142,7 +143,8 @@ export default function Auction() {
   }, []));
 
   useSocketEvent('auction:sold', useCallback((payload) => {
-    setSoldMessage(`${payload.driverCode} sold to ${payload.winnerName} for ${fmtCents(payload.finalPriceCents)}`);
+    const driverDisplay = payload.driverName || payload.driverCode || 'Driver';
+    setSoldMessage(`${driverDisplay} sold to ${payload.winnerName} for ${fmtCents(payload.finalPriceCents)}`);
     setActive(null);
     setRecentBids([]);
     setItems((prev) => prev.map((item) => (
@@ -245,12 +247,28 @@ export default function Auction() {
   const submitBid = (event) => {
     event.preventDefault();
     setBidError('');
+    if (!canPlaceBid) {
+      setBidError('Admin accounts cannot place bids.');
+      return;
+    }
     const value = Math.round(Number(bidInput) * 100);
     if (!Number.isFinite(value) || value <= 0) {
       setBidError('Enter a valid bid amount.');
       return;
     }
     socket?.emit('auction:bid', { amountCents: value });
+  };
+
+  const quickBidCents = (active?.current_price_cents || 0) + 100;
+
+  const submitQuickBid = () => {
+    setBidError('');
+    if (!canPlaceBid) {
+      setBidError('Admin accounts cannot place bids.');
+      return;
+    }
+    if (!active) return;
+    socket?.emit('auction:bid', { amountCents: quickBidCents });
   };
 
   return (
@@ -280,16 +298,27 @@ export default function Auction() {
       {active ? (
         <section className="panel">
           <h3>Place Bid</h3>
-          <form className="bid-form" onSubmit={submitBid}>
-            <div className="currency-prefix">$</div>
-            <input
-              value={bidInput}
-              onChange={(e) => setBidInput(e.target.value)}
-              placeholder="0"
-              inputMode="decimal"
-            />
-            <button className="btn" type="submit">Bid</button>
-          </form>
+          {canPlaceBid ? (
+            <form className="bid-form" onSubmit={submitBid}>
+              <div className="currency-prefix">$</div>
+              <input
+                value={bidInput}
+                onChange={(e) => setBidInput(e.target.value)}
+                placeholder="0"
+                inputMode="decimal"
+              />
+              <button
+                className="btn btn-outline quick-bid-btn"
+                type="button"
+                onClick={submitQuickBid}
+              >
+                Quick +$1
+              </button>
+              <button className="btn" type="submit">Bid</button>
+            </form>
+          ) : (
+            <p className="muted">Admin view only. Bidding is disabled for admin accounts.</p>
+          )}
           {bidError ? <p className="error-text">{bidError}</p> : null}
         </section>
       ) : null}

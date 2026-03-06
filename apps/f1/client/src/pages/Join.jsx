@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 const AUSTRALIAN_GP_START_ISO = '2026-02-22T04:00:00Z';
@@ -17,6 +17,7 @@ function formatCountdown(targetMs, nowMs) {
 }
 
 export default function Join() {
+  const location = useLocation();
   const { join, adminLogin } = useAuth();
   const [mode, setMode] = useState('join');
   const [name, setName] = useState('');
@@ -30,6 +31,14 @@ export default function Join() {
     const id = setInterval(() => setNowMs(Date.now()), 30000);
     return () => clearInterval(id);
   }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const linkInviteCode = params.get('invite');
+    if (!linkInviteCode) return;
+    setInviteCode(linkInviteCode.trim().toUpperCase());
+    setMode('join');
+  }, [location.search]);
 
   const countdownText = useMemo(() => {
     const targetMs = Date.parse(AUSTRALIAN_GP_START_ISO);

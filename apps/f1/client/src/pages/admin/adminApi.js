@@ -66,6 +66,21 @@ export function databaseBackupHref() {
   return '/api/admin/ops/database-backup';
 }
 
+export function buildInviteLink(inviteCode, origin = window.location.origin) {
+  const cleanCode = String(inviteCode || '').trim().toUpperCase();
+  if (!cleanCode) return '';
+  const base = String(origin || '').replace(/\/+$/, '');
+  return `${base}/join?invite=${encodeURIComponent(cleanCode)}`;
+}
+
+export function payoutAuditExportHref(eventId) {
+  return `/api/admin/payout-audit/${eventId}/export.csv`;
+}
+
+export function payoutAuditWinnerExportHref(eventId) {
+  return `/api/admin/payout-audit/${eventId}/export-winners.csv`;
+}
+
 export async function refreshDrivers() {
   const response = await api('/admin/results/refresh-drivers', {
     method: 'POST',

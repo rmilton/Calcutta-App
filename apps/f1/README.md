@@ -17,6 +17,7 @@ A dedicated Formula 1 Calcutta app for a full season pool.
 - Admin controls for auction, sync, payout rules, and settings
 - Results Sync admin view shows collapsible driver/event lists after provider refreshes
 - Results Sync admin view exposes a live database backup download and a visible driver-roster freeze guard after auction/scoring activity begins
+- Payout Audit admin view supports rule-level CSV export, winner-detail CSV export, and copyable text summaries for payout review and dispute handling
 - Public-facing explainer pages for both pool rules (`/guide`) and the agentic build case study (`/built-with-ai`)
 
 ## Run
@@ -63,6 +64,8 @@ Server: `http://localhost:3002`
 - Admin Results Sync page can download a live SQLite backup snapshot before auction night or race scoring operations
 - Admin Results Sync page disables `Refresh Drivers` once the season has bids, ownership, or scored payout activity so the auction roster is not changed casually after go-live
 - Admin Auction page can explicitly lock or unlock the season roster; Results Sync respects that lock in addition to activity-based safeguards
+- Admin Payout Audit page can export both rule-level and winner-detail CSVs, plus a concise text summary for payout review
+- Admin Auction page exposes a shareable invite link that deep-links to `/join` with the active invite code prefilled
 
 ## Engineering Docs
 

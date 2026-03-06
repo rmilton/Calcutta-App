@@ -11,6 +11,10 @@ const payoutRulesAdminService = require('../services/admin/payoutRulesAdminServi
 const resultsAdminService = require('../services/admin/resultsAdminService');
 const { OpenF1ResultsProvider } = require('../providers/openF1ResultsProvider');
 const {
+  buildEventPayoutAuditCsv,
+  buildEventPayoutAuditWinnerCsv,
+} = require('../services/payoutAuditService');
+const {
   parseForceFlag,
   parseIntegerParam,
   runAndRespond,
@@ -166,6 +170,38 @@ router.get('/ops/database-backup', withAdmin, async (req, res) => {
     fs.unlink(backupPath, () => {});
     return res.status(500).json({ error: error.message || 'Failed to create database backup.' });
   }
+});
+
+router.get('/payout-audit/:id/export.csv', withAdmin, (req, res) => {
+  const seasonId = getActiveSeasonId();
+  const eventId = parseIdFromParams(res, req.params.id);
+  if (eventId == null) return undefined;
+
+  const csv = buildEventPayoutAuditCsv({ seasonId, eventId });
+  if (!csv) {
+    return res.status(404).json({ error: 'Payout audit event not found.' });
+  }
+
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="f1-payout-audit-${eventId}-${timestamp}.csv"`);
+  return res.send(csv);
+});
+
+router.get('/payout-audit/:id/export-winners.csv', withAdmin, (req, res) => {
+  const seasonId = getActiveSeasonId();
+  const eventId = parseIdFromParams(res, req.params.id);
+  if (eventId == null) return undefined;
+
+  const csv = buildEventPayoutAuditWinnerCsv({ seasonId, eventId });
+  if (!csv) {
+    return res.status(404).json({ error: 'Payout audit event not found.' });
+  }
+
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="f1-payout-audit-winners-${eventId}-${timestamp}.csv"`);
+  return res.send(csv);
 });
 
 router.post('/test-data/clear-all', withAdmin, (req, res) => {

@@ -252,6 +252,11 @@ button {
   transform: none;
 }
 
+.btn-disabled-link {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
 .btn-outline {
   background: rgba(16, 22, 32, 0.48);
   border-color: var(--border);
@@ -2044,6 +2049,41 @@ tbody tr:hover {
   align-items: flex-start;
 }
 
+.invite-share-panel {
+  gap: 1rem;
+}
+
+.invite-share-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: minmax(0, 240px) minmax(0, 1fr);
+}
+
+.invite-share-card {
+  display: grid;
+  gap: 0.35rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(6, 10, 18, 0.72);
+}
+
+.invite-share-card strong {
+  display: block;
+  font-size: 1.2rem;
+  line-height: 1.25;
+}
+
+.invite-share-link-card {
+  min-width: 0;
+}
+
+.invite-share-link {
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
 .admin-participant-list {
   display: grid;
   gap: 0.8rem;
@@ -2446,6 +2486,10 @@ tbody tr:hover {
   }
 
   .admin-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .invite-share-grid {
     grid-template-columns: 1fr;
   }
 

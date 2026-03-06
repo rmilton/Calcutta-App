@@ -243,3 +243,96 @@ test('buildEventPayoutAudit includes random bonus target and winner details', ()
   assert.equal(randomRule.winner_count, 1);
   assert.equal(randomRule.winners[0].owner_participant_name, 'Audit-Random');
 });
+
+test('buildEventPayoutAuditCsv returns a rule-level CSV export', () => {
+  const {
+    db,
+    getActiveSeasonId,
+    upsertEventResults,
+    scoreEvent,
+    buildEventPayoutAuditCsv,
+  } = setupDb();
+
+  const seasonId = getActiveSeasonId();
+  const event = db.prepare(`
+    SELECT id
+    FROM events
+    WHERE season_id = ? AND type = 'grand_prix'
+    ORDER BY round_number ASC
+    LIMIT 1
+  `).get(seasonId);
+
+  db.prepare('UPDATE events SET lock_at = ? WHERE id = ?').run('2000-01-01T00:00:00Z', event.id);
+  const participantId = seedParticipant(db, seasonId, { name: 'Audit-CSV', color: '#36cfc9', token: 'audit-csv' });
+  const driver = db.prepare(`
+    SELECT id, external_id
+    FROM drivers
+    WHERE season_id = ?
+    ORDER BY external_id ASC
+    LIMIT 1
+  `).get(seasonId);
+
+  db.prepare(`
+    INSERT INTO ownership (season_id, driver_id, participant_id, purchase_price_cents)
+    VALUES (?, ?, ?, ?)
+  `).run(seasonId, driver.id, participantId, 1000);
+
+  upsertEventResults({
+    seasonId,
+    eventId: event.id,
+    rows: [{ external_driver_id: driver.external_id, finish_position: 1, start_position: 3 }],
+  });
+  assert.equal(scoreEvent({ seasonId, eventId: event.id }).ok, true);
+
+  const csv = buildEventPayoutAuditCsv({ seasonId, eventId: event.id });
+  assert.match(csv, /Event Name,Australian Grand Prix/i);
+  assert.match(csv, /Rule Label,Category,BPS/i);
+  assert.match(csv, /Race Winner/);
+  assert.match(csv, /Audit-CSV/);
+});
+
+test('buildEventPayoutAuditWinnerCsv returns one row per winner or empty outcome', () => {
+  const {
+    db,
+    getActiveSeasonId,
+    upsertEventResults,
+    scoreEvent,
+    buildEventPayoutAuditWinnerCsv,
+  } = setupDb();
+
+  const seasonId = getActiveSeasonId();
+  const event = db.prepare(`
+    SELECT id
+    FROM events
+    WHERE season_id = ? AND type = 'grand_prix'
+    ORDER BY round_number ASC
+    LIMIT 1
+  `).get(seasonId);
+
+  db.prepare('UPDATE events SET lock_at = ? WHERE id = ?').run('2000-01-01T00:00:00Z', event.id);
+  const participantId = seedParticipant(db, seasonId, { name: 'Audit-Winner-CSV', color: '#73d13d', token: 'audit-winner-csv' });
+  const driver = db.prepare(`
+    SELECT id, external_id
+    FROM drivers
+    WHERE season_id = ?
+    ORDER BY external_id ASC
+    LIMIT 1
+  `).get(seasonId);
+
+  db.prepare(`
+    INSERT INTO ownership (season_id, driver_id, participant_id, purchase_price_cents)
+    VALUES (?, ?, ?, ?)
+  `).run(seasonId, driver.id, participantId, 1000);
+
+  upsertEventResults({
+    seasonId,
+    eventId: event.id,
+    rows: [{ external_driver_id: driver.external_id, finish_position: 1, start_position: 2 }],
+  });
+  assert.equal(scoreEvent({ seasonId, eventId: event.id }).ok, true);
+
+  const csv = buildEventPayoutAuditWinnerCsv({ seasonId, eventId: event.id });
+  assert.match(csv, /Rule Label,Category,Rule Pot Cents,Rule Status,Driver Name/i);
+  assert.match(csv, /Audit-Winner-CSV/);
+  assert.match(csv, /Race Winner/);
+});

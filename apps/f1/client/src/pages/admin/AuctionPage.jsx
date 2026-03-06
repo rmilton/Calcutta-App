@@ -1,7 +1,8 @@
-import React, { useCallback } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import ParticipantAvatar from '../../components/ParticipantAvatar';
 import { useSocketEvent } from '../../context/SocketContext';
 import AdminLoadingState from './AdminLoadingState';
+import { buildInviteLink } from './adminApi';
 import useAdminOutletContext from './useAdminOutletContext';
 
 export default function AuctionPage() {
@@ -13,9 +14,11 @@ export default function AuctionPage() {
     saveSettingsPatch,
     runAuctionAction,
     refresh,
+    setMessage,
     loading,
     hasLoaded,
   } = useAdminOutletContext();
+  const [inviteBusy, setInviteBusy] = useState(false);
   const budgetCapValue = typeof settings?.auction_budget_cap_cents === 'string'
     ? settings.auction_budget_cap_cents
     : String(settings?.auction_budget_cap_cents == null ? 200 : (Number(settings.auction_budget_cap_cents) / 100));
@@ -23,10 +26,51 @@ export default function AuctionPage() {
     || settings?.auction_roster_locked === 1
     || settings?.auction_roster_locked === true;
   const joinedParticipants = (participants || []).filter((participant) => !participant.is_admin);
+  const inviteLink = useMemo(
+    () => buildInviteLink(settings?.invite_code),
+    [settings?.invite_code],
+  );
 
   const handleParticipantsUpdate = useCallback(() => {
     refresh({ silent: true });
   }, [refresh]);
+
+  const handleCopyInviteLink = useCallback(async () => {
+    if (!inviteLink) return;
+    setInviteBusy(true);
+    try {
+      await navigator.clipboard.writeText(inviteLink);
+      setMessage('Invite link copied.');
+    } catch (error) {
+      setMessage(error.message || 'Failed to copy invite link.');
+    } finally {
+      setInviteBusy(false);
+    }
+  }, [inviteLink, setMessage]);
+
+  const handleShareInviteLink = useCallback(async () => {
+    if (!inviteLink) return;
+    setInviteBusy(true);
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: 'Join the F1 Calcutta',
+          text: 'Use this link to join the F1 Calcutta pool.',
+          url: inviteLink,
+        });
+        setMessage('Invite link shared.');
+      } else {
+        await navigator.clipboard.writeText(inviteLink);
+        setMessage('Sharing is not available here. Invite link copied instead.');
+      }
+    } catch (error) {
+      if (error?.name !== 'AbortError') {
+        setMessage(error.message || 'Failed to share invite link.');
+      }
+    } finally {
+      setInviteBusy(false);
+    }
+  }, [inviteLink, setMessage]);
 
   useSocketEvent('participants:update', handleParticipantsUpdate);
 
@@ -36,6 +80,45 @@ export default function AuctionPage() {
 
   return (
     <div className="stack-lg">
+      <section className="panel stack">
+        <div className="row wrap gap-sm participants-panel-header">
+          <div>
+            <h2>Invite Participants</h2>
+            <p className="muted">Share the pool link or send the invite code directly.</p>
+          </div>
+        </div>
+        <div className="invite-share-panel stack">
+          <div className="invite-share-grid">
+            <div className="invite-share-card">
+              <span className="label">Invite Code</span>
+              <strong>{settings?.invite_code || '—'}</strong>
+            </div>
+            <div className="invite-share-card invite-share-link-card">
+              <span className="label">Shareable Link</span>
+              <strong className="invite-share-link">{inviteLink || 'Unavailable'}</strong>
+            </div>
+          </div>
+          <div className="row wrap gap-sm">
+            <button
+              className="btn"
+              type="button"
+              onClick={handleCopyInviteLink}
+              disabled={!inviteLink || inviteBusy}
+            >
+              Copy Invite Link
+            </button>
+            <button
+              className="btn btn-outline"
+              type="button"
+              onClick={handleShareInviteLink}
+              disabled={!inviteLink || inviteBusy}
+            >
+              Share Invite Link
+            </button>
+          </div>
+        </div>
+      </section>
+
       <section className="panel stack">
         <h2>Auction Controls</h2>
         <div className="row wrap gap-sm">

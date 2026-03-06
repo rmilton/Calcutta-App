@@ -49,6 +49,10 @@ export const GUIDE_FAQ = [
     answer: 'Yes. Many categories reward value drivers and race-to-race movement, not only podium finishers.',
   },
   {
+    question: 'How much can I spend in the auction?',
+    answer: 'The admin sets the auction spend cap for participants. It defaults to $200, and you can spread that budget across drivers however you want up to the configured limit.',
+  },
+  {
     question: 'What happens on ties?',
     answer: 'When multiple drivers tie for a category, the category payout is split evenly among tied winners. Any extra cents are distributed fairly by the split logic.',
   },
@@ -64,6 +68,7 @@ export const GUIDE_FAQ = [
 
 export const GUIDE_SECTION_LINKS = [
   { id: 'what-is-calcutta', label: 'What Is a Calcutta' },
+  { id: 'buy-in', label: 'Buy-In' },
   { id: 'auction-format', label: 'Auction Format' },
   { id: 'payout-model', label: 'Payout Model' },
   { id: 'season-bonus', label: 'Season Bonus' },

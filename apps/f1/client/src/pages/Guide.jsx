@@ -75,6 +75,15 @@ export default function Guide() {
         </p>
       </section>
 
+      <section id="buy-in" className="panel panel-hero stack guide-section guide-buyin">
+        <div className="hero-kicker">Buy-In</div>
+        <h2>Admin-Set Participant Cap</h2>
+        <p>
+          The admin sets the auction spend cap for each participant. It defaults to <strong>$200</strong>, and total bids
+          and purchases cannot go beyond the configured limit.
+        </p>
+      </section>
+
       <section id="auction-format" className="panel stack guide-section">
         <h2>Auction Format in This App</h2>
         <ul className="list guide-list">

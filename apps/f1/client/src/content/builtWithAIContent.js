@@ -6,6 +6,39 @@ export const BUILT_WITH_AI_OUTCOMES = [
   'OpenF1 turned the product into a live race data application instead of a static demo.',
 ];
 
+export const BUILT_WITH_AI_TOOLS = [
+  {
+    label: 'Codex',
+    sublabel: 'OpenAI',
+    logoUrl: '/tool-logos/openai.svg',
+  },
+  {
+    label: 'Claude Code',
+    sublabel: 'Anthropic',
+    logoUrl: '/tool-logos/anthropic.svg',
+  },
+  {
+    label: 'GitHub',
+    sublabel: 'Repo + PR flow',
+    logoUrl: '/tool-logos/github.svg',
+  },
+  {
+    label: 'Railway',
+    sublabel: 'Hosting',
+    logoUrl: '/tool-logos/railway.svg',
+  },
+  {
+    label: 'Azure DevOps',
+    sublabel: 'Backlog',
+    logoUrl: '/tool-logos/azure-devops.svg',
+  },
+  {
+    label: 'OpenF1',
+    sublabel: 'Live data',
+    logoUrl: '/tool-logos/openf1.svg',
+  },
+];
+
 export const BUILT_WITH_AI_TIMELINE = [
   {
     step: '01',

@@ -707,6 +707,21 @@ button {
   gap: var(--space-3);
 }
 
+.built-back-link {
+  justify-self: flex-start;
+  color: #cfd7e2;
+  font-size: var(--text-sm);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  border-bottom: 1px solid rgba(207, 215, 226, 0.28);
+  padding-bottom: 0.22rem;
+}
+
+.built-back-link:hover {
+  color: #fff;
+  border-color: rgba(207, 215, 226, 0.55);
+}
+
 .built-hero-subhead {
   margin: 0;
   max-width: 50ch;
@@ -714,38 +729,57 @@ button {
   line-height: 1.55;
 }
 
-.built-hero-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.55rem;
+.built-tool-strip {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.7rem 1rem;
+  max-width: 760px;
 }
 
-.built-hero-meta span {
-  padding: 0.34rem 0.48rem;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: #d8e0eb;
-  font-size: var(--text-xs);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  background: rgba(255, 255, 255, 0.02);
-}
-
-.built-hero-links {
+.built-tool-item {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  gap: 0.9rem;
+  gap: 0.7rem;
+  min-width: 0;
 }
 
-.built-contact-link {
-  color: #cfd7e2;
+.built-tool-logo-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.2rem;
+  height: 2.2rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.built-tool-logo {
+  width: 1.2rem;
+  height: 1.2rem;
+  object-fit: contain;
+}
+
+.built-tool-copy {
+  display: grid;
+  gap: 0.08rem;
+  min-width: 0;
+}
+
+.built-tool-copy strong,
+.built-tool-copy span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.built-tool-copy strong {
   font-size: var(--text-sm);
-  text-decoration: underline;
-  text-underline-offset: 0.2rem;
 }
 
-.built-contact-link:hover {
-  color: #fff;
+.built-tool-copy span {
+  color: #aab6c5;
+  font-size: var(--text-xs);
 }
 
 .built-hero-art {
@@ -2380,6 +2414,10 @@ tbody tr:hover {
     grid-template-columns: 1fr;
   }
 
+  .built-tool-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .built-hero-art {
     min-height: 220px;
     border-left: 0;
@@ -2443,6 +2481,10 @@ tbody tr:hover {
 
   .built-timeline-item {
     grid-template-columns: 52px minmax(0, 1fr);
+  }
+
+  .built-tool-strip {
+    grid-template-columns: 1fr;
   }
 
   .built-timeline-content {

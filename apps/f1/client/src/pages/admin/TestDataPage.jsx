@@ -43,6 +43,7 @@ export default function TestDataPage() {
     recalcSeasonBonuses,
     rescoreSeasonEvents,
     clearAllTestData,
+    resetAuctionOnly,
     loadHistoricalSeasonData,
     refresh,
     setMessage,
@@ -196,6 +197,16 @@ export default function TestDataPage() {
     await loadSeasonBonusBreakdown();
   }, [clearAllTestData, refresh, loadSeasonBonusBreakdown]);
 
+  const onResetAuctionOnly = useCallback(async () => {
+    const confirmed = window.confirm(
+      'Reset the F1 auction only? This clears bids, sold drivers, ownership, and resets all drivers to a fresh pending queue, but keeps participants, results, payouts, and schedule data.'
+    );
+    if (!confirmed) return;
+
+    await resetAuctionOnly();
+    await refresh();
+  }, [resetAuctionOnly, refresh]);
+
   const onLoad2025Data = useCallback(async () => {
     const confirmed = window.confirm(
       'Load 2025 OpenF1 drivers and events into the active season for testing? This clears current auction data, results, payouts, and replaces the current season metadata.'
@@ -245,6 +256,23 @@ export default function TestDataPage() {
             onClick={onLoad2025Data}
           >
             Load 2025 Drivers + Events
+          </button>
+        </div>
+      </section>
+
+      <section className="panel note-panel stack">
+        <div className="row between wrap gap-sm">
+          <div className="stack-xs">
+            <h2>Reset Auction Only</h2>
+            <p className="muted small">
+              Clears bids, sold drivers, and ownership, then resets all drivers to a fresh randomized pending queue. Participants, results, payouts, and schedule data stay intact.
+            </p>
+          </div>
+          <button
+            className="btn btn-outline"
+            onClick={onResetAuctionOnly}
+          >
+            Reset Auction Only
           </button>
         </div>
       </section>

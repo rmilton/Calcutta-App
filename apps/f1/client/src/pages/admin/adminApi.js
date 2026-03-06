@@ -85,6 +85,14 @@ export async function clearAllTestData() {
   return parseApiResponse(response, 'Failed to clear test data');
 }
 
+export async function resetAuctionOnly() {
+  const response = await api('/admin/test-data/reset-auction', {
+    method: 'POST',
+    body: '{}',
+  });
+  return parseApiResponse(response, 'Failed to reset auction');
+}
+
 export async function loadHistoricalSeasonData(year) {
   const response = await api('/admin/test-data/load-openf1-year', {
     method: 'POST',

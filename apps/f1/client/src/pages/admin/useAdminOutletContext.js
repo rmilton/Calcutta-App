@@ -18,6 +18,7 @@ import { useOutletContext } from 'react-router-dom';
  * @property {() => Promise<void>} refreshDrivers
  * @property {() => Promise<void>} refreshSchedule
  * @property {() => Promise<void>} clearAllTestData
+ * @property {() => Promise<void>} resetAuctionOnly
  * @property {(year: number) => Promise<void>} loadHistoricalSeasonData
  * @property {(options?: {force?: boolean}) => Promise<void>} syncNext
  * @property {(eventId: number, options?: {force?: boolean}) => Promise<void>} syncEvent

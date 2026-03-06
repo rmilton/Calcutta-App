@@ -156,6 +156,16 @@ router.post('/test-data/clear-all', withAdmin, (req, res) => {
   return runAndRespond(res, result, (payload) => ({ ok: true, ...payload }));
 });
 
+router.post('/test-data/reset-auction', withAdmin, (req, res) => {
+  const seasonId = getActiveSeasonId();
+  const result = resultsAdminService.resetAuctionOnlyForSeason({
+    seasonId,
+    io: req.app.get('io'),
+    auctionService: req.app.get('auctionService'),
+  });
+  return runAndRespond(res, result, (payload) => ({ ok: true, ...payload }));
+});
+
 router.post('/test-data/load-openf1-year', withAdmin, async (req, res) => {
   const seasonId = getActiveSeasonId();
   const provider = new OpenF1ResultsProvider({ baseUrl: process.env.OPENF1_BASE_URL });

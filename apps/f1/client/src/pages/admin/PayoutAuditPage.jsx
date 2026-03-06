@@ -7,6 +7,10 @@ import {
   fmtCents,
   fmtWhen,
 } from '../../utils';
+import {
+  payoutAuditExportHref,
+  payoutAuditWinnerExportHref,
+} from './adminApi';
 import AdminLoadingState from './AdminLoadingState';
 import useAdminOutletContext from './useAdminOutletContext';
 
@@ -41,6 +45,7 @@ export default function PayoutAuditPage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState('');
   const [expandedRuleKey, setExpandedRuleKey] = useState('');
+  const [copyStatus, setCopyStatus] = useState('');
 
   useEffect(() => {
     if (!selectedEventId && events?.length) {
@@ -77,15 +82,46 @@ export default function PayoutAuditPage() {
 
   useEffect(() => {
     setExpandedRuleKey('');
+    setCopyStatus('');
     if (!selectedEventId) return;
     loadEventAudit(selectedEventId);
   }, [selectedEventId, loadEventAudit]);
 
+  const audit = eventDetail?.payout_audit;
+
+  const auditSummaryText = useMemo(() => {
+    if (!audit || !selectedEvent) return '';
+    const lines = [
+      `${selectedEvent.name} payout audit`,
+      `${eventTypeLabel(selectedEvent.type)} • Total pot ${fmtCents(audit.total_pot_cents || 0)} • Random position ${audit.random_bonus_position || '—'}`,
+    ];
+
+    (audit.rules || []).forEach((rule) => {
+      const winnerSummary = (rule.winners || []).length
+        ? rule.winners.map((winner) => {
+          const owner = winner.owner_participant_name || 'Unowned';
+          return `${winner.driver_name || winner.driver_code || 'Driver'} (${owner}) ${fmtCents(winner.received_cents)}`;
+        }).join(', ')
+        : 'No winners';
+      lines.push(`${categoryLabel(rule.category)} | ${rule.bps} bps | ${fmtCents(rule.category_pot_cents)} | ${rule.status_reason} | ${winnerSummary}`);
+    });
+
+    return lines.join('\n');
+  }, [audit, selectedEvent]);
+
+  const copyAuditSummary = useCallback(async () => {
+    if (!auditSummaryText) return;
+    try {
+      await navigator.clipboard.writeText(auditSummaryText);
+      setCopyStatus('Audit summary copied.');
+    } catch {
+      setCopyStatus('Failed to copy audit summary.');
+    }
+  }, [auditSummaryText]);
+
   if (loading && !hasLoaded) {
     return <AdminLoadingState />;
   }
-
-  const audit = eventDetail?.payout_audit;
 
   return (
     <section className="panel stack-lg">
@@ -109,6 +145,36 @@ export default function PayoutAuditPage() {
             ))}
           </select>
         </label>
+        <div className="row wrap gap-sm">
+          <a
+            className={`btn btn-outline ${selectedEventId ? '' : 'btn-disabled-link'}`}
+            href={selectedEventId ? payoutAuditExportHref(selectedEventId) : undefined}
+            aria-disabled={!selectedEventId}
+            onClick={(event) => {
+              if (!selectedEventId) event.preventDefault();
+            }}
+          >
+            Download CSV
+          </a>
+          <a
+            className={`btn btn-outline ${selectedEventId ? '' : 'btn-disabled-link'}`}
+            href={selectedEventId ? payoutAuditWinnerExportHref(selectedEventId) : undefined}
+            aria-disabled={!selectedEventId}
+            onClick={(event) => {
+              if (!selectedEventId) event.preventDefault();
+            }}
+          >
+            Download Winner CSV
+          </a>
+          <button
+            type="button"
+            className="btn btn-outline"
+            onClick={copyAuditSummary}
+            disabled={!auditSummaryText}
+          >
+            Copy Summary
+          </button>
+        </div>
       </div>
 
       {selectedEvent ? (
@@ -119,6 +185,7 @@ export default function PayoutAuditPage() {
 
       {detailLoading ? <p className="muted">Loading payout audit...</p> : null}
       {detailError ? <p className="error-text">{detailError}</p> : null}
+      {copyStatus ? <p className="muted small">{copyStatus}</p> : null}
 
       {!detailLoading && !detailError && audit ? (
         <>

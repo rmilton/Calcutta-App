@@ -166,6 +166,154 @@ function buildEventPayoutAudit({ seasonId, eventId }) {
   };
 }
 
+function csvCell(value) {
+  if (value == null) return '';
+  const text = String(value);
+  if (/[",\n]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
+  return text;
+}
+
+function formatWinnerSummary(winners) {
+  if (!Array.isArray(winners) || winners.length === 0) return 'No winners';
+  return winners.map((winner) => {
+    const owner = winner.owner_participant_name || 'Unowned';
+    const finish = winner.finish_position ?? 'N/A';
+    const start = winner.start_position ?? 'N/A';
+    const gain = winner.positions_gained ?? 'N/A';
+    const stop = Number(winner.slowest_pit_stop_seconds);
+    const stopText = Number.isFinite(stop) && stop > 0 ? `, slowest stop ${stop.toFixed(3)}s` : '';
+    return `${winner.driver_name || winner.driver_code || 'Driver'} (${winner.team_name || 'Team N/A'}) - owner ${owner}, finish ${finish}, start ${start}, gain ${gain}${stopText}, received ${winner.received_cents}`;
+  }).join(' | ');
+}
+
+function buildEventPayoutAuditCsv({ seasonId, eventId }) {
+  const event = getEventById(seasonId, eventId);
+  const audit = buildEventPayoutAudit({ seasonId, eventId });
+  if (!event || !audit) return null;
+
+  const rows = [
+    ['Event Name', event.name],
+    ['Event Type', event.type],
+    ['Total Pot Cents', audit.total_pot_cents],
+    ['Random Bonus Position', audit.random_bonus_position || ''],
+    ['Has Results', audit.has_results ? 'yes' : 'no'],
+    [],
+    [
+      'Rule Label',
+      'Category',
+      'BPS',
+      'Percent Of Pot',
+      'Rule Pot Cents',
+      'Winner Count',
+      'Status',
+      'Status Reason',
+      'Distributed Cents',
+      'Undistributed Cents',
+      'Resolution Metric',
+      'Resolution Target',
+      'Winner Summary',
+    ],
+    ...(audit.rules || []).map((rule) => [
+      rule.label || rule.category,
+      rule.category,
+      rule.bps,
+      rule.category_pct_of_pot,
+      rule.category_pot_cents,
+      rule.winner_count,
+      rule.status,
+      rule.status_reason,
+      rule.distributed_cents,
+      rule.undistributed_cents,
+      rule.resolution?.metric || '',
+      rule.resolution?.target_value ?? '',
+      formatWinnerSummary(rule.winners),
+    ]),
+  ];
+
+  return rows.map((row) => row.map(csvCell).join(',')).join('\n');
+}
+
+function buildEventPayoutAuditWinnerCsv({ seasonId, eventId }) {
+  const event = getEventById(seasonId, eventId);
+  const audit = buildEventPayoutAudit({ seasonId, eventId });
+  if (!event || !audit) return null;
+
+  const rows = [
+    ['Event Name', event.name],
+    ['Event Type', event.type],
+    ['Total Pot Cents', audit.total_pot_cents],
+    ['Random Bonus Position', audit.random_bonus_position || ''],
+    [],
+    [
+      'Rule Label',
+      'Category',
+      'Rule Pot Cents',
+      'Rule Status',
+      'Driver Name',
+      'Driver Code',
+      'Team Name',
+      'Driver Active',
+      'Owner Participant',
+      'Finish Position',
+      'Start Position',
+      'Positions Gained',
+      'Slowest Pit Stop Seconds',
+      'Split Share Cents',
+      'Received Cents',
+      'Undistributed Cents',
+    ],
+  ];
+
+  (audit.rules || []).forEach((rule) => {
+    if (!rule.winners?.length) {
+      rows.push([
+        rule.label || rule.category,
+        rule.category,
+        rule.category_pot_cents,
+        rule.status,
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        '',
+        0,
+        0,
+        rule.undistributed_cents,
+      ]);
+      return;
+    }
+
+    rule.winners.forEach((winner) => {
+      rows.push([
+        rule.label || rule.category,
+        rule.category,
+        rule.category_pot_cents,
+        rule.status,
+        winner.driver_name || '',
+        winner.driver_code || '',
+        winner.team_name || '',
+        winner.driver_active ?? '',
+        winner.owner_participant_name || 'Unowned',
+        winner.finish_position ?? '',
+        winner.start_position ?? '',
+        winner.positions_gained ?? '',
+        winner.slowest_pit_stop_seconds ?? '',
+        winner.split_share_cents ?? 0,
+        winner.received_cents ?? 0,
+        rule.undistributed_cents ?? 0,
+      ]);
+    });
+  });
+
+  return rows.map((row) => row.map(csvCell).join(',')).join('\n');
+}
+
 module.exports = {
   buildEventPayoutAudit,
+  buildEventPayoutAuditCsv,
+  buildEventPayoutAuditWinnerCsv,
 };

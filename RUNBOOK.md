@@ -101,6 +101,16 @@ After deploy:
    - before the first real race sync
    - before any destructive test-data reset
 
+### F) F1 Payout Audit Export
+
+1. Open `Admin -> Payout Audit`.
+2. Select the event in question.
+3. Use:
+   - `Download CSV` for a shareable rule-by-rule export
+   - `Download Winner CSV` for spreadsheet-friendly winner rows
+   - `Copy Summary` for a concise plain-text explanation
+4. Use these outputs when reviewing disputed race payouts with participants.
+
 ## Rollback Procedure
 
 1. Open service Deployments in Railway.

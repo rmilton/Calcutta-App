@@ -14,6 +14,7 @@ import { useOutletContext } from 'react-router-dom';
  * @property {(field: string, value: unknown) => void} setField
  * @property {(value: string) => void} setMessage
  * @property {() => Promise<void>} saveSettings
+ * @property {(patch: Object) => Promise<void>} saveSettingsPatch
  * @property {(endpoint: string) => Promise<void>} runAuctionAction
  * @property {() => Promise<void>} refreshDrivers
  * @property {() => Promise<void>} refreshSchedule

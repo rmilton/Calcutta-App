@@ -27,6 +27,7 @@ test('admin api helper normalizes settings and rules payloads', async () => {
     auction_grace_seconds: 15,
     auction_auto_advance: 1,
     auction_budget_cap_cents: 25000,
+    auction_roster_locked: 0,
   });
 
   const rules = normalizeRulesPayload({

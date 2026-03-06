@@ -6,7 +6,9 @@ import useAdminOutletContext from './useAdminOutletContext';
 export default function OverviewPage() {
   const { settings, participants, events, rules, loading, hasLoaded } = useAdminOutletContext();
   const drawnAtMs = Number(settings?.season_random_bonus_drawn_at);
-  const drawnAtIso = Number.isFinite(drawnAtMs) ? new Date(drawnAtMs).toISOString() : null;
+  const drawnAtIso = Number.isFinite(drawnAtMs) && drawnAtMs > 0
+    ? new Date(drawnAtMs).toISOString()
+    : null;
   const drawnAt = drawnAtIso ? fmtWhen(drawnAtIso) : 'Not drawn yet';
 
   if (loading && !hasLoaded) {

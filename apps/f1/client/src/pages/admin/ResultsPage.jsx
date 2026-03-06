@@ -3,6 +3,7 @@ import {
   eventTypeLabel,
   fmtCents,
 } from '../../utils';
+import { databaseBackupHref } from './adminApi';
 import AdminLoadingState from './AdminLoadingState';
 import useAdminOutletContext from './useAdminOutletContext';
 
@@ -60,6 +61,8 @@ export default function ResultsPage() {
     () => Array.isArray(providerStatus?.last_driver_refresh?.drivers) ? providerStatus.last_driver_refresh.drivers : [],
     [providerStatus]
   );
+  const driverRosterGuard = providerStatus?.driver_roster_guard || null;
+  const isDriverRosterFrozen = Boolean(driverRosterGuard?.frozen);
 
   if (loading && !hasLoaded) {
     return <AdminLoadingState />;
@@ -74,6 +77,8 @@ export default function ResultsPage() {
             <button
               className="btn btn-outline"
               onClick={() => runAndReload(() => refreshDrivers())}
+              disabled={isDriverRosterFrozen}
+              title={isDriverRosterFrozen ? driverRosterGuard?.message : 'Refresh drivers from the results provider'}
             >
               Refresh Drivers
             </button>
@@ -95,7 +100,21 @@ export default function ResultsPage() {
             >
               Advance Next (Force)
             </button>
+            <a className="btn btn-outline" href={databaseBackupHref()}>
+              Download DB Backup
+            </a>
           </div>
+        </div>
+        <div className={`note-panel ${isDriverRosterFrozen ? 'note-panel-warning' : ''}`}>
+          <strong>Driver Roster {isDriverRosterFrozen ? 'Frozen' : 'Open'}</strong>
+          <div className="muted small">
+            {driverRosterGuard?.message || 'Driver roster guard unavailable.'}
+          </div>
+          {isDriverRosterFrozen ? (
+            <div className="muted small">
+              Activity counts: bids {driverRosterGuard?.season_activity?.bids || 0}, ownership {driverRosterGuard?.season_activity?.ownership || 0}, results {driverRosterGuard?.season_activity?.eventResults || 0}, event payouts {driverRosterGuard?.season_activity?.eventPayouts || 0}.
+            </div>
+          ) : null}
         </div>
         <div className="grid-3 results-provider-grid">
           <div className="strip-item">

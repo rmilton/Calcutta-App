@@ -7,6 +7,7 @@ A dedicated Formula 1 Calcutta app for a full season pool.
 - Live driver auction (real-time via Socket.io)
 - Auction queue shuffled randomly once per season, with admin reshuffle for pending drivers
 - Admin-configurable per-participant auction budget cap (default $200)
+- Explicit season roster lock control to freeze driver refresh after auction setup
 - Event-by-event payouts using percentage-of-pool rules
 - Grand Prix and Sprint scoring categories
 - Auto-drawn random finishing position bonus per event
@@ -15,6 +16,7 @@ A dedicated Formula 1 Calcutta app for a full season pool.
 - Results sync via provider adapter (`openf1` for real data, `mock` for local/dev/test)
 - Admin controls for auction, sync, payout rules, and settings
 - Results Sync admin view shows collapsible driver/event lists after provider refreshes
+- Results Sync admin view exposes a live database backup download and a visible driver-roster freeze guard after auction/scoring activity begins
 - Public-facing explainer pages for both pool rules (`/guide`) and the agentic build case study (`/built-with-ai`)
 
 ## Run
@@ -58,6 +60,9 @@ Server: `http://localhost:3002`
 - Admin Test Data page can restore the canonical seeded 2026 F1 drivers and events for recovery from polluted local metadata
 - Admin Test Data page can reset only auction state while keeping participants and scored race data
 - Admin Test Data page can rescore all scored events after payout-rule changes
+- Admin Results Sync page can download a live SQLite backup snapshot before auction night or race scoring operations
+- Admin Results Sync page disables `Refresh Drivers` once the season has bids, ownership, or scored payout activity so the auction roster is not changed casually after go-live
+- Admin Auction page can explicitly lock or unlock the season roster; Results Sync respects that lock in addition to activity-based safeguards
 
 ## Engineering Docs
 

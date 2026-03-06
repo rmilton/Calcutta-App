@@ -272,6 +272,58 @@ test('results admin refreshDrivers still fails closed on roster drift after seas
   assert.equal(driverMeta.seasonActivity.ownership, 1);
 });
 
+test('results admin provider status reports driver roster freeze after season activity exists', () => {
+  const {
+    db,
+    getActiveSeasonId,
+    resultsAdminService,
+  } = setupDb();
+
+  const seasonId = getActiveSeasonId();
+  const participantId = db.prepare(`
+    INSERT INTO participants (name, color, session_token)
+    VALUES ('Freeze Guard Tester', '#ffffff', 'freeze-guard-token')
+  `).run().lastInsertRowid;
+  db.prepare('INSERT INTO season_participants (season_id, participant_id) VALUES (?, ?)').run(seasonId, participantId);
+
+  const driver = db.prepare('SELECT id FROM drivers WHERE season_id = ? ORDER BY id ASC LIMIT 1').get(seasonId);
+  db.prepare(`
+    INSERT INTO ownership (season_id, driver_id, participant_id, purchase_price_cents)
+    VALUES (?, ?, ?, ?)
+  `).run(seasonId, driver.id, participantId, 900);
+
+  const status = resultsAdminService.getProviderStatus({
+    seasonId,
+    provider: { name: 'openf1' },
+    autoPollService: null,
+  });
+
+  assert.equal(status.driver_roster_guard.frozen, true);
+  assert.equal(status.driver_roster_guard.can_authoritatively_rebuild, false);
+  assert.equal(status.driver_roster_guard.season_activity.ownership, 1);
+});
+
+test('results admin provider status reports explicit roster lock even without season activity', () => {
+  const {
+    db,
+    getActiveSeasonId,
+    resultsAdminService,
+  } = setupDb();
+
+  const seasonId = getActiveSeasonId();
+  db.prepare('UPDATE seasons SET auction_roster_locked = 1 WHERE id = ?').run(seasonId);
+
+  const status = resultsAdminService.getProviderStatus({
+    seasonId,
+    provider: { name: 'openf1' },
+    autoPollService: null,
+  });
+
+  assert.equal(status.driver_roster_guard.frozen, true);
+  assert.equal(status.driver_roster_guard.explicitly_locked, true);
+  assert.equal(status.driver_roster_guard.season_activity.ownership, 0);
+});
+
 test('results admin refreshSchedule updates matching seeded events with provider keys', async () => {
   const {
     db,

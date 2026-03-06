@@ -17,6 +17,7 @@ Operational guide for deploying, validating, and recovering NCAA/F1 services.
 2. Confirm app-scoped changes did not cross boundaries.
 3. Confirm required env vars exist in Railway.
 4. Confirm health endpoint is `/api/health`.
+5. Download a fresh F1 database backup before auction night and before the first real race sync.
 
 ## Required Environment Variables
 
@@ -90,6 +91,15 @@ After deploy:
 4. Run admin `Refresh Drivers` and `Refresh Schedule` before syncing event results.
 5. If OpenF1 returns `429`, wait briefly and retry; the F1 provider now serializes requests, spaces them, retries boundedly, and enforces a rolling minute budget, but repeated manual clicks can still queue work and extend refresh latency.
 6. If provider responses are incomplete or unmapped, use manual results entry and do not force-score partial provider data.
+
+### E) F1 Backup / Export
+
+1. Open `Admin -> Results Sync`.
+2. Use `Download DB Backup`.
+3. Store the exported SQLite file before major live operations:
+   - before auction night
+   - before the first real race sync
+   - before any destructive test-data reset
 
 ## Rollback Procedure
 

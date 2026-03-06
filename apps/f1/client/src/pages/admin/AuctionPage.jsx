@@ -1,12 +1,34 @@
-import React from 'react';
+import React, { useCallback } from 'react';
+import ParticipantAvatar from '../../components/ParticipantAvatar';
+import { useSocketEvent } from '../../context/SocketContext';
 import AdminLoadingState from './AdminLoadingState';
 import useAdminOutletContext from './useAdminOutletContext';
 
 export default function AuctionPage() {
-  const { settings, setField, saveSettings, runAuctionAction, loading, hasLoaded } = useAdminOutletContext();
+  const {
+    settings,
+    participants,
+    setField,
+    saveSettings,
+    saveSettingsPatch,
+    runAuctionAction,
+    refresh,
+    loading,
+    hasLoaded,
+  } = useAdminOutletContext();
   const budgetCapValue = typeof settings?.auction_budget_cap_cents === 'string'
     ? settings.auction_budget_cap_cents
     : String(settings?.auction_budget_cap_cents == null ? 200 : (Number(settings.auction_budget_cap_cents) / 100));
+  const isRosterLocked = String(settings?.auction_roster_locked) === '1'
+    || settings?.auction_roster_locked === 1
+    || settings?.auction_roster_locked === true;
+  const joinedParticipants = (participants || []).filter((participant) => !participant.is_admin);
+
+  const handleParticipantsUpdate = useCallback(() => {
+    refresh({ silent: true });
+  }, [refresh]);
+
+  useSocketEvent('participants:update', handleParticipantsUpdate);
 
   if (loading && !hasLoaded) {
     return <AdminLoadingState />;
@@ -22,6 +44,24 @@ export default function AuctionPage() {
           <button className="btn btn-outline" onClick={() => runAuctionAction('/admin/auction/next')}>Start Next Driver</button>
           <button className="btn btn-outline" onClick={() => runAuctionAction('/admin/auction/shuffle')}>Shuffle Pending Order</button>
           <button className="btn btn-outline" onClick={() => runAuctionAction('/admin/auction/close')}>Close Active</button>
+        </div>
+        <div className={`note-panel ${isRosterLocked ? 'note-panel-warning' : ''}`}>
+          <strong>Season Roster {isRosterLocked ? 'Locked' : 'Unlocked'}</strong>
+          <div className="muted small">
+            {isRosterLocked
+              ? 'Refresh Drivers is now intended to stay off for the season unless you deliberately unlock the roster.'
+              : 'You can still refresh or rebuild the driver roster before the real season starts.'}
+          </div>
+          <div className="row wrap gap-sm">
+            <button
+              className="btn btn-outline"
+              onClick={() => {
+                saveSettingsPatch({ auction_roster_locked: isRosterLocked ? 0 : 1 });
+              }}
+            >
+              {isRosterLocked ? 'Unlock Season Roster' : 'Lock Season Roster'}
+            </button>
+          </div>
         </div>
       </section>
 
@@ -62,6 +102,40 @@ export default function AuctionPage() {
           </label>
         </div>
         <button className="btn" onClick={saveSettings}>Save Settings</button>
+      </section>
+
+      <section className="panel stack">
+        <div className="row wrap gap-sm participants-panel-header">
+          <div>
+            <h2>Joined Participants</h2>
+            <p className="muted">Live participant roster for the current auction pool.</p>
+          </div>
+          <span className="meta-pill">{joinedParticipants.length} joined</span>
+        </div>
+        {joinedParticipants.length ? (
+          <div className="admin-participant-list">
+            {joinedParticipants.map((participant) => (
+              <div key={participant.id} className="admin-participant-row">
+                <div className="row gap-sm admin-participant-identity">
+                  <ParticipantAvatar name={participant.name} color={participant.color} size={28} />
+                  <div className="stack-xs">
+                    <strong>{participant.name}</strong>
+                    <span className="muted">Ready for auction</span>
+                  </div>
+                </div>
+                <span
+                  className="admin-participant-swatch"
+                  style={{ backgroundColor: participant.color }}
+                  aria-hidden="true"
+                />
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="note-panel">
+            No non-admin participants have joined yet.
+          </div>
+        )}
       </section>
     </div>
   );

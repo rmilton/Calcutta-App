@@ -1,6 +1,9 @@
 const express = require('express');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 
-const { getActiveSeasonId } = require('../db');
+const { db, getActiveSeasonId } = require('../db');
 const { requireAuth, requireAdmin } = require('./middleware');
 
 const auctionAdminService = require('../services/admin/auctionAdminService');
@@ -144,6 +147,25 @@ router.get('/results/provider-status', withAdmin, (req, res) => {
     provider,
     autoPollService,
   }));
+});
+
+router.get('/ops/database-backup', withAdmin, async (req, res) => {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const backupPath = path.join(os.tmpdir(), `f1-calcutta-backup-${timestamp}.db`);
+  const downloadName = `f1-calcutta-backup-${timestamp}.db`;
+
+  try {
+    await db.backup(backupPath);
+    return res.download(backupPath, downloadName, (error) => {
+      fs.unlink(backupPath, () => {});
+      if (error && !res.headersSent) {
+        res.status(500).json({ error: 'Failed to stream database backup.' });
+      }
+    });
+  } catch (error) {
+    fs.unlink(backupPath, () => {});
+    return res.status(500).json({ error: error.message || 'Failed to create database backup.' });
+  }
 });
 
 router.post('/test-data/clear-all', withAdmin, (req, res) => {

@@ -33,6 +33,7 @@ function getSeasonSettings(db, seasonId) {
            auction_timer_seconds, auction_grace_seconds,
            auction_status, auction_auto_advance,
            auction_budget_cap_cents,
+           auction_roster_locked,
            payout_model_version,
            season_random_bonus_position,
            season_random_bonus_drawn_at
@@ -50,6 +51,7 @@ function updateSeasonSettings(db, seasonId, patch) {
     'auction_status',
     'auction_auto_advance',
     'auction_budget_cap_cents',
+    'auction_roster_locked',
     'status',
   ];
 

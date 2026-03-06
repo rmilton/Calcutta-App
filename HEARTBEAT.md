@@ -28,12 +28,16 @@ Owner: On-call engineer / active implementer
 - F1 driver refresh now pulls the latest started non-testing session roster and falls back from `session_key` to `meeting_key` roster lookups when a live session weekend has started but the session-level roster is not populated yet.
 - F1 event sync now preserves unknown substitute/new race drivers as inactive, non-auction season drivers so event scoring can mark their payouts as unowned instead of dropping their result rows.
 - F1 OpenF1 access now rate-limits outbound provider calls against both short-burst and rolling minute windows to reduce `429` failures during admin refresh/sync operations.
+- F1 Results Sync now exposes a DB backup/export path and a visible driver-roster freeze guard once auction or scoring activity exists.
+- F1 now has an explicit season roster lock setting in admin so post-auction driver refresh policy is visible and deliberate.
 
 ## Active Priorities
 
 1. Confirm Railway deploy health with `F1_RESULTS_PROVIDER=openf1` plus OpenF1 credentials in production.
 2. Validate F1 driver and schedule refresh against live provider data before relying on event sync.
 3. Keep docs as single source of truth (no drift back into handoff files).
+4. Use DB backup export before auction night and before first live scoring operations.
+5. Lock the season roster explicitly after the real auction is complete.
 
 ## Known Risks / Watch Items
 

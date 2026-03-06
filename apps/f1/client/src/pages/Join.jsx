@@ -86,7 +86,6 @@ export default function Join() {
           </p>
           <div className="join-guide-links">
             <Link className="btn join-guide-cta" to="/guide">How It Works</Link>
-            <Link className="join-built-link" to="/built-with-ai">Built With AI</Link>
           </div>
           <div className="join-hero-cards">
             <div>
@@ -183,6 +182,7 @@ export default function Join() {
           <img src="/tool-logos/linkedin.svg" alt="" aria-hidden="true" />
           <span>LinkedIn</span>
         </a>
+        <Link className="page-copyright-secondary" to="/built-with-ai">Built With AI</Link>
       </footer>
     </div>
   );

@@ -43,7 +43,7 @@ export default function Guide() {
     <div className="guide-page fade-in stack-lg">
       <section className="panel panel-hero guide-hero">
         <div className="guide-hero-main">
-          <div className="hero-kicker">Before You Join</div>
+          <Link className="built-back-link" to="/join">← Back to landing page</Link>
           <h1>How F1 Calcutta Works</h1>
           <p className="muted">
             This guide explains what a Calcutta is, how the F1 auction runs, and exactly how race and season payouts are earned.

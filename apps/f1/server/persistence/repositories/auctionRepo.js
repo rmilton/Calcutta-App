@@ -91,6 +91,34 @@ function getResolvedAuctionStatus(db, seasonId) {
   return configured;
 }
 
+function getParticipantSpendCents(db, seasonId, participantId) {
+  return Number(db.prepare(`
+    SELECT COALESCE(SUM(purchase_price_cents), 0) as total
+    FROM ownership
+    WHERE season_id = ? AND participant_id = ?
+  `).get(seasonId, participantId)?.total || 0);
+}
+
+function getParticipantReservedBidCents(db, seasonId, participantId) {
+  return Number(db.prepare(`
+    SELECT COALESCE(current_price_cents, 0) as reserved
+    FROM auction_items
+    WHERE season_id = ? AND status = 'active' AND current_leader_id = ?
+    LIMIT 1
+  `).get(seasonId, participantId)?.reserved || 0);
+}
+
+function getParticipantAuctionBudgetSummary(db, seasonId, participantId, budgetCapCents) {
+  const spentCents = getParticipantSpendCents(db, seasonId, participantId);
+  const reservedBidCents = getParticipantReservedBidCents(db, seasonId, participantId);
+  return {
+    auctionBudgetCapCents: Number(budgetCapCents || 0),
+    participantSpentCents: spentCents,
+    participantReservedBidCents: reservedBidCents,
+    participantRemainingCents: Number(budgetCapCents || 0) - spentCents - reservedBidCents,
+  };
+}
+
 module.exports = {
   getAuctionItems,
   getActiveAuctionItem,
@@ -100,4 +128,7 @@ module.exports = {
   getTotalPotCents,
   getAuctionCounts,
   getResolvedAuctionStatus,
+  getParticipantSpendCents,
+  getParticipantReservedBidCents,
+  getParticipantAuctionBudgetSummary,
 };

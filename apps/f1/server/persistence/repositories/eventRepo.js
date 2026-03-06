@@ -6,7 +6,7 @@ const EVENT_CATEGORY_ORDER = {
     'best_p6_or_lower',
     'best_p11_or_lower',
     'most_positions_gained',
-    'second_most_positions_gained',
+    'slowest_pit_stop',
     'random_finish_bonus',
   ],
   sprint: [

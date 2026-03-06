@@ -15,6 +15,12 @@ function parsePositiveInt(value) {
   return Math.floor(n);
 }
 
+function parsePositiveSeconds(value) {
+  const n = Number(value);
+  if (!Number.isFinite(n) || n <= 0) return null;
+  return n;
+}
+
 function buildManualRows(drivers, results) {
   const byDriver = new Map((results || []).map((row) => [row.driver_id, row]));
   return (drivers || []).map((driver) => {
@@ -26,6 +32,7 @@ function buildManualRows(drivers, results) {
       team_name: driver.team_name,
       finish_position: existing?.finish_position ?? '',
       start_position: existing?.start_position ?? '',
+      slowest_pit_stop_seconds: existing?.slowest_pit_stop_seconds ?? '',
     };
   });
 }
@@ -34,6 +41,7 @@ export default function TestDataPage() {
   const {
     events,
     recalcSeasonBonuses,
+    rescoreSeasonEvents,
     clearAllTestData,
     loadHistoricalSeasonData,
     refresh,
@@ -136,6 +144,7 @@ export default function TestDataPage() {
           driver_id: row.driver_id,
           finish_position,
           start_position,
+          slowest_pit_stop_seconds: parsePositiveSeconds(row.slowest_pit_stop_seconds),
         };
       })
       .filter(Boolean);
@@ -203,6 +212,20 @@ export default function TestDataPage() {
     await loadSeasonBonusBreakdown();
   }, [loadHistoricalSeasonData, refresh, loadSeasonBonusBreakdown]);
 
+  const onRescoreSeasonEvents = useCallback(async () => {
+    const confirmed = window.confirm(
+      'Rescore all currently scored F1 events under the active payout rules? This rewrites event payouts and recalculates season bonuses for the active season.'
+    );
+    if (!confirmed) return;
+
+    await rescoreSeasonEvents();
+    await refresh();
+    await loadSeasonBonusBreakdown();
+    if (selectedEventId) {
+      await loadManualEvent(selectedEventId);
+    }
+  }, [rescoreSeasonEvents, refresh, loadSeasonBonusBreakdown, selectedEventId, loadManualEvent]);
+
   if (loading && !hasLoaded) {
     return <AdminLoadingState />;
   }
@@ -239,6 +262,23 @@ export default function TestDataPage() {
             onClick={onClearAllTestData}
           >
             Clear All Test Data
+          </button>
+        </div>
+      </section>
+
+      <section className="panel note-panel stack">
+        <div className="row between wrap gap-sm">
+          <div className="stack-xs">
+            <h2>Rescore Scored Events</h2>
+            <p className="muted small">
+              Rebuilds event payouts and season bonus payouts for every currently scored event using the active payout rules.
+            </p>
+          </div>
+          <button
+            className="btn btn-outline"
+            onClick={onRescoreSeasonEvents}
+          >
+            Rescore All Scored Events
           </button>
         </div>
       </section>
@@ -287,6 +327,7 @@ export default function TestDataPage() {
                   <th>Finish</th>
                   <th>Start</th>
                   <th>Gain</th>
+                  <th>Slowest Stop (s)</th>
                 </tr>
               </thead>
               <tbody>
@@ -321,6 +362,15 @@ export default function TestDataPage() {
                         />
                       </td>
                       <td>{gain == null ? '—' : gain}</td>
+                      <td>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.001"
+                          value={row.slowest_pit_stop_seconds}
+                          onChange={(e) => onManualCellChange(row.driver_id, 'slowest_pit_stop_seconds', e.target.value)}
+                        />
+                      </td>
                     </tr>
                   );
                 })}

@@ -199,20 +199,34 @@ class OpenF1ResultsProvider {
       throw new Error(`Event ${event?.id || ''} is missing an OpenF1 session key`);
     }
 
-    const [sessionResults, startingGrid] = await Promise.all([
+    const [sessionResults, startingGrid, pitStops] = await Promise.all([
       this.request('/session_result', { session_key: sessionKey }),
       this.request('/starting_grid', { session_key: sessionKey }),
+      this.request('/pit', { session_key: sessionKey }),
     ]);
 
     const gridByDriver = new Map(
       startingGrid.map((row) => [Number(row.driver_number), Number(row.position) || null])
     );
+    const slowestPitByDriver = new Map();
+
+    pitStops.forEach((row) => {
+      const driverNumber = Number(row.driver_number);
+      const stopDuration = Number(row.stop_duration);
+      if (!Number.isFinite(driverNumber) || !Number.isFinite(stopDuration) || stopDuration <= 0) return;
+
+      const current = slowestPitByDriver.get(driverNumber);
+      if (current == null || stopDuration > current) {
+        slowestPitByDriver.set(driverNumber, stopDuration);
+      }
+    });
 
     const rows = sessionResults
       .map((row) => ({
         external_driver_id: Number(row.driver_number),
         finish_position: Number(row.position),
         start_position: gridByDriver.get(Number(row.driver_number)) ?? null,
+        slowest_pit_stop_seconds: slowestPitByDriver.get(Number(row.driver_number)) ?? null,
       }))
       .filter((row) => Number.isFinite(row.external_driver_id) && Number.isFinite(row.finish_position) && row.finish_position > 0)
       .sort((a, b) => a.finish_position - b.finish_position);

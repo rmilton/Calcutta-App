@@ -10,7 +10,7 @@ export const GUIDE_EVENT_PAYOUTS = {
       { category: 'Best P6+', bps: 50 },
       { category: 'Best P11+', bps: 50 },
       { category: 'Most Positions Gained', bps: 50 },
-      { category: '2nd Most Positions Gained', bps: 25 },
+      { category: 'Slowest Pit Stop', bps: 25 },
       { category: 'Random Position Bonus (P4+)', bps: 75 },
     ],
   },

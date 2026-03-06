@@ -4,6 +4,9 @@ import useAdminOutletContext from './useAdminOutletContext';
 
 export default function AuctionPage() {
   const { settings, setField, saveSettings, runAuctionAction, loading, hasLoaded } = useAdminOutletContext();
+  const budgetCapValue = typeof settings?.auction_budget_cap_cents === 'string'
+    ? settings.auction_budget_cap_cents
+    : String(settings?.auction_budget_cap_cents == null ? 200 : (Number(settings.auction_budget_cap_cents) / 100));
 
   if (loading && !hasLoaded) {
     return <AdminLoadingState />;
@@ -17,6 +20,7 @@ export default function AuctionPage() {
           <button className="btn" onClick={() => runAuctionAction('/admin/auction/start')}>Open</button>
           <button className="btn btn-outline" onClick={() => runAuctionAction('/admin/auction/pause')}>Pause</button>
           <button className="btn btn-outline" onClick={() => runAuctionAction('/admin/auction/next')}>Start Next Driver</button>
+          <button className="btn btn-outline" onClick={() => runAuctionAction('/admin/auction/shuffle')}>Shuffle Pending Order</button>
           <button className="btn btn-outline" onClick={() => runAuctionAction('/admin/auction/close')}>Close Active</button>
         </div>
       </section>
@@ -36,6 +40,16 @@ export default function AuctionPage() {
             <input
               value={settings?.auction_grace_seconds ?? ''}
               onChange={(e) => setField('auction_grace_seconds', e.target.value)}
+            />
+          </label>
+          <label>
+            Budget Cap ($)
+            <input
+              type="number"
+              min="0"
+              step="1"
+              value={budgetCapValue}
+              onChange={(e) => setField('auction_budget_cap_cents', e.target.value)}
             />
           </label>
           <label className="checkbox-row">

@@ -1,4 +1,5 @@
 const { generateInviteCode } = require('../lib/core');
+const { shuffleArray } = require('../lib/shuffle');
 const { DRIVERS_2026 } = require('../data/drivers2026');
 const { EVENTS_2026 } = require('../data/events2026');
 const { EVENT_RULES, DEFAULT_SEASON_BONUS_RULES } = require('../data/payoutRules');
@@ -63,7 +64,7 @@ function seedSeasonData(db, seasonId) {
       ORDER BY external_id ASC
     `).all(seasonId);
 
-    seededDrivers.forEach((driver, idx) => {
+    shuffleArray(seededDrivers).forEach((driver, idx) => {
       insertAuctionItem.run(seasonId, driver.id, idx);
     });
 

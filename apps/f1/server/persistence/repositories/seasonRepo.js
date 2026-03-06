@@ -32,6 +32,7 @@ function getSeasonSettings(db, seasonId) {
     SELECT id, year, name, invite_code, status,
            auction_timer_seconds, auction_grace_seconds,
            auction_status, auction_auto_advance,
+           auction_budget_cap_cents,
            payout_model_version,
            season_random_bonus_position,
            season_random_bonus_drawn_at
@@ -48,6 +49,7 @@ function updateSeasonSettings(db, seasonId, patch) {
     'auction_grace_seconds',
     'auction_status',
     'auction_auto_advance',
+    'auction_budget_cap_cents',
     'status',
   ];
 

@@ -292,14 +292,17 @@ function upsertEventResults({ seasonId, eventId, rows, manualOverride = false })
     if (!driverId) return null;
     const finish = Number(row.finish_position);
     const start = Number(row.start_position);
+    const slowestPitStop = Number(row.slowest_pit_stop_seconds);
     if (!Number.isFinite(finish) || finish < 1) return null;
     const startPos = Number.isFinite(start) && start >= 1 ? start : null;
+    const pitStopSeconds = Number.isFinite(slowestPitStop) && slowestPitStop > 0 ? slowestPitStop : null;
 
     return {
       driver_id: driverId,
       finish_position: Math.floor(finish),
       start_position: startPos,
       positions_gained: startPos ? (startPos - Math.floor(finish)) : 0,
+      slowest_pit_stop_seconds: pitStopSeconds,
       is_manual_override: manualOverride ? 1 : 0,
     };
   }).filter(Boolean);
@@ -310,8 +313,8 @@ function upsertEventResults({ seasonId, eventId, rows, manualOverride = false })
 
   const insert = db.prepare(`
     INSERT INTO event_results
-      (event_id, driver_id, finish_position, start_position, positions_gained, is_manual_override, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+      (event_id, driver_id, finish_position, start_position, positions_gained, slowest_pit_stop_seconds, is_manual_override, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   db.transaction(() => {
@@ -324,6 +327,7 @@ function upsertEventResults({ seasonId, eventId, rows, manualOverride = false })
         row.finish_position,
         row.start_position,
         row.positions_gained,
+        row.slowest_pit_stop_seconds,
         row.is_manual_override,
         Date.now()
       );

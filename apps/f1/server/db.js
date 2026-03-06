@@ -83,6 +83,18 @@ function getResolvedAuctionStatus(seasonId) {
   return auctionRepo.getResolvedAuctionStatus(db, seasonId);
 }
 
+function getParticipantSpendCents(seasonId, participantId) {
+  return auctionRepo.getParticipantSpendCents(db, seasonId, participantId);
+}
+
+function getParticipantReservedBidCents(seasonId, participantId) {
+  return auctionRepo.getParticipantReservedBidCents(db, seasonId, participantId);
+}
+
+function getParticipantAuctionBudgetSummary(seasonId, participantId, budgetCapCents) {
+  return auctionRepo.getParticipantAuctionBudgetSummary(db, seasonId, participantId, budgetCapCents);
+}
+
 function getStandings(seasonId) {
   return standingsRepo.getStandings(db, seasonId);
 }
@@ -145,6 +157,9 @@ module.exports = {
   getTotalPotCents,
   getAuctionCounts,
   getResolvedAuctionStatus,
+  getParticipantSpendCents,
+  getParticipantReservedBidCents,
+  getParticipantAuctionBudgetSummary,
   getStandings,
   getParticipantPortfolio,
   getEvents,

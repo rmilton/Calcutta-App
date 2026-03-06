@@ -122,7 +122,13 @@ export default function BuiltWithAI() {
       </section>
 
       <section className="built-footer">
-        <p>Questions? <a href="mailto:ryan@ryanmilton.com">Contact Ryan</a></p>
+        <p>
+          Questions?{' '}
+          <a className="built-linkedin-link" href="https://www.linkedin.com/in/ryanmilton/" target="_blank" rel="noreferrer">
+            <span>Connect with Ryan on LinkedIn</span>
+            <span className="built-external-icon" aria-hidden="true">↗</span>
+          </a>
+        </p>
         <div className="built-footer-links">
           <Link to="/guide">F1 Calcutta Guide</Link>
           <Link to="/join">Join Page</Link>
@@ -130,7 +136,11 @@ export default function BuiltWithAI() {
       </section>
 
       <footer className="page-copyright">
-        © 2026 Ryan Milton.
+        <span>© 2026 Ryan Milton.</span>
+        <a className="page-copyright-link" href="https://www.linkedin.com/in/ryanmilton/" target="_blank" rel="noreferrer">
+          <img src="/tool-logos/linkedin.svg" alt="" aria-hidden="true" />
+          <span>LinkedIn</span>
+        </a>
       </footer>
     </div>
   );

@@ -1064,6 +1064,17 @@ button {
   color: #e1e7ef;
 }
 
+.built-linkedin-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.built-external-icon {
+  font-size: 0.95em;
+  line-height: 1;
+}
+
 .built-footer-links {
   display: flex;
   gap: 1rem;
@@ -1072,10 +1083,32 @@ button {
 
 .page-copyright {
   margin: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
   text-align: center;
   color: #9ca8b8;
   font-size: var(--text-xs);
   letter-spacing: 0.04em;
+}
+
+.page-copyright-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.38rem;
+  color: #b7c2d0;
+}
+
+.page-copyright-link:hover {
+  color: #edf1f7;
+}
+
+.page-copyright-link img {
+  width: 0.9rem;
+  height: 0.9rem;
+  object-fit: contain;
 }
 
 .admin-header p {

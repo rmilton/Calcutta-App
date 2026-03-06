@@ -5,6 +5,7 @@ import {
   BUILT_WITH_AI_OUTCOMES,
   BUILT_WITH_AI_PRACTICE,
   BUILT_WITH_AI_TIMELINE,
+  BUILT_WITH_AI_TOOLS,
   BUILT_WITH_AI_WHY,
 } from '../content/builtWithAIContent';
 
@@ -13,23 +14,24 @@ export default function BuiltWithAI() {
     <div className="built-page fade-in stack-lg">
       <section className="built-hero">
         <div className="built-hero-copy">
-          <div className="hero-kicker">Case Study</div>
+          <Link className="built-back-link" to="/join">← Back to landing page</Link>
           <h1>Built With AI</h1>
           <p className="built-hero-subhead">
             This F1 Calcutta was planned, built, deployed, and operated through an agentic engineering workflow using
             OpenAI Codex, Anthropic Claude Code, GitHub, Railway, Azure DevOps, and OpenF1.
           </p>
-          <div className="built-hero-meta">
-            <span>OpenAI Codex</span>
-            <span>Anthropic Claude Code</span>
-            <span>GitHub</span>
-            <span>Railway</span>
-            <span>Azure DevOps</span>
-            <span>OpenF1</span>
-          </div>
-          <div className="built-hero-links">
-            <Link className="btn" to="/join">View App Entry</Link>
-            <a className="built-contact-link" href="mailto:ryan@ryanmilton.com">Questions? Contact Ryan</a>
+          <div className="built-tool-strip" aria-label="Tools used">
+            {BUILT_WITH_AI_TOOLS.map((tool) => (
+              <div key={tool.label} className="built-tool-item">
+                <div className="built-tool-logo-wrap">
+                  <img className="built-tool-logo" src={tool.logoUrl} alt={`${tool.label} logo`} loading="lazy" />
+                </div>
+                <div className="built-tool-copy">
+                  <strong>{tool.label}</strong>
+                  <span>{tool.sublabel}</span>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
         <div className="built-hero-art" aria-hidden="true">

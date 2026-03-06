@@ -1,0 +1,10 @@
+<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="openf1Title">
+  <title id="openf1Title">OpenF1</title>
+  <g fill="none" stroke="#E8EEF7" stroke-linecap="round" stroke-linejoin="round" stroke-width="4.5">
+    <path d="M11 42c7.5-10.8 16.8-16.2 27.8-16.2 5.2 0 10 .9 14.2 2.8"/>
+    <path d="M11 32.5c6.8-7 14.6-10.5 23.5-10.5h17"/>
+    <path d="M10 49h25"/>
+    <path d="M43 19v30"/>
+    <path d="M50 19h7"/>
+  </g>
+</svg>

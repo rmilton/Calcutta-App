@@ -51,6 +51,7 @@ export default function Guide() {
           <div className="row wrap gap-sm">
             <Link className="btn" to="/join">Join Pool</Link>
             <Link className="btn btn-outline" to="/join">Admin Login</Link>
+            <Link className="btn btn-outline" to="/built-with-ai">Built With AI</Link>
           </div>
           <p className="muted small">Admin login uses the Admin tab on the join screen.</p>
         </div>
@@ -134,6 +135,7 @@ export default function Guide() {
         <div className="row wrap gap-sm">
           <Link className="btn" to="/join">Join Pool</Link>
           <Link className="btn btn-outline" to="/join">Go to Login</Link>
+          <Link className="btn btn-outline" to="/built-with-ai">See How It Was Built</Link>
         </div>
       </section>
       <footer className="page-copyright">

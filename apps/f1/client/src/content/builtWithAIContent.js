@@ -63,7 +63,7 @@ export const BUILT_WITH_AI_TIMELINE = [
   {
     step: '05',
     title: 'Backlog and Execution',
-    body: 'Azure DevOps was used to create and manage user stories, feature ideas, and implementation work so product direction stayed visible and structured.',
+    body: 'An Azure DevOps skill let the agent work directly with the backlog, creating user stories, updating feature work, and moving items across the board as delivery progressed.',
   },
   {
     step: '06',

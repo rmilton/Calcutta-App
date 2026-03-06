@@ -486,20 +486,6 @@ button {
   border-color: rgba(195, 111, 116, 0.82);
 }
 
-.join-built-link {
-  color: #d8e0eb;
-  font-size: var(--text-sm);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  padding-bottom: 0.12rem;
-  border-bottom: 1px solid rgba(216, 224, 235, 0.28);
-}
-
-.join-built-link:hover {
-  color: #fff;
-  border-color: rgba(216, 224, 235, 0.56);
-}
-
 .join-entry-page {
   gap: var(--space-3);
 }
@@ -1109,6 +1095,18 @@ button {
   width: 0.9rem;
   height: 0.9rem;
   object-fit: contain;
+}
+
+.page-copyright-secondary {
+  width: 100%;
+  color: #d96d73;
+  font-size: var(--text-xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.page-copyright-secondary:hover {
+  color: #ef9a9f;
 }
 
 .admin-header p {

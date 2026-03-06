@@ -15,6 +15,7 @@ A dedicated Formula 1 Calcutta app for a full season pool.
 - Results sync via provider adapter (`openf1` for real data, `mock` for local/dev/test)
 - Admin controls for auction, sync, payout rules, and settings
 - Results Sync admin view shows collapsible driver/event lists after provider refreshes
+- Public-facing explainer pages for both pool rules (`/guide`) and the agentic build case study (`/built-with-ai`)
 
 ## Run
 

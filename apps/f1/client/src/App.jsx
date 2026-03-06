@@ -5,6 +5,7 @@ import { SocketProvider } from './context/SocketContext';
 import Nav from './components/Nav';
 import Join from './pages/Join';
 import Guide from './pages/Guide';
+import BuiltWithAI from './pages/BuiltWithAI';
 import Auction from './pages/Auction';
 import Events from './pages/Events';
 import Standings from './pages/Standings';
@@ -44,6 +45,7 @@ function AppRoutes() {
         <Routes>
           <Route path="/join" element={participant ? <Navigate to={participant.isAdmin ? '/admin' : '/auction'} replace /> : <Join />} />
           <Route path="/guide" element={<Guide />} />
+          <Route path="/built-with-ai" element={<BuiltWithAI />} />
           <Route path="/" element={<Navigate to="/auction" replace />} />
           <Route path="/auction" element={<ProtectedRoute><Auction /></ProtectedRoute>} />
           <Route path="/events" element={<ProtectedRoute><Events /></ProtectedRoute>} />

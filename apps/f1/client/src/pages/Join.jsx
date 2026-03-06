@@ -86,6 +86,7 @@ export default function Join() {
           </p>
           <div className="join-guide-links">
             <Link className="btn join-guide-cta" to="/guide">How It Works</Link>
+            <Link className="join-built-link" to="/built-with-ai">Built With AI</Link>
           </div>
           <div className="join-hero-cards">
             <div>
@@ -172,7 +173,7 @@ export default function Join() {
           )}
           {error ? <p className="error-text">{error}</p> : null}
           <p className="small muted join-guide-secondary">
-            New here? <Link className="join-guide-link-inline" to="/guide">Read the F1 Calcutta guide</Link> before joining.
+            New here? <Link className="join-guide-link-inline" to="/guide">Read the F1 Calcutta guide</Link> or see <Link className="join-guide-link-inline" to="/built-with-ai">how the app was built</Link>.
           </p>
         </section>
       </div>

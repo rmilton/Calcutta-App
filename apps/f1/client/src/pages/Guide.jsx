@@ -139,7 +139,11 @@ export default function Guide() {
         </div>
       </section>
       <footer className="page-copyright">
-        © 2026 Ryan Milton.
+        <span>© 2026 Ryan Milton.</span>
+        <a className="page-copyright-link" href="https://www.linkedin.com/in/ryanmilton/" target="_blank" rel="noreferrer">
+          <img src="/tool-logos/linkedin.svg" alt="" aria-hidden="true" />
+          <span>LinkedIn</span>
+        </a>
       </footer>
     </div>
   );

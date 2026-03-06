@@ -21,6 +21,7 @@ function ensureSchema(db) {
       auction_status TEXT NOT NULL DEFAULT 'waiting',
       auction_auto_advance INTEGER NOT NULL DEFAULT 0,
       auction_budget_cap_cents INTEGER NOT NULL DEFAULT 20000,
+      auction_roster_locked INTEGER NOT NULL DEFAULT 0,
       payout_model_version INTEGER NOT NULL DEFAULT 1,
       season_random_bonus_position INTEGER,
       season_random_bonus_drawn_at INTEGER,
@@ -185,6 +186,9 @@ function ensureSchema(db) {
   }
   if (!columnExists(db, 'seasons', 'auction_budget_cap_cents')) {
     db.exec('ALTER TABLE seasons ADD COLUMN auction_budget_cap_cents INTEGER NOT NULL DEFAULT 20000');
+  }
+  if (!columnExists(db, 'seasons', 'auction_roster_locked')) {
+    db.exec('ALTER TABLE seasons ADD COLUMN auction_roster_locked INTEGER NOT NULL DEFAULT 0');
   }
   if (!columnExists(db, 'event_results', 'slowest_pit_stop_seconds')) {
     db.exec('ALTER TABLE event_results ADD COLUMN slowest_pit_stop_seconds REAL');

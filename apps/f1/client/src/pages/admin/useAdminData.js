@@ -71,6 +71,17 @@ export default function useAdminData() {
     }
   }, [loadAll, settings]);
 
+  const saveSettingsPatch = useCallback(async (patch) => {
+    try {
+      await patchSettings(normalizeSettingsPayload({ ...(settings || {}), ...(patch || {}) }));
+      setSettings((prev) => ({ ...(prev || {}), ...(patch || {}) }));
+      setMessage('Settings saved.');
+      await loadAll({ silent: true });
+    } catch (error) {
+      setMessage(error.message || 'Failed to save settings.');
+    }
+  }, [loadAll, settings]);
+
   const runAuctionAction = useCallback(async (endpoint) => {
     try {
       await runAuctionActionApi(endpoint);
@@ -211,10 +222,11 @@ export default function useAdminData() {
     message,
     loading,
     hasLoaded,
-    refresh: () => loadAll(),
+    refresh: (options) => loadAll(options),
     setField,
     setMessage,
     saveSettings,
+    saveSettingsPatch,
     runAuctionAction,
     refreshDrivers,
     refreshSchedule,
@@ -240,6 +252,7 @@ export default function useAdminData() {
     loadAll,
     setField,
     saveSettings,
+    saveSettingsPatch,
     runAuctionAction,
     refreshDrivers,
     refreshSchedule,

@@ -1,4 +1,4 @@
-const { db } = require('./persistence/connection');
+const { db, DB_PATH } = require('./persistence/connection');
 const { ensureSchema } = require('./persistence/schema');
 const { ensureActiveSeason, seedSeasonData } = require('./persistence/seed');
 const { applyPayoutModelV2Migration } = require('./persistence/migrations/payoutModelV2');
@@ -141,6 +141,7 @@ function upsertProviderSyncState(seasonId, scope, payload) {
 
 module.exports = {
   db,
+  DB_PATH,
   init,
   getActiveSeasonId,
   getActiveSeason,

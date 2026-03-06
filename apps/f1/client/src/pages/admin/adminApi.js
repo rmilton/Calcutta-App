@@ -19,6 +19,7 @@ export function normalizeSettingsPayload(settings) {
     auction_grace_seconds: Number(settings?.auction_grace_seconds) || 15,
     auction_auto_advance: settings?.auction_auto_advance ? 1 : 0,
     auction_budget_cap_cents: Math.max(0, Math.round((Number.isFinite(budgetCapDollars) ? budgetCapDollars : 200) * 100)),
+    auction_roster_locked: settings?.auction_roster_locked ? 1 : 0,
   };
 }
 
@@ -59,6 +60,10 @@ export async function syncNext({ force = false } = {}) {
 
 export async function readProviderStatus() {
   return readApi('/admin/results/provider-status');
+}
+
+export function databaseBackupHref() {
+  return '/api/admin/ops/database-backup';
 }
 
 export async function refreshDrivers() {

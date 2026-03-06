@@ -1542,6 +1542,11 @@ button {
   background: linear-gradient(165deg, rgba(159, 63, 67, 0.12), transparent 46%), var(--panel);
 }
 
+.note-panel-warning {
+  border-color: rgba(183, 98, 72, 0.52);
+  background: linear-gradient(165deg, rgba(183, 98, 72, 0.16), transparent 48%), var(--panel);
+}
+
 .telemetry-strip {
   display: grid;
   gap: var(--space-3);
@@ -2032,6 +2037,42 @@ tbody tr:hover {
   display: grid;
   gap: var(--space-3);
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.participants-panel-header {
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.admin-participant-list {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.admin-participant-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.8rem;
+  padding: 0.8rem 0.9rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(6, 10, 18, 0.72);
+}
+
+.admin-participant-identity {
+  min-width: 0;
+  align-items: center;
+}
+
+.admin-participant-identity strong {
+  display: block;
+}
+
+.admin-participant-swatch {
+  width: 0.7rem;
+  height: 2rem;
+  flex-shrink: 0;
+  opacity: 0.9;
 }
 
 .results-provider-grid .strip-item {

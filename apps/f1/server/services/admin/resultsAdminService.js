@@ -85,6 +85,24 @@ function canAuthoritativelyReplaceDrivers(seasonId) {
   return { isClean, counts };
 }
 
+function getDriverRosterGuard(seasonId) {
+  const season = getSeason(seasonId);
+  const replacementCheck = canAuthoritativelyReplaceDrivers(seasonId);
+  const explicitlyLocked = Boolean(Number(season?.auction_roster_locked || 0));
+  const frozen = explicitlyLocked || !replacementCheck.isClean;
+  return {
+    frozen,
+    explicitly_locked: explicitlyLocked,
+    can_authoritatively_rebuild: replacementCheck.isClean,
+    season_activity: replacementCheck.counts,
+    message: explicitlyLocked
+      ? 'Driver roster is explicitly locked for the season.'
+      : replacementCheck.isClean
+        ? 'Driver roster can still be refreshed or rebuilt from the provider before auction or scoring activity begins.'
+        : 'Driver roster is frozen because the season already has auction or scoring activity.',
+  };
+}
+
 function rebuildSeasonDriversFromProvider({ seasonId, providerDrivers, shuffle = shuffleArray }) {
   const deleteAuctionItems = db.prepare('DELETE FROM auction_items WHERE season_id = ?');
   const deleteDrivers = db.prepare('DELETE FROM drivers WHERE season_id = ?');
@@ -396,11 +414,13 @@ function getProviderStatus({ seasonId, provider, autoPollService }) {
   const states = Object.fromEntries(stateRows.map((row) => [row.scope, row]));
   const providerInfo = typeof provider?.getStatus === 'function' ? provider.getStatus() : {};
   const autoPollInfo = typeof autoPollService?.getStatus === 'function' ? autoPollService.getStatus() : null;
+  const driverRosterGuard = getDriverRosterGuard(seasonId);
 
   return {
     provider: getProviderName(provider),
     mode: process.env.NODE_ENV || 'development',
     provider_info: providerInfo,
+    driver_roster_guard: driverRosterGuard,
     last_driver_refresh: states.drivers || null,
     last_schedule_refresh: states.schedule || null,
     auto_poll: {
@@ -826,6 +846,7 @@ module.exports = {
   refreshDriversFromProvider,
   refreshScheduleFromProvider,
   getProviderStatus,
+  getDriverRosterGuard,
   clearTestDataForSeason,
   resetAuctionOnlyForSeason,
   loadHistoricalSeasonMetadata,

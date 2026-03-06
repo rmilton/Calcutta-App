@@ -18,6 +18,10 @@ const COLORS = [
   '#9254de', '#f759ab', '#13c2c2', '#5cdbd3',
 ];
 
+function emitParticipantsUpdate(req, seasonId) {
+  req.app.get('io')?.emit('participants:update', { seasonId });
+}
+
 router.get('/me', (req, res) => {
   const token = req.cookies?.session;
   if (!token) return res.json({ participant: null });
@@ -72,6 +76,8 @@ router.post('/join', (req, res) => {
       VALUES (?, ?)
     `).run(season.id, existing.id);
 
+    emitParticipantsUpdate(req, season.id);
+
     res.cookie('session', token, { httpOnly: true, maxAge: 30 * 24 * 60 * 60 * 1000 });
     return res.json({
       participant: {
@@ -96,6 +102,8 @@ router.post('/join', (req, res) => {
     INSERT INTO season_participants (season_id, participant_id)
     VALUES (?, ?)
   `).run(season.id, participantId);
+
+  emitParticipantsUpdate(req, season.id);
 
   res.cookie('session', token, { httpOnly: true, maxAge: 30 * 24 * 60 * 60 * 1000 });
   return res.json({

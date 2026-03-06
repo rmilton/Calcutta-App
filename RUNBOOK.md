@@ -32,14 +32,18 @@ Operational guide for deploying, validating, and recovering NCAA/F1 services.
 - `ADMIN_PASSWORD`
 - `NODE_ENV=production`
 - `DB_PATH=/data/f1-calcutta.db`
-- optional: `F1_CLIENT_ORIGIN`, `F1_RESULTS_PROVIDER`, `F1_AUTO_POLL_ENABLED`, `F1_AUTO_POLL_INTERVAL_SECONDS`, `OPENF1_BASE_URL`
+- `F1_RESULTS_PROVIDER=openf1`
+- `OPENF1_USERNAME`
+- `OPENF1_PASSWORD`
+- optional: `F1_CLIENT_ORIGIN`, `F1_AUTO_POLL_ENABLED`, `F1_AUTO_POLL_INTERVAL_SECONDS`, `OPENF1_BASE_URL`, `OPENF1_TOKEN_URL`
 
 ## F1 Provider Defaults
 
 1. Production should use `F1_RESULTS_PROVIDER=openf1`.
-2. `mock` is intended for local/dev/test only.
-3. Do not set `F1_PORT` in Railway.
-4. Keep `F1_AUTO_POLL_ENABLED=0` until one successful manual OpenF1 verification pass is complete.
+2. OpenF1 live-session windows can require authenticated backend requests even for historical endpoints.
+3. `mock` is intended for local/dev/test only.
+4. Do not set `F1_PORT` in Railway.
+5. Keep `F1_AUTO_POLL_ENABLED=0` until one successful manual OpenF1 verification pass is complete.
 
 ## Deploy Validation
 
@@ -82,8 +86,10 @@ After deploy:
 
 1. Check `GET /api/admin/results/provider-status`.
 2. Verify `F1_RESULTS_PROVIDER=openf1` in production.
-3. Run admin `Refresh Drivers` and `Refresh Schedule` before syncing event results.
-4. If provider responses are incomplete or unmapped, use manual results entry and do not force-score partial provider data.
+3. Verify `OPENF1_USERNAME` and `OPENF1_PASSWORD` are set when OpenF1 returns live-session `401` responses.
+4. Run admin `Refresh Drivers` and `Refresh Schedule` before syncing event results.
+5. If OpenF1 returns `429`, wait briefly and retry; the F1 provider now serializes requests, spaces them, retries boundedly, and enforces a rolling minute budget, but repeated manual clicks can still queue work and extend refresh latency.
+6. If provider responses are incomplete or unmapped, use manual results entry and do not force-score partial provider data.
 
 ## Rollback Procedure
 

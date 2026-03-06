@@ -20,6 +20,7 @@ import { useOutletContext } from 'react-router-dom';
  * @property {() => Promise<void>} clearAllTestData
  * @property {() => Promise<void>} resetAuctionOnly
  * @property {(year: number) => Promise<void>} loadHistoricalSeasonData
+ * @property {() => Promise<void>} restoreSeeded2026Data
  * @property {(options?: {force?: boolean}) => Promise<void>} syncNext
  * @property {(eventId: number, options?: {force?: boolean}) => Promise<void>} syncEvent
  * @property {() => Promise<void>} recalcSeasonBonuses

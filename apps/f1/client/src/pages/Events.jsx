@@ -60,6 +60,10 @@ function winnerResultSummary(winner) {
   return `Finished ${finish}, started ${start}, gained ${gainText}.${pitText}`;
 }
 
+function isInactiveRaceOnlyDriver(driver) {
+  return Number(driver?.driver_active) === 0;
+}
+
 export default function Events() {
   const [events, setEvents] = useState([]);
   const [selectedEventId, setSelectedEventId] = useState(null);
@@ -412,6 +416,9 @@ export default function Events() {
                                         >
                                           <div>
                                             <strong>{winner.driver_name || winner.driver_code || 'Driver'}</strong>
+                                            {isInactiveRaceOnlyDriver(winner) ? (
+                                              <span className="status-flag substitute-flag">Substitute / Unauctioned</span>
+                                            ) : null}
                                             <div className="muted small">
                                               {winner.team_name || 'Team N/A'}
                                               {' • '}
@@ -456,6 +463,9 @@ export default function Events() {
                               showCode={false}
                               showTeam
                             />
+                            {isInactiveRaceOnlyDriver(result) ? (
+                              <span className="status-flag substitute-flag">Substitute / Unauctioned</span>
+                            ) : null}
                           </span>
                           <span className="muted">Started {result.start_position ?? 'N/A'}</span>
                         </li>

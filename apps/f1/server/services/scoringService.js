@@ -278,9 +278,40 @@ function rescoreSeasonEvents({ seasonId }) {
   };
 }
 
+function ensureSeasonDriverForResultRow(seasonId, row) {
+  const externalDriverId = Number(row?.external_driver_id);
+  if (!Number.isFinite(externalDriverId)) return null;
+
+  const existing = db.prepare(`
+    SELECT id
+    FROM drivers
+    WHERE season_id = ? AND external_id = ?
+    LIMIT 1
+  `).get(seasonId, externalDriverId);
+  if (existing?.id) return existing.id;
+
+  const driverName = String(row?.driver_name || row?.driver_code || `Driver ${externalDriverId}`).trim();
+  const driverCode = String(row?.driver_code || '').trim() || null;
+  const teamName = String(row?.team_name || 'Unknown Team').trim();
+
+  const insert = db.prepare(`
+    INSERT INTO drivers (season_id, external_id, code, name, team_name, active)
+    VALUES (?, ?, ?, ?, ?, 0)
+  `).run(seasonId, externalDriverId, driverCode, driverName, teamName);
+
+  return insert.lastInsertRowid;
+}
+
 function upsertEventResults({ seasonId, eventId, rows, manualOverride = false }) {
   const event = getEventById(seasonId, eventId);
   if (!event) return { ok: false, status: 404, error: 'Event not found' };
+
+  db.transaction(() => {
+    (rows || []).forEach((row) => {
+      if (row?.driver_id || row?.external_driver_id == null) return;
+      ensureSeasonDriverForResultRow(seasonId, row);
+    });
+  })();
 
   const driversByExternal = new Map(
     db.prepare('SELECT id, external_id FROM drivers WHERE season_id = ?').all(seasonId)

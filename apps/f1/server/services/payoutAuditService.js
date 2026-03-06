@@ -110,6 +110,7 @@ function buildEventPayoutAudit({ seasonId, eventId }) {
         driver_code: row?.driver_code || null,
         driver_name: row?.driver_name || null,
         team_name: row?.team_name || null,
+        driver_active: row?.driver_active ?? 1,
         finish_position: row?.finish_position ?? null,
         start_position: row?.start_position ?? null,
         positions_gained: row?.positions_gained ?? null,

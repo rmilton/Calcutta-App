@@ -31,6 +31,7 @@ test('results admin syncNext maps force flag to includeFuture/ignoreLock behavio
   const {
     db,
     getActiveSeasonId,
+    getProviderSyncStates,
     resultsAdminService,
   } = setupDb();
 
@@ -76,6 +77,7 @@ test('results admin manual save forces scoring path and persists results', () =>
   const {
     db,
     getActiveSeasonId,
+    getProviderSyncStates,
     resultsAdminService,
   } = setupDb();
 
@@ -106,6 +108,7 @@ test('results admin refreshDrivers updates seeded drivers without changing ident
   const {
     db,
     getActiveSeasonId,
+    getProviderSyncStates,
     resultsAdminService,
   } = setupDb();
 
@@ -162,6 +165,111 @@ test('results admin refreshDrivers updates seeded drivers without changing ident
   assert.notEqual(after.external_id, before.external_id);
   assert.equal(after.external_id, 11);
   assert.equal(after.team_name, 'Oracle Red Bull Racing');
+
+  const driverState = getProviderSyncStates(seasonId).find((row) => row.scope === 'drivers');
+  const driverMeta = JSON.parse(driverState.meta_json);
+  assert.equal(driverMeta.drivers.length, 20);
+  assert.deepEqual(driverMeta.drivers[0], {
+    external_id: 1,
+    code: 'VER',
+    name: 'Max Verstappen',
+    team_name: 'Oracle Red Bull Racing',
+  });
+});
+
+test('results admin refreshDrivers rebuilds clean season roster when provider lineup drifts from the seed', async () => {
+  const {
+    db,
+    getActiveSeasonId,
+    getProviderSyncStates,
+    resultsAdminService,
+  } = setupDb();
+
+  const seasonId = getActiveSeasonId();
+  const provider = {
+    name: 'openf1',
+    async fetchDrivers() {
+      return [
+        { external_id: 1, code: 'VER', name: 'Max Verstappen', team_name: 'Red Bull Racing' },
+        { external_id: 81, code: 'PIA', name: 'Oscar Piastri', team_name: 'McLaren' },
+        { external_id: 43, code: 'LIN', name: 'Arvid Lindblad', team_name: 'Cadillac' },
+      ];
+    },
+  };
+
+  const result = await resultsAdminService.refreshDriversFromProvider({
+    seasonId,
+    provider,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.count, 3);
+
+  const drivers = db.prepare(`
+    SELECT code, name, team_name, external_id
+    FROM drivers
+    WHERE season_id = ?
+    ORDER BY id ASC
+  `).all(seasonId);
+  assert.equal(drivers.length, 3);
+  assert.deepEqual(drivers[2], {
+    code: 'LIN',
+    name: 'Arvid Lindblad',
+    team_name: 'Cadillac',
+    external_id: 43,
+  });
+  assert.equal(db.prepare('SELECT COUNT(*) as c FROM auction_items WHERE season_id = ?').get(seasonId).c, 3);
+
+  const driverState = getProviderSyncStates(seasonId).find((row) => row.scope === 'drivers');
+  const driverMeta = JSON.parse(driverState.meta_json);
+  assert.equal(driverState.status, 'success');
+  assert.equal(driverMeta.source, 'authoritative-rebuild');
+  assert.equal(driverMeta.drivers.length, 3);
+});
+
+test('results admin refreshDrivers still fails closed on roster drift after season activity exists', async () => {
+  const {
+    db,
+    getActiveSeasonId,
+    getProviderSyncStates,
+    resultsAdminService,
+  } = setupDb();
+
+  const seasonId = getActiveSeasonId();
+  const participantId = db.prepare(`
+    INSERT INTO participants (name, color, session_token)
+    VALUES ('Refresh Lock Tester', '#ffffff', 'refresh-lock-token')
+  `).run().lastInsertRowid;
+  db.prepare('INSERT INTO season_participants (season_id, participant_id) VALUES (?, ?)').run(seasonId, participantId);
+
+  const driver = db.prepare('SELECT id FROM drivers WHERE season_id = ? ORDER BY id ASC LIMIT 1').get(seasonId);
+  db.prepare(`
+    INSERT INTO ownership (season_id, driver_id, participant_id, purchase_price_cents)
+    VALUES (?, ?, ?, ?)
+  `).run(seasonId, driver.id, participantId, 500);
+
+  const provider = {
+    name: 'openf1',
+    async fetchDrivers() {
+      return [
+        { external_id: 1, code: 'VER', name: 'Max Verstappen', team_name: 'Red Bull Racing' },
+        { external_id: 43, code: 'LIN', name: 'Arvid Lindblad', team_name: 'Cadillac' },
+      ];
+    },
+  };
+
+  const result = await resultsAdminService.refreshDriversFromProvider({
+    seasonId,
+    provider,
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.status, 400);
+
+  const driverState = getProviderSyncStates(seasonId).find((row) => row.scope === 'drivers');
+  const driverMeta = JSON.parse(driverState.meta_json);
+  assert.equal(driverState.status, 'error');
+  assert.equal(driverMeta.seasonActivity.ownership, 1);
 });
 
 test('results admin refreshSchedule updates matching seeded events with provider keys', async () => {
@@ -846,4 +954,66 @@ test('results admin resetAuctionOnlyForSeason preserves participants and race da
   assert.ok(auctionItems.every((item) => item.final_price_cents == null));
   assert.ok(auctionItems.every((item) => item.winner_id == null));
   assert.deepEqual(auctionItems.map((item) => item.queue_order), auctionItems.map((_, idx) => idx));
+});
+
+test('results admin restoreSeededSeasonMetadata rebuilds canonical 2026 drivers and events', () => {
+  const {
+    db,
+    getActiveSeasonId,
+    resultsAdminService,
+  } = setupDb();
+
+  const seasonId = getActiveSeasonId();
+
+  db.prepare(`
+    INSERT INTO drivers (season_id, external_id, code, name, team_name, active)
+    VALUES (?, 999, 'TST', 'Test Driver', 'Test Team', 1)
+  `).run(seasonId);
+  db.prepare(`
+    INSERT INTO events (season_id, external_event_id, round_number, name, type, starts_at, lock_at)
+    VALUES (?, 'test-event', 99, 'Test Event', 'grand_prix', '2026-01-01T00:00:00Z', '2025-12-31T23:50:00Z')
+  `).run(seasonId);
+
+  const participantId = db.prepare(`
+    INSERT INTO participants (name, color, session_token)
+    VALUES ('Restore Tester', '#ffffff', 'restore-token')
+  `).run().lastInsertRowid;
+  db.prepare('INSERT INTO season_participants (season_id, participant_id) VALUES (?, ?)').run(seasonId, participantId);
+
+  const result = resultsAdminService.restoreSeededSeasonMetadata({
+    seasonId,
+    io: null,
+    auctionService: { clearActiveTimer() {} },
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.driverCount, 20);
+  assert.equal(result.eventCount, 24);
+  assert.equal(db.prepare('SELECT COUNT(*) as c FROM drivers WHERE season_id = ?').get(seasonId).c, 20);
+  assert.equal(db.prepare('SELECT COUNT(*) as c FROM events WHERE season_id = ?').get(seasonId).c, 24);
+  assert.equal(db.prepare('SELECT COUNT(*) as c FROM auction_items WHERE season_id = ?').get(seasonId).c, 20);
+  assert.equal(db.prepare('SELECT COUNT(*) as c FROM season_participants WHERE season_id = ?').get(seasonId).c, 0);
+
+  const restoredDriver = db.prepare(`
+    SELECT code, name, team_name, external_id
+    FROM drivers
+    WHERE season_id = ? AND code = 'VER'
+  `).get(seasonId);
+  assert.deepEqual(restoredDriver, {
+    code: 'VER',
+    name: 'Max Verstappen',
+    team_name: 'Red Bull',
+    external_id: 1,
+  });
+
+  const restoredEvent = db.prepare(`
+    SELECT round_number, name, type
+    FROM events
+    WHERE season_id = ? AND round_number = 1 AND type = 'grand_prix'
+  `).get(seasonId);
+  assert.deepEqual(restoredEvent, {
+    round_number: 1,
+    name: 'Australian Grand Prix',
+    type: 'grand_prix',
+  });
 });

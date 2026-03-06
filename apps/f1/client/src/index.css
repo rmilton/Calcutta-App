@@ -1591,6 +1591,73 @@ tbody tr:hover {
   min-height: 112px;
 }
 
+.admin-collapsible {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-sm);
+  background: rgba(10, 14, 20, 0.56);
+  overflow: hidden;
+}
+
+.admin-collapsible + .admin-collapsible {
+  margin-top: var(--space-3);
+}
+
+.admin-collapsible-summary {
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  cursor: pointer;
+  padding: 0.7rem 0.8rem;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.admin-collapsible-summary::-webkit-details-marker {
+  display: none;
+}
+
+.admin-collapsible-summary strong {
+  display: block;
+}
+
+.admin-collapsible-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.admin-collapsible-time {
+  font-size: var(--text-xs);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.admin-collapsible-count {
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  padding: 0.22rem 0.5rem;
+  border-radius: var(--radius-sm);
+}
+
+.admin-collapsible > .muted.small,
+.admin-collapsible > .list {
+  margin: 0;
+}
+
+.admin-collapsible > .muted.small {
+  padding: 0 0.8rem 0.8rem;
+}
+
+.admin-sync-list {
+  padding: 0.8rem;
+}
+
 .bps-summary {
   margin-top: var(--space-2);
   display: flex;
@@ -1677,6 +1744,25 @@ tbody tr:hover {
 .audit-rule-detail {
   border-top: 1px solid rgba(255, 255, 255, 0.1);
   padding-top: var(--space-2);
+}
+
+.status-flag {
+  display: inline-flex;
+  align-items: center;
+  margin-left: var(--space-2);
+  padding: 0.12rem 0.42rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  font-size: var(--text-xs);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.substitute-flag {
+  color: #d7c39a;
+  border-color: rgba(215, 195, 154, 0.38);
+  background: rgba(215, 195, 154, 0.08);
 }
 
 .audit-winner-list {

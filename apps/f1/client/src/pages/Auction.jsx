@@ -109,6 +109,10 @@ export default function Auction() {
   const [bidInput, setBidInput] = useState('');
   const [bidError, setBidError] = useState('');
   const [soldNotice, setSoldNotice] = useState(null);
+  const [auctionBudgetCapCents, setAuctionBudgetCapCents] = useState(0);
+  const [participantSpentCents, setParticipantSpentCents] = useState(0);
+  const [participantReservedBidCents, setParticipantReservedBidCents] = useState(0);
+  const [participantRemainingCents, setParticipantRemainingCents] = useState(0);
 
   const refresh = useCallback(async () => {
     const response = await api('/auction');
@@ -117,6 +121,10 @@ export default function Auction() {
     setActive(data.active);
     setItems(data.items || []);
     setRecentBids(data.recentBids || []);
+    setAuctionBudgetCapCents(data.auctionBudgetCapCents || 0);
+    setParticipantSpentCents(data.participantSpentCents || 0);
+    setParticipantReservedBidCents(data.participantReservedBidCents || 0);
+    setParticipantRemainingCents(data.participantRemainingCents || 0);
   }, []);
 
   useEffect(() => {
@@ -144,6 +152,10 @@ export default function Auction() {
     setActive(payload.active || null);
     setItems(payload.items || []);
     setRecentBids(payload.recentBids || []);
+    setAuctionBudgetCapCents(payload.auctionBudgetCapCents || 0);
+    setParticipantSpentCents(payload.participantSpentCents || 0);
+    setParticipantReservedBidCents(payload.participantReservedBidCents || 0);
+    setParticipantRemainingCents(payload.participantRemainingCents || 0);
   }, []));
 
   useSocketEvent('auction:started', useCallback(() => {
@@ -163,7 +175,8 @@ export default function Auction() {
     setRecentBids(payload.recentBids || []);
     setBidError('');
     setBidInput('');
-  }, []));
+    refresh().catch(() => {});
+  }, [refresh]));
 
   useSocketEvent('auction:sold', useCallback((payload) => {
     setSoldNotice({
@@ -273,6 +286,9 @@ export default function Auction() {
     [soldByOwner]
   );
   const auctionComplete = auctionStatus === 'complete';
+  const quickBidCents = (active?.current_price_cents || 0) + 100;
+  const maxAvailableBidCents = Math.max(0, auctionBudgetCapCents - participantSpentCents);
+  const quickBidWouldExceedBudget = canPlaceBid && quickBidCents > maxAvailableBidCents;
 
   const submitBid = (event) => {
     event.preventDefault();
@@ -286,10 +302,12 @@ export default function Auction() {
       setBidError('Enter a valid bid amount.');
       return;
     }
+    if (value > maxAvailableBidCents) {
+      setBidError(`Bid exceeds your remaining cap. Maximum available bid is ${fmtCents(maxAvailableBidCents)}.`);
+      return;
+    }
     socket?.emit('auction:bid', { amountCents: value });
   };
-
-  const quickBidCents = (active?.current_price_cents || 0) + 100;
 
   const submitQuickBid = () => {
     setBidError('');
@@ -298,6 +316,10 @@ export default function Auction() {
       return;
     }
     if (!active) return;
+    if (quickBidCents > maxAvailableBidCents) {
+      setBidError(`Quick bid exceeds your remaining cap. Maximum available bid is ${fmtCents(maxAvailableBidCents)}.`);
+      return;
+    }
     socket?.emit('auction:bid', { amountCents: quickBidCents });
   };
 
@@ -313,8 +335,10 @@ export default function Auction() {
           <strong>{pendingCount}</strong>
         </div>
         <div className="strip-item">
-          <span className="label">Auction Purse</span>
-          <strong>{fmtCents(auctionPurseCents)}</strong>
+          <span className="label">{canPlaceBid ? 'Remaining Budget' : 'Auction Purse'}</span>
+          <strong className={canPlaceBid && participantRemainingCents < 0 ? 'text-neg' : ''}>
+            {canPlaceBid ? fmtCents(participantRemainingCents) : fmtCents(auctionPurseCents)}
+          </strong>
         </div>
       </section>
 
@@ -350,6 +374,7 @@ export default function Auction() {
                 className="btn btn-outline quick-bid-btn"
                 type="button"
                 onClick={submitQuickBid}
+                disabled={!active || quickBidWouldExceedBudget}
               >
                 Quick +$1
               </button>
@@ -358,6 +383,11 @@ export default function Auction() {
           ) : (
             <p className="muted">Admin view only. Bidding is disabled for admin accounts.</p>
           )}
+          {canPlaceBid ? (
+            <p className="muted small">
+              Cap {fmtCents(auctionBudgetCapCents)} • Spent {fmtCents(participantSpentCents)} • Reserved {fmtCents(participantReservedBidCents)}
+            </p>
+          ) : null}
           {bidError ? <p className="error-text">{bidError}</p> : null}
         </section>
       ) : null}

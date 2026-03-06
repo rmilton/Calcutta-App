@@ -92,6 +92,11 @@ test('OpenF1ResultsProvider normalizes season schedule and event results', async
       { driver_number: 1, position: 4 },
       { driver_number: 16, position: 2 },
     ],
+    '/v1/pit?session_key=9001': [
+      { driver_number: 1, stop_duration: 2.455 },
+      { driver_number: 1, stop_duration: 3.102 },
+      { driver_number: 16, stop_duration: 2.201 },
+    ],
   };
 
   const provider = new OpenF1ResultsProvider({
@@ -125,8 +130,8 @@ test('OpenF1ResultsProvider normalizes season schedule and event results', async
     event: { external_event_id: '9001' },
   });
   assert.deepEqual(results, [
-    { external_driver_id: 16, finish_position: 1, start_position: 2 },
-    { external_driver_id: 1, finish_position: 2, start_position: 4 },
+    { external_driver_id: 16, finish_position: 1, start_position: 2, slowest_pit_stop_seconds: 2.201 },
+    { external_driver_id: 1, finish_position: 2, start_position: 4, slowest_pit_stop_seconds: 3.102 },
   ]);
 });
 

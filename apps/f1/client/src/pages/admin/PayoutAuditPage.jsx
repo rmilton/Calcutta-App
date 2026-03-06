@@ -25,7 +25,9 @@ function winnerResultSummary(winner) {
   const start = winner?.start_position ?? 'N/A';
   const gain = winner?.positions_gained;
   const gainText = gain == null || gain === '' ? 'N/A' : String(gain);
-  return `Finished ${finish}, started ${start}, gained ${gainText}.`;
+  const pitStop = Number(winner?.slowest_pit_stop_seconds);
+  const pitText = Number.isFinite(pitStop) && pitStop > 0 ? ` Slowest stop ${pitStop.toFixed(3)}s.` : '';
+  return `Finished ${finish}, started ${start}, gained ${gainText}.${pitText}`;
 }
 
 export default function PayoutAuditPage() {
@@ -186,6 +188,9 @@ export default function PayoutAuditPage() {
                                   Start {winner.start_position ?? 'N/A'}
                                   {' • '}
                                   Gain {winner.positions_gained ?? 'N/A'}
+                                  {Number.isFinite(Number(winner.slowest_pit_stop_seconds)) && Number(winner.slowest_pit_stop_seconds) > 0
+                                    ? ` • Slowest stop ${Number(winner.slowest_pit_stop_seconds).toFixed(3)}s`
+                                    : ''}
                                 </div>
                                 <div className="muted small">
                                   Owner: {winner.owner_participant_name || 'Unowned'}

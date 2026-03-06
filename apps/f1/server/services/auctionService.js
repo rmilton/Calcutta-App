@@ -12,7 +12,19 @@ const {
   getRecentBids,
   getAuctionCounts,
   getResolvedAuctionStatus,
+  getParticipantSpendCents,
+  getParticipantReservedBidCents,
+  getParticipantAuctionBudgetSummary,
 } = require('../db');
+
+function formatCurrencyCents(cents) {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  }).format((Number(cents) || 0) / 100);
+}
 
 function createAuctionService(io, options = {}) {
   const autoAdvanceDelayMs = options.autoAdvanceDelayMs ?? 2500;
@@ -207,6 +219,22 @@ function createAuctionService(io, options = {}) {
       return { ok: false, status: 400, error: 'Bid must be higher than current price' };
     }
 
+    const budgetCapCents = Number(settings.auction_budget_cap_cents || 0);
+    const spentCents = getParticipantSpendCents(sid, participant.id);
+    const currentReservedBidCents = getParticipantReservedBidCents(sid, participant.id);
+    const nextReservedBidCents = active.current_leader_id === participant.id ? currentReservedBidCents : bidAmount;
+    const committedCents = spentCents + nextReservedBidCents;
+
+    if (committedCents > budgetCapCents) {
+      const budgetSummary = getParticipantAuctionBudgetSummary(sid, participant.id, budgetCapCents);
+      const availableBidCents = Math.max(0, budgetCapCents - spentCents);
+      return {
+        ok: false,
+        status: 400,
+        error: `Bid exceeds your ${formatCurrencyCents(budgetCapCents)} cap. Remaining budget: ${formatCurrencyCents(budgetSummary.participantRemainingCents)}. Maximum available bid: ${formatCurrencyCents(availableBidCents)}.`,
+      };
+    }
+
     const newEndTime = extendBidEndTime({
       nowMs: Date.now(),
       existingEndTime: active.bid_end_time,
@@ -246,11 +274,22 @@ function createAuctionService(io, options = {}) {
     const sid = seasonId ?? getActiveSeasonId();
     const active = getActiveAuctionItem(sid);
     const auctionStatus = getResolvedAuctionStatus(sid);
+    const settings = getSeasonSettings(sid);
+    const participant = socket?.data?.participant || null;
+    const budgetSummary = participant && !participant.is_admin
+      ? getParticipantAuctionBudgetSummary(sid, participant.id, settings.auction_budget_cap_cents)
+      : {
+        auctionBudgetCapCents: Number(settings.auction_budget_cap_cents || 0),
+        participantSpentCents: 0,
+        participantReservedBidCents: 0,
+        participantRemainingCents: Number(settings.auction_budget_cap_cents || 0),
+      };
     socket.emit('auction:state', {
       auctionStatus,
       active,
       recentBids: active ? getRecentBids(active.driver_id, sid) : [],
       items: getAuctionItems(sid),
+      ...budgetSummary,
     });
   }
 

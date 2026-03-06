@@ -55,7 +55,9 @@ function winnerResultSummary(winner) {
   const start = winner?.start_position ?? 'N/A';
   const gain = winner?.positions_gained;
   const gainText = gain == null || gain === '' ? 'N/A' : String(gain);
-  return `Finished ${finish}, started ${start}, gained ${gainText}.`;
+  const pitStop = Number(winner?.slowest_pit_stop_seconds);
+  const pitText = Number.isFinite(pitStop) && pitStop > 0 ? ` Slowest stop ${pitStop.toFixed(3)}s.` : '';
+  return `Finished ${finish}, started ${start}, gained ${gainText}.${pitText}`;
 }
 
 export default function Events() {

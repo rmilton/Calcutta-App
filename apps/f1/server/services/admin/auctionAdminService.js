@@ -6,6 +6,7 @@ const {
   getSeasonParticipants,
   getAuctionItems,
 } = require('../../db');
+const { shuffleArray } = require('../../lib/shuffle');
 
 function getSettings({ seasonId }) {
   return getSeasonSettings(seasonId);
@@ -58,6 +59,34 @@ function updateAuctionQueue({ seasonId, order }) {
   return { ok: true };
 }
 
+function shufflePendingAuctionQueue({ seasonId, shuffle = shuffleArray }) {
+  const pendingItems = db.prepare(`
+    SELECT id
+    FROM auction_items
+    WHERE season_id = ? AND status = 'pending'
+    ORDER BY queue_order ASC, id ASC
+  `).all(seasonId);
+
+  const update = db.prepare(`
+    UPDATE auction_items
+    SET queue_order = ?
+    WHERE id = ? AND season_id = ? AND status = 'pending'
+  `);
+
+  const shuffled = shuffle(pendingItems);
+  db.transaction(() => {
+    shuffled.forEach((item, idx) => update.run(idx, item.id, seasonId));
+  })();
+
+  return {
+    ok: true,
+    shuffledCount: shuffled.length,
+    message: shuffled.length
+      ? `Shuffled ${shuffled.length} pending drivers.`
+      : 'No pending drivers to shuffle.',
+  };
+}
+
 function setAuctionStatus({ seasonId, status, io }) {
   updateSeasonSettings(seasonId, { auction_status: status });
   io?.emit('auction:status', { status });
@@ -80,6 +109,7 @@ module.exports = {
   removeParticipant,
   listAuctionQueue,
   updateAuctionQueue,
+  shufflePendingAuctionQueue,
   setAuctionStatus,
   startNextAuction,
   closeActiveAuction,

@@ -11,10 +11,12 @@ const {
 const {
   scoreEvent,
   recalcSeasonBonuses,
+  rescoreSeasonEvents,
   upsertEventResults,
   syncEventFromProvider,
   syncNextEventFromProvider,
 } = require('../scoringService');
+const { shuffleArray } = require('../../lib/shuffle');
 
 function normalizeText(value) {
   return String(value || '').replace(/\s+/g, ' ').trim().toLowerCase();
@@ -454,12 +456,14 @@ async function loadHistoricalSeasonMetadata({ seasonId, provider, year, io, auct
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
 
+    const insertedDriverIds = [];
+
     db.transaction(() => {
       deleteAuctionItems.run(seasonId);
       deleteDrivers.run(seasonId);
       deleteEvents.run(seasonId);
 
-      drivers.forEach((driver, idx) => {
+      drivers.forEach((driver) => {
         const insert = insertDriver.run(
           seasonId,
           driver.external_id,
@@ -467,7 +471,11 @@ async function loadHistoricalSeasonMetadata({ seasonId, provider, year, io, auct
           driver.name,
           driver.team_name,
         );
-        insertAuctionItem.run(seasonId, insert.lastInsertRowid, idx);
+        insertedDriverIds.push(insert.lastInsertRowid);
+      });
+
+      shuffleArray(insertedDriverIds).forEach((driverId, idx) => {
+        insertAuctionItem.run(seasonId, driverId, idx);
       });
 
       events.forEach((event) => {
@@ -562,6 +570,13 @@ function recalcSeasonBonusesForSeason({ seasonId, io }) {
   return { ok: true, ...result };
 }
 
+function rescoreSeasonEventsForSeason({ seasonId, io }) {
+  const result = rescoreSeasonEvents({ seasonId });
+  if (!result.ok) return result;
+  io?.emit('standings:update');
+  return { ok: true, ...result, message: `Rescored ${result.rescoredEvents} scored events under the current rule set.` };
+}
+
 function getSeasonBonusPayouts({ seasonId }) {
   const rows = db.prepare(`
     SELECT sbp.id, sbp.category, sbp.amount_cents, sbp.tie_count,
@@ -597,5 +612,6 @@ module.exports = {
   getEventEditorData,
   saveManualResultsAndScore,
   recalcSeasonBonusesForSeason,
+  rescoreSeasonEventsForSeason,
   getSeasonBonusPayouts,
 };

@@ -115,6 +115,73 @@ test('random bonus position is immutable after first scoring', () => {
   assert.equal(secondDraw, firstDraw);
 });
 
+test('season settings default auction budget cap is $200', () => {
+  const { getActiveSeasonId, getSeasonSettings } = setupDb();
+  const seasonId = getActiveSeasonId();
+  const settings = getSeasonSettings(seasonId);
+  assert.equal(settings.auction_budget_cap_cents, 20000);
+});
+
+test('slowest pit stop payout uses highest recorded stop duration', () => {
+  const {
+    db,
+    getActiveSeasonId,
+    upsertEventResults,
+    scoreEvent,
+  } = setupDb();
+
+  const seasonId = getActiveSeasonId();
+  const event = db.prepare(`
+    SELECT id
+    FROM events
+    WHERE season_id = ? AND type = 'grand_prix'
+    ORDER BY round_number ASC
+    LIMIT 1
+  `).get(seasonId);
+  db.prepare('UPDATE events SET lock_at = ? WHERE id = ?').run('2000-01-01T00:00:00Z', event.id);
+
+  const participantId = db.prepare(`
+    INSERT INTO participants (name, color, session_token)
+    VALUES ('Pit-Tester', '#ff8a65', 'tok-pit')
+  `).run().lastInsertRowid;
+  db.prepare('INSERT INTO season_participants (season_id, participant_id) VALUES (?, ?)').run(seasonId, participantId);
+
+  const [d1, d2] = db.prepare(`
+    SELECT id, external_id
+    FROM drivers
+    WHERE season_id = ?
+    ORDER BY external_id ASC
+    LIMIT 2
+  `).all(seasonId);
+
+  db.prepare(`
+    INSERT INTO ownership (season_id, driver_id, participant_id, purchase_price_cents)
+    VALUES (?, ?, ?, ?)
+  `).run(seasonId, d2.id, participantId, 1000);
+
+  upsertEventResults({
+    seasonId,
+    eventId: event.id,
+    rows: [
+      { external_driver_id: d1.external_id, finish_position: 5, start_position: 3, slowest_pit_stop_seconds: 2.411 },
+      { external_driver_id: d2.external_id, finish_position: 9, start_position: 8, slowest_pit_stop_seconds: 6.834 },
+    ],
+  });
+
+  const score = scoreEvent({ seasonId, eventId: event.id });
+  assert.equal(score.ok, true);
+
+  const payout = db.prepare(`
+    SELECT participant_id, driver_id, amount_cents
+    FROM event_payouts
+    WHERE season_id = ? AND event_id = ? AND category = 'slowest_pit_stop'
+  `).get(seasonId, event.id);
+
+  assert.equal(payout.participant_id, participantId);
+  assert.equal(payout.driver_id, d2.id);
+  assert.equal(payout.amount_cents, 3);
+});
+
 test('auction lifecycle sells driver and records ownership', () => {
   const {
     db,
@@ -147,6 +214,109 @@ test('auction lifecycle sells driver and records ownership', () => {
 
   const ownershipCount = db.prepare('SELECT COUNT(*) as c FROM ownership WHERE season_id = ?').get(seasonId).c;
   assert.equal(ownershipCount, 1);
+});
+
+test('auction rejects bids that exceed participant budget cap', () => {
+  const {
+    db,
+    getActiveSeasonId,
+    createAuctionService,
+  } = setupDb();
+
+  const seasonId = getActiveSeasonId();
+  const participantId = db.prepare("INSERT INTO participants (name, color, session_token) VALUES ('Budget Bob', '#22aaee', 'tok-budget')").run().lastInsertRowid;
+  db.prepare('INSERT INTO season_participants (season_id, participant_id) VALUES (?, ?)').run(seasonId, participantId);
+
+  const driver = db.prepare('SELECT id FROM drivers WHERE season_id = ? ORDER BY external_id ASC LIMIT 1').get(seasonId);
+  db.prepare(`
+    INSERT INTO ownership (season_id, driver_id, participant_id, purchase_price_cents)
+    VALUES (?, ?, ?, ?)
+  `).run(seasonId, driver.id, participantId, 19900);
+
+  const io = { emit: () => {} };
+  const auction = createAuctionService(io, {
+    setTimeoutFn: () => 0,
+    clearTimeoutFn: () => {},
+  });
+
+  assert.equal(auction.startAuction({ seasonId }).ok, true);
+  const participant = db.prepare('SELECT * FROM participants WHERE id = ?').get(participantId);
+  const bid = auction.placeBid({ participant, amountCents: 200 });
+  assert.equal(bid.ok, false);
+  assert.match(bid.error, /exceeds your \$200 cap/i);
+});
+
+test('auction budget summary counts current live high bid as reserved commitment', () => {
+  const {
+    db,
+    getActiveSeasonId,
+    getSeasonSettings,
+    getParticipantAuctionBudgetSummary,
+    createAuctionService,
+  } = setupDb();
+
+  const seasonId = getActiveSeasonId();
+  const participantId = db.prepare("INSERT INTO participants (name, color, session_token) VALUES ('Reserve Rita', '#33aa55', 'tok-reserve')").run().lastInsertRowid;
+  db.prepare('INSERT INTO season_participants (season_id, participant_id) VALUES (?, ?)').run(seasonId, participantId);
+
+  const io = { emit: () => {} };
+  const auction = createAuctionService(io, {
+    setTimeoutFn: () => 0,
+    clearTimeoutFn: () => {},
+  });
+
+  assert.equal(auction.startAuction({ seasonId }).ok, true);
+  const participant = db.prepare('SELECT * FROM participants WHERE id = ?').get(participantId);
+  assert.equal(auction.placeBid({ participant, amountCents: 4500 }).ok, true);
+
+  const settings = getSeasonSettings(seasonId);
+  const budget = getParticipantAuctionBudgetSummary(seasonId, participantId, settings.auction_budget_cap_cents);
+  assert.equal(budget.participantSpentCents, 0);
+  assert.equal(budget.participantReservedBidCents, 4500);
+  assert.equal(budget.participantRemainingCents, 15500);
+});
+
+test('existing over-cap ownership blocks future bids without rewriting prior data', () => {
+  const {
+    db,
+    getActiveSeasonId,
+    createAuctionService,
+  } = setupDb();
+
+  const seasonId = getActiveSeasonId();
+  const participantId = db.prepare("INSERT INTO participants (name, color, session_token) VALUES ('Over Cap Owen', '#cc6622', 'tok-overcap')").run().lastInsertRowid;
+  db.prepare('INSERT INTO season_participants (season_id, participant_id) VALUES (?, ?)').run(seasonId, participantId);
+
+  const [driverA, driverB] = db.prepare('SELECT id FROM drivers WHERE season_id = ? ORDER BY external_id ASC LIMIT 2').all(seasonId);
+  db.prepare(`
+    INSERT INTO ownership (season_id, driver_id, participant_id, purchase_price_cents)
+    VALUES (?, ?, ?, ?)
+  `).run(seasonId, driverA.id, participantId, 21000);
+
+  const io = { emit: () => {} };
+  const auction = createAuctionService(io, {
+    setTimeoutFn: () => 0,
+    clearTimeoutFn: () => {},
+  });
+
+  db.prepare(`
+    UPDATE auction_items
+    SET queue_order = CASE WHEN driver_id = ? THEN 0 ELSE queue_order + 1 END
+    WHERE season_id = ?
+  `).run(driverB.id, seasonId);
+
+  assert.equal(auction.startAuction({ seasonId, driverId: driverB.id }).ok, true);
+  const participant = db.prepare('SELECT * FROM participants WHERE id = ?').get(participantId);
+  const bid = auction.placeBid({ participant, amountCents: 100 });
+  assert.equal(bid.ok, false);
+  assert.match(bid.error, /remaining budget/i);
+
+  const ownershipAmount = db.prepare(`
+    SELECT purchase_price_cents
+    FROM ownership
+    WHERE season_id = ? AND driver_id = ? AND participant_id = ?
+  `).get(seasonId, driverA.id, participantId).purchase_price_cents;
+  assert.equal(ownershipAmount, 21000);
 });
 
 test('random bonus draw ranges follow payout model v2 bounds by event type', () => {

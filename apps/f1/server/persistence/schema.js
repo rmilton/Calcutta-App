@@ -20,6 +20,7 @@ function ensureSchema(db) {
       auction_grace_seconds INTEGER NOT NULL DEFAULT 15,
       auction_status TEXT NOT NULL DEFAULT 'waiting',
       auction_auto_advance INTEGER NOT NULL DEFAULT 0,
+      auction_budget_cap_cents INTEGER NOT NULL DEFAULT 20000,
       payout_model_version INTEGER NOT NULL DEFAULT 1,
       season_random_bonus_position INTEGER,
       season_random_bonus_drawn_at INTEGER,
@@ -109,6 +110,7 @@ function ensureSchema(db) {
       finish_position INTEGER NOT NULL,
       start_position INTEGER,
       positions_gained INTEGER,
+      slowest_pit_stop_seconds REAL,
       is_manual_override INTEGER NOT NULL DEFAULT 0,
       updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
       UNIQUE(event_id, driver_id)
@@ -180,6 +182,12 @@ function ensureSchema(db) {
   }
   if (!columnExists(db, 'seasons', 'season_random_bonus_drawn_at')) {
     db.exec('ALTER TABLE seasons ADD COLUMN season_random_bonus_drawn_at INTEGER');
+  }
+  if (!columnExists(db, 'seasons', 'auction_budget_cap_cents')) {
+    db.exec('ALTER TABLE seasons ADD COLUMN auction_budget_cap_cents INTEGER NOT NULL DEFAULT 20000');
+  }
+  if (!columnExists(db, 'event_results', 'slowest_pit_stop_seconds')) {
+    db.exec('ALTER TABLE event_results ADD COLUMN slowest_pit_stop_seconds REAL');
   }
 }
 

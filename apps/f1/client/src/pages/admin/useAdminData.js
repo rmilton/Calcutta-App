@@ -8,6 +8,7 @@ import {
   readApi,
   readProviderStatus,
   recalcSeasonBonuses as recalcSeasonBonusesApi,
+  rescoreSeasonEvents as rescoreSeasonEventsApi,
   refreshDrivers as refreshDriversApi,
   refreshSchedule as refreshScheduleApi,
   runAuctionAction as runAuctionActionApi,
@@ -128,6 +129,16 @@ export default function useAdminData() {
     }
   }, [loadAll]);
 
+  const rescoreSeasonEvents = useCallback(async () => {
+    try {
+      const result = await rescoreSeasonEventsApi();
+      setMessage(result.message || 'Scored events rescored.');
+      await loadAll({ silent: true });
+    } catch (error) {
+      setMessage(error.message || 'Season rescore failed.');
+    }
+  }, [loadAll]);
+
   const clearAllTestData = useCallback(async () => {
     try {
       const result = await clearAllTestDataApi();
@@ -190,6 +201,7 @@ export default function useAdminData() {
     syncNext,
     syncEvent,
     recalcSeasonBonuses,
+    rescoreSeasonEvents,
     updateRules,
     saveRules,
   }), [
@@ -212,6 +224,7 @@ export default function useAdminData() {
     syncNext,
     syncEvent,
     recalcSeasonBonuses,
+    rescoreSeasonEvents,
     updateRules,
     saveRules,
   ]);

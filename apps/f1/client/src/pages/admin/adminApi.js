@@ -9,10 +9,16 @@ async function parseApiResponse(response, fallbackMessage) {
 }
 
 export function normalizeSettingsPayload(settings) {
+  const rawBudgetCap = settings?.auction_budget_cap_cents;
+  const budgetCapDollars = typeof rawBudgetCap === 'string'
+    ? Number(rawBudgetCap)
+    : Number(rawBudgetCap || 0) / 100;
+
   return {
     auction_timer_seconds: Number(settings?.auction_timer_seconds) || 30,
     auction_grace_seconds: Number(settings?.auction_grace_seconds) || 15,
     auction_auto_advance: settings?.auction_auto_advance ? 1 : 0,
+    auction_budget_cap_cents: Math.max(0, Math.round((Number.isFinite(budgetCapDollars) ? budgetCapDollars : 200) * 100)),
   };
 }
 
@@ -101,6 +107,14 @@ export async function recalcSeasonBonuses() {
     body: '{}',
   });
   return parseApiResponse(response, 'Recalculation failed');
+}
+
+export async function rescoreSeasonEvents() {
+  const response = await api('/admin/results/rescore-season-events', {
+    method: 'POST',
+    body: '{}',
+  });
+  return parseApiResponse(response, 'Season rescore failed');
 }
 
 export async function savePayoutRules(payload) {

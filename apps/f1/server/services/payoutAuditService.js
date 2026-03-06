@@ -113,6 +113,7 @@ function buildEventPayoutAudit({ seasonId, eventId }) {
         finish_position: row?.finish_position ?? null,
         start_position: row?.start_position ?? null,
         positions_gained: row?.positions_gained ?? null,
+        slowest_pit_stop_seconds: row?.slowest_pit_stop_seconds ?? null,
         owner_participant_id: ownerParticipantId,
         owner_participant_name: ownerParticipant?.name || null,
         split_share_cents: splitShareCents,

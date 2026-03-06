@@ -35,6 +35,20 @@ function mostPositionsGained(rows, denseRank) {
   };
 }
 
+function slowestPitStop(rows) {
+  const eligible = rows.filter((row) => Number.isFinite(Number(row.slowest_pit_stop_seconds)) && Number(row.slowest_pit_stop_seconds) > 0);
+  if (!eligible.length) {
+    return { winnerDriverIds: [], targetDuration: null };
+  }
+  const targetDuration = Math.max(...eligible.map((row) => Number(row.slowest_pit_stop_seconds)));
+  return {
+    winnerDriverIds: eligible
+      .filter((row) => Number(row.slowest_pit_stop_seconds) === targetDuration)
+      .map((row) => row.driver_id),
+    targetDuration,
+  };
+}
+
 function randomPositionWinners(rows, randomPosition) {
   if (!randomPosition) return [];
   return rows
@@ -111,6 +125,18 @@ function evaluateCategoryRule({ category, rows, event, rankOrder = 1 }) {
         },
       };
     }
+    case 'slowest_pit_stop': {
+      const slowestPit = slowestPitStop(rows);
+      return {
+        winnerDriverIds: slowestPit.winnerDriverIds,
+        criteriaText: 'Slowest recorded pit stop',
+        resolution: {
+          metric: 'slowest_pit_stop_seconds',
+          target_value: slowestPit.targetDuration,
+          note: 'Highest OpenF1 stop_duration recorded for a driver in this event',
+        },
+      };
+    }
     case 'second_most_positions_gained': {
       const secondMostGain = mostPositionsGained(rows, rankOrder || 2);
       return {
@@ -154,6 +180,7 @@ module.exports = {
   winnersByFinish,
   bestFinisherAtOrBelow,
   mostPositionsGained,
+  slowestPitStop,
   randomPositionWinners,
   resolveCategoryWinners,
   evaluateCategoryRule,

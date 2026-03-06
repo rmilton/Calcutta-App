@@ -101,6 +101,12 @@ router.post('/auction/close', withAdmin, (req, res) => {
   return runAndRespond(res, result, () => ({ ok: true }));
 });
 
+router.post('/auction/shuffle', withAdmin, (req, res) => {
+  const seasonId = getActiveSeasonId();
+  const result = auctionAdminService.shufflePendingAuctionQueue({ seasonId });
+  return runAndRespond(res, result, (payload) => ({ ok: true, ...payload }));
+});
+
 router.get('/payout-rules', withAdmin, (req, res) => {
   const seasonId = getActiveSeasonId();
   return res.json(payoutRulesAdminService.getPayoutRulesForSeason({ seasonId }));
@@ -243,6 +249,15 @@ router.patch('/results/event/:id', withAdmin, (req, res) => {
 router.post('/results/recalc-season-bonuses', withAdmin, (req, res) => {
   const seasonId = getActiveSeasonId();
   const result = resultsAdminService.recalcSeasonBonusesForSeason({
+    seasonId,
+    io: req.app.get('io'),
+  });
+  return runAndRespond(res, result, (payload) => ({ ok: true, ...payload }));
+});
+
+router.post('/results/rescore-season-events', withAdmin, (req, res) => {
+  const seasonId = getActiveSeasonId();
+  const result = resultsAdminService.rescoreSeasonEventsForSeason({
     seasonId,
     io: req.app.get('io'),
   });

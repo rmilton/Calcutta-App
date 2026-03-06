@@ -20,11 +20,13 @@ test('admin api helper normalizes settings and rules payloads', async () => {
     auction_timer_seconds: '45',
     auction_grace_seconds: '15',
     auction_auto_advance: true,
+    auction_budget_cap_cents: '250',
   });
   assert.deepEqual(settings, {
     auction_timer_seconds: 45,
     auction_grace_seconds: 15,
     auction_auto_advance: 1,
+    auction_budget_cap_cents: 25000,
   });
 
   const rules = normalizeRulesPayload({

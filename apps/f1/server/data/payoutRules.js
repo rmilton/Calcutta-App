@@ -8,7 +8,7 @@ const EVENT_RULES = {
     { category: 'best_p6_or_lower', label: 'Best Finisher P6 or Lower', bps: 50, rank_order: 1 },
     { category: 'best_p11_or_lower', label: 'Best Finisher P11 or Lower', bps: 50, rank_order: 1 },
     { category: 'most_positions_gained', label: 'Most Positions Gained', bps: 50, rank_order: 1 },
-    { category: 'second_most_positions_gained', label: '2nd Most Positions Gained', bps: 25, rank_order: 2 },
+    { category: 'slowest_pit_stop', label: 'Slowest Pit Stop', bps: 25, rank_order: 1 },
     { category: 'random_finish_bonus', label: 'Random Finishing Position Bonus (P4+)', bps: 75, rank_order: 1 },
   ],
   sprint: [

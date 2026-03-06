@@ -48,6 +48,7 @@ export const categoryLabel = (category) => {
     best_p6_or_lower: 'Best P6+',
     best_p11_or_lower: 'Best P11+',
     most_positions_gained: 'Most Positions Gained',
+    slowest_pit_stop: 'Slowest Pit Stop',
     second_most_positions_gained: '2nd Most Positions Gained',
     random_finish_bonus: 'Random Position Bonus',
     drivers_champion: 'Drivers Champion',
@@ -70,6 +71,7 @@ export const auditRuleSummary = (category, { randomBonusPosition } = {}) => {
     best_p6_or_lower: 'Pays the best finisher from positions 6 through 20.',
     best_p11_or_lower: 'Pays the best finisher from positions 11 through 20.',
     most_positions_gained: 'Pays the driver with the most positions gained.',
+    slowest_pit_stop: 'Pays the driver with the slowest recorded pit stop duration from OpenF1 pit data.',
     second_most_positions_gained: 'Pays the driver with the second-most positions gained.',
     random_finish_bonus: randomBonusPosition
       ? `Pays the driver who finished in random position ${randomBonusPosition}.`

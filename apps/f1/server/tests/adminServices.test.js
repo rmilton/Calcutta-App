@@ -13,7 +13,8 @@ function freshModules() {
   const dbModule = require('../db');
   const resultsAdminService = require('../services/admin/resultsAdminService');
   const payoutRulesAdminService = require('../services/admin/payoutRulesAdminService');
-  return { ...dbModule, resultsAdminService, payoutRulesAdminService };
+  const auctionAdminService = require('../services/admin/auctionAdminService');
+  return { ...dbModule, resultsAdminService, payoutRulesAdminService, auctionAdminService };
 }
 
 function setupDb() {
@@ -259,6 +260,54 @@ test('results admin refreshSchedule matches by round and type when provider name
 
   assert.equal(australianGp.external_event_id, '9901');
   assert.equal(australianGp.name, 'FORMULA 1 LOUIS VUITTON AUSTRALIAN GRAND PRIX 2026');
+});
+
+test('auction admin shufflePendingAuctionQueue reorders pending drivers only', () => {
+  const {
+    db,
+    getActiveSeasonId,
+    auctionAdminService,
+  } = setupDb();
+
+  const seasonId = getActiveSeasonId();
+  const before = db.prepare(`
+    SELECT id, queue_order, status
+    FROM auction_items
+    WHERE season_id = ?
+    ORDER BY queue_order ASC, id ASC
+    LIMIT 5
+  `).all(seasonId);
+
+  db.prepare(`
+    UPDATE auction_items
+    SET status = 'sold'
+    WHERE id = ?
+  `).run(before[0].id);
+
+  const result = auctionAdminService.shufflePendingAuctionQueue({
+    seasonId,
+    shuffle: (items) => [...items].reverse(),
+  });
+  assert.equal(result.ok, true);
+  assert.ok(result.shuffledCount > 0);
+
+  const sold = db.prepare('SELECT queue_order, status FROM auction_items WHERE id = ?').get(before[0].id);
+  assert.equal(sold.status, 'sold');
+  assert.equal(sold.queue_order, before[0].queue_order);
+
+  const pending = db.prepare(`
+    SELECT id, queue_order
+    FROM auction_items
+    WHERE season_id = ? AND status = 'pending'
+    ORDER BY queue_order ASC
+    LIMIT 5
+  `).all(seasonId);
+
+  assert.deepEqual(pending.map((item) => item.queue_order), [0, 1, 2, 3, 4]);
+  assert.notDeepEqual(
+    pending.map((item) => item.id),
+    before.slice(1).map((item) => item.id),
+  );
 });
 
 test('results admin refreshSchedule inserts missing sprint-weekend grand prix rows', async () => {
@@ -583,6 +632,87 @@ test('results admin loadHistoricalSeasonMetadata replaces drivers and events wit
   `).get(seasonId);
   assert.equal(loadedSprint.external_event_id, '2025-2-sprint');
   assert.equal(loadedSprint.name, 'Chinese Grand Prix (Sprint)');
+});
+
+test('results admin rescoreSeasonEventsForSeason rewrites scored event payouts under current rules', () => {
+  const {
+    db,
+    getActiveSeasonId,
+    resultsAdminService,
+  } = setupDb();
+
+  const seasonId = getActiveSeasonId();
+  const event = db.prepare(`
+    SELECT id
+    FROM events
+    WHERE season_id = ? AND type = 'grand_prix'
+    ORDER BY round_number ASC
+    LIMIT 1
+  `).get(seasonId);
+  const [d1, d2] = db.prepare(`
+    SELECT id, external_id
+    FROM drivers
+    WHERE season_id = ?
+    ORDER BY external_id ASC
+    LIMIT 2
+  `).all(seasonId);
+
+  const participantId = db.prepare(`
+    INSERT INTO participants (name, color, session_token)
+    VALUES ('Rescore Tester', '#ffaa00', 'rescore-token')
+  `).run().lastInsertRowid;
+  db.prepare('INSERT INTO season_participants (season_id, participant_id) VALUES (?, ?)').run(seasonId, participantId);
+  db.prepare(`
+    INSERT INTO ownership (season_id, driver_id, participant_id, purchase_price_cents)
+    VALUES (?, ?, ?, ?)
+  `).run(seasonId, d2.id, participantId, 1000);
+
+  db.prepare(`
+    INSERT INTO event_results
+      (event_id, driver_id, finish_position, start_position, positions_gained, slowest_pit_stop_seconds, is_manual_override)
+    VALUES (?, ?, ?, ?, ?, ?, 1)
+  `).run(event.id, d1.id, 3, 2, -1, 2.111);
+  db.prepare(`
+    INSERT INTO event_results
+      (event_id, driver_id, finish_position, start_position, positions_gained, slowest_pit_stop_seconds, is_manual_override)
+    VALUES (?, ?, ?, ?, ?, ?, 1)
+  `).run(event.id, d2.id, 8, 7, -1, 7.456);
+  db.prepare(`
+    UPDATE events
+    SET status = 'scored', lock_at = '2000-01-01T00:00:00Z'
+    WHERE id = ?
+  `).run(event.id);
+
+  db.prepare(`
+    INSERT INTO event_payouts (season_id, event_id, participant_id, driver_id, category, amount_cents, tie_count)
+    VALUES (?, ?, ?, ?, 'second_most_positions_gained', 999, 1)
+  `).run(seasonId, event.id, participantId, d2.id);
+
+  const emitted = [];
+  const result = resultsAdminService.rescoreSeasonEventsForSeason({
+    seasonId,
+    io: { emit: (eventName) => emitted.push(eventName) },
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.rescoredEvents, 1);
+  assert.ok(emitted.includes('standings:update'));
+
+  const stalePayoutCount = db.prepare(`
+    SELECT COUNT(*) as c
+    FROM event_payouts
+    WHERE season_id = ? AND event_id = ? AND category = 'second_most_positions_gained'
+  `).get(seasonId, event.id).c;
+  assert.equal(stalePayoutCount, 0);
+
+  const newPayout = db.prepare(`
+    SELECT participant_id, driver_id, category, amount_cents
+    FROM event_payouts
+    WHERE season_id = ? AND event_id = ? AND category = 'slowest_pit_stop'
+  `).get(seasonId, event.id);
+  assert.equal(newPayout.participant_id, participantId);
+  assert.equal(newPayout.driver_id, d2.id);
+  assert.equal(newPayout.amount_cents, 3);
 });
 
 test('payout rules admin save triggers bonus recalc path and standings update emit', () => {

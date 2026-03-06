@@ -17,6 +17,8 @@ const {
   syncNextEventFromProvider,
 } = require('../scoringService');
 const { shuffleArray } = require('../../lib/shuffle');
+const { DRIVERS_2026 } = require('../../data/drivers2026');
+const { EVENTS_2026 } = require('../../data/events2026');
 
 function normalizeText(value) {
   return String(value || '').replace(/\s+/g, ' ').trim().toLowerCase();
@@ -61,6 +63,68 @@ function saveProviderState(seasonId, scope, providerName, status, message, meta)
 
 function getProviderName(provider) {
   return provider?.name || 'unknown';
+}
+
+function getSeasonActivityCounts(seasonId) {
+  return {
+    bids: db.prepare('SELECT COUNT(*) as c FROM bids WHERE season_id = ?').get(seasonId).c,
+    ownership: db.prepare('SELECT COUNT(*) as c FROM ownership WHERE season_id = ?').get(seasonId).c,
+    eventResults: db.prepare(`
+      SELECT COUNT(*) as c
+      FROM event_results
+      WHERE event_id IN (SELECT id FROM events WHERE season_id = ?)
+    `).get(seasonId).c,
+    eventPayouts: db.prepare('SELECT COUNT(*) as c FROM event_payouts WHERE season_id = ?').get(seasonId).c,
+    seasonBonusPayouts: db.prepare('SELECT COUNT(*) as c FROM season_bonus_payouts WHERE season_id = ?').get(seasonId).c,
+  };
+}
+
+function canAuthoritativelyReplaceDrivers(seasonId) {
+  const counts = getSeasonActivityCounts(seasonId);
+  const isClean = Object.values(counts).every((count) => Number(count) === 0);
+  return { isClean, counts };
+}
+
+function rebuildSeasonDriversFromProvider({ seasonId, providerDrivers, shuffle = shuffleArray }) {
+  const deleteAuctionItems = db.prepare('DELETE FROM auction_items WHERE season_id = ?');
+  const deleteDrivers = db.prepare('DELETE FROM drivers WHERE season_id = ?');
+  const insertDriver = db.prepare(`
+    INSERT INTO drivers (season_id, external_id, code, name, team_name, active)
+    VALUES (?, ?, ?, ?, ?, 1)
+  `);
+  const insertAuctionItem = db.prepare(`
+    INSERT INTO auction_items (season_id, driver_id, queue_order)
+    VALUES (?, ?, ?)
+  `);
+  const resetAuctionStatus = db.prepare(`
+    UPDATE seasons
+    SET auction_status = 'waiting'
+    WHERE id = ?
+  `);
+
+  const insertedDriverIds = [];
+
+  db.transaction(() => {
+    deleteAuctionItems.run(seasonId);
+    deleteDrivers.run(seasonId);
+
+    providerDrivers.forEach((driver) => {
+      const insert = insertDriver.run(
+        seasonId,
+        driver.external_id,
+        driver.code,
+        driver.name,
+        driver.team_name,
+      );
+      insertedDriverIds.push(insert.lastInsertRowid);
+    });
+
+    shuffle(insertedDriverIds).forEach((driverId, idx) => {
+      insertAuctionItem.run(seasonId, driverId, idx);
+    });
+
+    resetAuctionStatus.run(seasonId);
+  })();
 }
 
 function syncNextResults({ seasonId, provider, io, force = false }) {
@@ -131,10 +195,28 @@ async function refreshDriversFromProvider({ seasonId, provider }) {
       .map((driver) => driver.name);
 
     if (unmappedProvider.length || unmatchedSeason.length) {
+      const replacementCheck = canAuthoritativelyReplaceDrivers(seasonId);
+      if (replacementCheck.isClean) {
+        rebuildSeasonDriversFromProvider({ seasonId, providerDrivers });
+        const message = `Rebuilt ${providerDrivers.length} season drivers from ${providerName}.`;
+        saveProviderState(seasonId, 'drivers', providerName, 'success', message, {
+          count: providerDrivers.length,
+          source: 'authoritative-rebuild',
+          drivers: providerDrivers.map((providerDriver) => ({
+            external_id: providerDriver.external_id,
+            code: providerDriver.code,
+            name: providerDriver.name,
+            team_name: providerDriver.team_name,
+          })),
+        });
+        return { ok: true, count: providerDrivers.length, message };
+      }
+
       const message = `Driver mapping failed. Provider unmatched: ${unmappedProvider.length}. Season unmatched: ${unmatchedSeason.length}.`;
       saveProviderState(seasonId, 'drivers', providerName, 'error', message, {
         unmappedProvider,
         unmatchedSeason,
+        seasonActivity: replacementCheck.counts,
       });
       return { ok: false, status: 400, error: message };
     }
@@ -168,6 +250,12 @@ async function refreshDriversFromProvider({ seasonId, provider }) {
     const message = `Refreshed ${matched.length} drivers from ${providerName}.`;
     saveProviderState(seasonId, 'drivers', providerName, 'success', message, {
       count: matched.length,
+      drivers: matched.map(({ provider: providerDriver }) => ({
+        external_id: providerDriver.external_id,
+        code: providerDriver.code,
+        name: providerDriver.name,
+        team_name: providerDriver.team_name,
+      })),
     });
     return { ok: true, count: matched.length, message };
   } catch (error) {
@@ -587,6 +675,78 @@ async function loadHistoricalSeasonMetadata({ seasonId, provider, year, io, auct
   }
 }
 
+function restoreSeededSeasonMetadata({ seasonId, io, auctionService }) {
+  const season = getSeason(seasonId);
+  if (!season) return { ok: false, status: 404, error: 'Season not found' };
+
+  clearTestDataForSeason({ seasonId, io: null, auctionService });
+
+  const deleteAuctionItems = db.prepare('DELETE FROM auction_items WHERE season_id = ?');
+  const deleteDrivers = db.prepare('DELETE FROM drivers WHERE season_id = ?');
+  const deleteEvents = db.prepare('DELETE FROM events WHERE season_id = ?');
+  const insertDriver = db.prepare(`
+    INSERT INTO drivers (season_id, external_id, code, name, team_name, active)
+    VALUES (?, ?, ?, ?, ?, 1)
+  `);
+  const insertAuctionItem = db.prepare(`
+    INSERT INTO auction_items (season_id, driver_id, queue_order)
+    VALUES (?, ?, ?)
+  `);
+  const insertEvent = db.prepare(`
+    INSERT INTO events
+      (season_id, external_event_id, round_number, name, type, starts_at, lock_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  const insertedDriverIds = [];
+
+  db.transaction(() => {
+    deleteAuctionItems.run(seasonId);
+    deleteDrivers.run(seasonId);
+    deleteEvents.run(seasonId);
+
+    DRIVERS_2026.forEach((driver) => {
+      const insert = insertDriver.run(
+        seasonId,
+        driver.external_id,
+        driver.code,
+        driver.name,
+        driver.team_name,
+      );
+      insertedDriverIds.push(insert.lastInsertRowid);
+    });
+
+    shuffleArray(insertedDriverIds).forEach((driverId, idx) => {
+      insertAuctionItem.run(seasonId, driverId, idx);
+    });
+
+    EVENTS_2026.forEach((event) => {
+      insertEvent.run(
+        seasonId,
+        `mock-${event.round_number}`,
+        event.round_number,
+        event.name,
+        event.type,
+        event.starts_at,
+        event.lock_at,
+      );
+    });
+  })();
+
+  io?.emit('auction:status', { status: 'waiting' });
+  io?.emit('standings:update');
+  if (auctionService?.emitAuctionState && io) {
+    auctionService.emitAuctionState(io, seasonId);
+  }
+
+  return {
+    ok: true,
+    driverCount: DRIVERS_2026.length,
+    eventCount: EVENTS_2026.length,
+    message: 'Restored canonical 2026 F1 drivers and events for the active season.',
+  };
+}
+
 function getEventEditorData({ seasonId, eventId }) {
   const event = getEventById(seasonId, eventId);
   if (!event) return { ok: false, status: 404, error: 'Event not found' };
@@ -669,6 +829,7 @@ module.exports = {
   clearTestDataForSeason,
   resetAuctionOnlyForSeason,
   loadHistoricalSeasonMetadata,
+  restoreSeededSeasonMetadata,
   getEventEditorData,
   saveManualResultsAndScore,
   recalcSeasonBonusesForSeason,

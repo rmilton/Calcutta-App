@@ -30,6 +30,10 @@ function winnerResultSummary(winner) {
   return `Finished ${finish}, started ${start}, gained ${gainText}.${pitText}`;
 }
 
+function isInactiveRaceOnlyDriver(driver) {
+  return Number(driver?.driver_active) === 0;
+}
+
 export default function PayoutAuditPage() {
   const { events, loading, hasLoaded } = useAdminOutletContext();
   const [selectedEventId, setSelectedEventId] = useState('');
@@ -180,6 +184,9 @@ export default function PayoutAuditPage() {
                             <li key={`${currentRuleKey}:${winner.driver_id}`}>
                               <div>
                                 <strong>{winner.driver_name || winner.driver_code || 'Driver'}</strong>
+                                {isInactiveRaceOnlyDriver(winner) ? (
+                                  <span className="status-flag substitute-flag">Substitute / Unauctioned</span>
+                                ) : null}
                                 <div className="muted small">
                                   {winner.team_name || 'Team N/A'}
                                   {' • '}

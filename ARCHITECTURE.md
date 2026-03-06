@@ -65,6 +65,7 @@ Both have:
 - F1 results ingestion uses a provider adapter:
   - `mock` for local/dev/test
   - `openf1` for real driver, schedule, and event-result data
+- F1 OpenF1 runtime can exchange backend credentials for a cached bearer token when the upstream provider restricts live-session access.
 - F1 provider sync state is persisted in `provider_sync_state`.
 - F1 event scoring remains admin-triggered by default; optional auto-poll calls the same sync path and does not override manual edits.
 

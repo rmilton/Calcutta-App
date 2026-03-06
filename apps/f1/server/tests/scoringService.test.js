@@ -182,6 +182,109 @@ test('slowest pit stop payout uses highest recorded stop duration', () => {
   assert.equal(payout.amount_cents, 3);
 });
 
+test('sync preserves unknown race drivers as inactive unowned season drivers', () => {
+  const {
+    db,
+    getActiveSeasonId,
+    upsertEventResults,
+    scoreEvent,
+  } = setupDb();
+
+  const seasonId = getActiveSeasonId();
+  const event = db.prepare(`
+    SELECT id
+    FROM events
+    WHERE season_id = ? AND type = 'grand_prix'
+    ORDER BY round_number ASC
+    LIMIT 1
+  `).get(seasonId);
+  db.prepare('UPDATE events SET lock_at = ? WHERE id = ?').run('2000-01-01T00:00:00Z', event.id);
+
+  const participantId = db.prepare(`
+    INSERT INTO participants (name, color, session_token)
+    VALUES ('Known Owner', '#ffae57', 'tok-known')
+  `).run().lastInsertRowid;
+  db.prepare('INSERT INTO season_participants (season_id, participant_id) VALUES (?, ?)').run(seasonId, participantId);
+
+  const knownDriver = db.prepare(`
+    SELECT id, external_id
+    FROM drivers
+    WHERE season_id = ?
+    ORDER BY external_id ASC
+    LIMIT 1
+  `).get(seasonId);
+
+  db.prepare(`
+    INSERT INTO ownership (season_id, driver_id, participant_id, purchase_price_cents)
+    VALUES (?, ?, ?, ?)
+  `).run(seasonId, knownDriver.id, participantId, 1000);
+
+  const upsert = upsertEventResults({
+    seasonId,
+    eventId: event.id,
+    rows: [
+      {
+        external_driver_id: 999,
+        driver_code: 'SUB',
+        driver_name: 'Sub Driver',
+        team_name: 'Cadillac',
+        finish_position: 1,
+        start_position: 14,
+      },
+      {
+        external_driver_id: knownDriver.external_id,
+        finish_position: 6,
+        start_position: 9,
+      },
+    ],
+  });
+  assert.equal(upsert.ok, true);
+
+  const unknownDriver = db.prepare(`
+    SELECT id, external_id, code, name, team_name, active
+    FROM drivers
+    WHERE season_id = ? AND external_id = 999
+  `).get(seasonId);
+  assert.deepEqual(unknownDriver, {
+    id: unknownDriver.id,
+    external_id: 999,
+    code: 'SUB',
+    name: 'Sub Driver',
+    team_name: 'Cadillac',
+    active: 0,
+  });
+
+  const unknownAuctionItemCount = db.prepare(`
+    SELECT COUNT(*) as c
+    FROM auction_items
+    WHERE season_id = ? AND driver_id = ?
+  `).get(seasonId, unknownDriver.id).c;
+  assert.equal(unknownAuctionItemCount, 0);
+
+  const score = scoreEvent({ seasonId, eventId: event.id });
+  assert.equal(score.ok, true);
+
+  const raceWinnerPayouts = db.prepare(`
+    SELECT COUNT(*) as c
+    FROM event_payouts
+    WHERE season_id = ? AND event_id = ? AND category = 'race_winner'
+  `).get(seasonId, event.id).c;
+  assert.equal(raceWinnerPayouts, 0);
+
+  const resultRow = db.prepare(`
+    SELECT d.external_id, d.name, d.active, er.finish_position
+    FROM event_results er
+    JOIN drivers d ON d.id = er.driver_id
+    WHERE er.event_id = ? AND d.external_id = 999
+  `).get(event.id);
+  assert.deepEqual(resultRow, {
+    external_id: 999,
+    name: 'Sub Driver',
+    active: 0,
+    finish_position: 1,
+  });
+});
+
 test('auction lifecycle sells driver and records ownership', () => {
   const {
     db,

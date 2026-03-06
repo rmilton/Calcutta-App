@@ -53,7 +53,7 @@ function getEventById(db, seasonId, eventId) {
 function getEventResults(db, eventId) {
   return db.prepare(`
     SELECT er.*, d.external_id as driver_external_id, d.code as driver_code,
-           d.name as driver_name, d.team_name
+           d.name as driver_name, d.team_name, d.active as driver_active
     FROM event_results er
     JOIN drivers d ON d.id = er.driver_id
     WHERE er.event_id = ?

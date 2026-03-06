@@ -45,6 +45,7 @@ export default function TestDataPage() {
     clearAllTestData,
     resetAuctionOnly,
     loadHistoricalSeasonData,
+    restoreSeeded2026Data,
     refresh,
     setMessage,
     loading,
@@ -223,6 +224,22 @@ export default function TestDataPage() {
     await loadSeasonBonusBreakdown();
   }, [loadHistoricalSeasonData, refresh, loadSeasonBonusBreakdown]);
 
+  const onRestore2026Data = useCallback(async () => {
+    const confirmed = window.confirm(
+      'Restore the active F1 season back to the canonical seeded 2026 drivers and events? This clears current auction data, results, payouts, and participants, then rebuilds the season metadata from the app seed data.'
+    );
+    if (!confirmed) return;
+
+    await restoreSeeded2026Data();
+    setSelectedEventId('');
+    setManualRows([]);
+    setManualMeta(null);
+    setBonusRows([]);
+    setBonusTotals([]);
+    await refresh();
+    await loadSeasonBonusBreakdown();
+  }, [restoreSeeded2026Data, refresh, loadSeasonBonusBreakdown]);
+
   const onRescoreSeasonEvents = useCallback(async () => {
     const confirmed = window.confirm(
       'Rescore all currently scored F1 events under the active payout rules? This rewrites event payouts and recalculates season bonuses for the active season.'
@@ -243,6 +260,23 @@ export default function TestDataPage() {
 
   return (
     <div className="stack-lg">
+      <section className="panel note-panel stack">
+        <div className="row between wrap gap-sm">
+          <div className="stack-xs">
+            <h2>Restore Seeded 2026 Data</h2>
+            <p className="muted small">
+              Rebuilds the active season from the canonical seeded 2026 F1 driver roster and 2026 event schedule. Use this to recover from polluted local test metadata before running OpenF1 refreshes.
+            </p>
+          </div>
+          <button
+            className="btn btn-outline"
+            onClick={onRestore2026Data}
+          >
+            Restore 2026 Drivers + Events
+          </button>
+        </div>
+      </section>
+
       <section className="panel note-panel stack">
         <div className="row between wrap gap-sm">
           <div className="stack-xs">

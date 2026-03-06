@@ -9,6 +9,7 @@ import {
   readProviderStatus,
   recalcSeasonBonuses as recalcSeasonBonusesApi,
   resetAuctionOnly as resetAuctionOnlyApi,
+  restoreSeeded2026Data as restoreSeeded2026DataApi,
   rescoreSeasonEvents as rescoreSeasonEventsApi,
   refreshDrivers as refreshDriversApi,
   refreshSchedule as refreshScheduleApi,
@@ -170,6 +171,16 @@ export default function useAdminData() {
     }
   }, [loadAll]);
 
+  const restoreSeeded2026Data = useCallback(async () => {
+    try {
+      const result = await restoreSeeded2026DataApi();
+      setMessage(result.message || 'Restored seeded 2026 data.');
+      await loadAll({ silent: true });
+    } catch (error) {
+      setMessage(error.message || 'Failed to restore seeded 2026 data.');
+    }
+  }, [loadAll]);
+
   const updateRules = useCallback((group, id, field, value) => {
     setRules((prev) => {
       if (!prev?.[group]) return prev;
@@ -210,6 +221,7 @@ export default function useAdminData() {
     clearAllTestData,
     resetAuctionOnly,
     loadHistoricalSeasonData,
+    restoreSeeded2026Data,
     syncNext,
     syncEvent,
     recalcSeasonBonuses,
@@ -234,6 +246,7 @@ export default function useAdminData() {
     clearAllTestData,
     resetAuctionOnly,
     loadHistoricalSeasonData,
+    restoreSeeded2026Data,
     syncNext,
     syncEvent,
     recalcSeasonBonuses,

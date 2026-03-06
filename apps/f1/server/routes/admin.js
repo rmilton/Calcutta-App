@@ -179,6 +179,16 @@ router.post('/test-data/load-openf1-year', withAdmin, async (req, res) => {
   return runAndRespond(res, result, (payload) => ({ ok: true, ...payload }));
 });
 
+router.post('/test-data/restore-seeded-2026', withAdmin, (req, res) => {
+  const seasonId = getActiveSeasonId();
+  const result = resultsAdminService.restoreSeededSeasonMetadata({
+    seasonId,
+    io: req.app.get('io'),
+    auctionService: req.app.get('auctionService'),
+  });
+  return runAndRespond(res, result, (payload) => ({ ok: true, ...payload }));
+});
+
 router.post('/results/refresh-drivers', withAdmin, async (req, res) => {
   const seasonId = getActiveSeasonId();
   const provider = req.app.get('resultsProvider');

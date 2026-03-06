@@ -101,6 +101,14 @@ export async function loadHistoricalSeasonData(year) {
   return parseApiResponse(response, 'Failed to load historical season data');
 }
 
+export async function restoreSeeded2026Data() {
+  const response = await api('/admin/test-data/restore-seeded-2026', {
+    method: 'POST',
+    body: '{}',
+  });
+  return parseApiResponse(response, 'Failed to restore seeded 2026 data');
+}
+
 export async function syncEvent(eventId, { force = false } = {}) {
   const response = await api(`/admin/results/sync-event/${eventId}`, {
     method: 'POST',

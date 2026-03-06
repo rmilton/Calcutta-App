@@ -761,3 +761,89 @@ test('payout rules admin save triggers bonus recalc path and standings update em
   `).get(seasonId).c;
   assert.equal(dummyCount, 0);
 });
+
+test('results admin resetAuctionOnlyForSeason preserves participants and race data while clearing auction state', () => {
+  const {
+    db,
+    getActiveSeasonId,
+    resultsAdminService,
+  } = setupDb();
+
+  const seasonId = getActiveSeasonId();
+  const participantId = db.prepare(`
+    INSERT INTO participants (name, color, session_token)
+    VALUES ('Auction Tester', '#ffffff', 'token-auction-reset')
+  `).run().lastInsertRowid;
+  db.prepare('INSERT INTO season_participants (season_id, participant_id) VALUES (?, ?)').run(seasonId, participantId);
+
+  const driver = db.prepare('SELECT id FROM drivers WHERE season_id = ? ORDER BY id ASC LIMIT 1').get(seasonId);
+  const event = db.prepare('SELECT id FROM events WHERE season_id = ? ORDER BY round_number ASC LIMIT 1').get(seasonId);
+
+  db.prepare(`
+    INSERT INTO ownership (season_id, driver_id, participant_id, purchase_price_cents)
+    VALUES (?, ?, ?, ?)
+  `).run(seasonId, driver.id, participantId, 500);
+  db.prepare(`
+    INSERT INTO bids (season_id, driver_id, participant_id, amount_cents)
+    VALUES (?, ?, ?, ?)
+  `).run(seasonId, driver.id, participantId, 500);
+  db.prepare(`
+    UPDATE auction_items
+    SET status = 'sold',
+        current_price_cents = 500,
+        current_leader_id = ?,
+        bid_end_time = 123,
+        final_price_cents = 500,
+        winner_id = ?,
+        queue_order = 19
+    WHERE season_id = ? AND driver_id = ?
+  `).run(participantId, participantId, seasonId, driver.id);
+  db.prepare(`UPDATE seasons SET auction_status = 'complete' WHERE id = ?`).run(seasonId);
+
+  db.prepare(`UPDATE events SET status = 'scored' WHERE id = ?`).run(event.id);
+  db.prepare(`
+    INSERT INTO event_results (event_id, driver_id, finish_position, start_position, positions_gained, is_manual_override)
+    VALUES (?, ?, 1, 3, 2, 1)
+  `).run(event.id, driver.id);
+  db.prepare(`
+    INSERT INTO event_payouts (season_id, event_id, participant_id, driver_id, category, amount_cents, tie_count)
+    VALUES (?, ?, ?, ?, 'race_winner', 103, 1)
+  `).run(seasonId, event.id, participantId, driver.id);
+  db.prepare(`
+    INSERT INTO season_bonus_payouts (season_id, participant_id, driver_id, category, amount_cents, tie_count)
+    VALUES (?, ?, ?, 'drivers_champion', 500, 1)
+  `).run(seasonId, participantId, driver.id);
+
+  const result = resultsAdminService.resetAuctionOnlyForSeason({
+    seasonId,
+    io: null,
+    auctionService: { clearActiveTimer() {} },
+    shuffle: (items) => [...items].reverse(),
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(db.prepare('SELECT COUNT(*) as c FROM season_participants WHERE season_id = ? AND participant_id = ?').get(seasonId, participantId).c, 1);
+  assert.equal(db.prepare('SELECT COUNT(*) as c FROM participants WHERE id = ?').get(participantId).c, 1);
+  assert.equal(db.prepare('SELECT COUNT(*) as c FROM event_results WHERE event_id = ?').get(event.id).c, 1);
+  assert.equal(db.prepare('SELECT COUNT(*) as c FROM event_payouts WHERE season_id = ?').get(seasonId).c, 1);
+  assert.equal(db.prepare('SELECT COUNT(*) as c FROM season_bonus_payouts WHERE season_id = ?').get(seasonId).c, 1);
+  assert.equal(db.prepare('SELECT COUNT(*) as c FROM ownership WHERE season_id = ?').get(seasonId).c, 0);
+  assert.equal(db.prepare('SELECT COUNT(*) as c FROM bids WHERE season_id = ?').get(seasonId).c, 0);
+  assert.equal(db.prepare('SELECT auction_status FROM seasons WHERE id = ?').get(seasonId).auction_status, 'waiting');
+
+  const auctionItems = db.prepare(`
+    SELECT status, current_price_cents, current_leader_id, bid_end_time, final_price_cents, winner_id, queue_order
+    FROM auction_items
+    WHERE season_id = ?
+    ORDER BY queue_order ASC
+  `).all(seasonId);
+
+  assert.ok(auctionItems.length > 0);
+  assert.ok(auctionItems.every((item) => item.status === 'pending'));
+  assert.ok(auctionItems.every((item) => item.current_price_cents === 0));
+  assert.ok(auctionItems.every((item) => item.current_leader_id == null));
+  assert.ok(auctionItems.every((item) => item.bid_end_time == null));
+  assert.ok(auctionItems.every((item) => item.final_price_cents == null));
+  assert.ok(auctionItems.every((item) => item.winner_id == null));
+  assert.deepEqual(auctionItems.map((item) => item.queue_order), auctionItems.map((_, idx) => idx));
+});

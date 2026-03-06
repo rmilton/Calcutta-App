@@ -8,6 +8,7 @@ import {
   readApi,
   readProviderStatus,
   recalcSeasonBonuses as recalcSeasonBonusesApi,
+  resetAuctionOnly as resetAuctionOnlyApi,
   rescoreSeasonEvents as rescoreSeasonEventsApi,
   refreshDrivers as refreshDriversApi,
   refreshSchedule as refreshScheduleApi,
@@ -149,6 +150,16 @@ export default function useAdminData() {
     }
   }, [loadAll]);
 
+  const resetAuctionOnly = useCallback(async () => {
+    try {
+      const result = await resetAuctionOnlyApi();
+      setMessage(result.message || 'Auction reset.');
+      await loadAll({ silent: true });
+    } catch (error) {
+      setMessage(error.message || 'Failed to reset auction.');
+    }
+  }, [loadAll]);
+
   const loadHistoricalSeasonData = useCallback(async (year) => {
     try {
       const result = await loadHistoricalSeasonDataApi(year);
@@ -197,6 +208,7 @@ export default function useAdminData() {
     refreshDrivers,
     refreshSchedule,
     clearAllTestData,
+    resetAuctionOnly,
     loadHistoricalSeasonData,
     syncNext,
     syncEvent,
@@ -220,6 +232,7 @@ export default function useAdminData() {
     refreshDrivers,
     refreshSchedule,
     clearAllTestData,
+    resetAuctionOnly,
     loadHistoricalSeasonData,
     syncNext,
     syncEvent,

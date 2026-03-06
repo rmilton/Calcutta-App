@@ -411,6 +411,65 @@ function clearTestDataForSeason({ seasonId, io, auctionService }) {
   };
 }
 
+function resetAuctionOnlyForSeason({ seasonId, io, auctionService, shuffle = shuffleArray }) {
+  const season = getSeason(seasonId);
+  if (!season) return { ok: false, status: 404, error: 'Season not found' };
+
+  if (typeof auctionService?.clearActiveTimer === 'function') {
+    auctionService.clearActiveTimer();
+  }
+
+  const auctionItems = db.prepare(`
+    SELECT id
+    FROM auction_items
+    WHERE season_id = ?
+    ORDER BY queue_order ASC, id ASC
+  `).all(seasonId);
+
+  const shuffledItems = shuffle(auctionItems);
+  const updateQueue = db.prepare(`
+    UPDATE auction_items
+    SET queue_order = ?
+    WHERE id = ? AND season_id = ?
+  `);
+
+  db.transaction(() => {
+    db.prepare(`
+      UPDATE seasons
+      SET auction_status = 'waiting'
+      WHERE id = ?
+    `).run(seasonId);
+
+    db.prepare(`
+      UPDATE auction_items
+      SET status = 'pending',
+          current_price_cents = 0,
+          current_leader_id = NULL,
+          bid_end_time = NULL,
+          final_price_cents = NULL,
+          winner_id = NULL
+      WHERE season_id = ?
+    `).run(seasonId);
+
+    shuffledItems.forEach((item, idx) => {
+      updateQueue.run(idx, item.id, seasonId);
+    });
+
+    db.prepare('DELETE FROM ownership WHERE season_id = ?').run(seasonId);
+    db.prepare('DELETE FROM bids WHERE season_id = ?').run(seasonId);
+  })();
+
+  io?.emit('auction:status', { status: 'waiting' });
+  if (auctionService?.emitAuctionState && io) {
+    auctionService.emitAuctionState(io, seasonId);
+  }
+
+  return {
+    ok: true,
+    message: 'Reset auction state, bids, ownership, and queue order for the active season.',
+  };
+}
+
 async function loadHistoricalSeasonMetadata({ seasonId, provider, year, io, auctionService }) {
   const season = getSeason(seasonId);
   const parsedYear = Number(year);
@@ -608,6 +667,7 @@ module.exports = {
   refreshScheduleFromProvider,
   getProviderStatus,
   clearTestDataForSeason,
+  resetAuctionOnlyForSeason,
   loadHistoricalSeasonMetadata,
   getEventEditorData,
   saveManualResultsAndScore,

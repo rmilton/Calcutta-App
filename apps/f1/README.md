@@ -45,6 +45,7 @@ Server: `http://localhost:3002`
   - `F1_AUTO_POLL_INTERVAL_SECONDS=<seconds>`
 - Local/dev/test may continue using `mock`
 - Admin Test Data page can load a 2025 OpenF1 driver/event dataset for pre-2026 flow testing
+- Admin Test Data page can reset only auction state while keeping participants and scored race data
 - Admin Test Data page can rescore all scored events after payout-rule changes
 
 ## Engineering Docs

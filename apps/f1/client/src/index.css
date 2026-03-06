@@ -569,11 +569,13 @@ button {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: var(--space-3);
+  align-items: start;
 }
 
 .guide-table-panel {
   display: grid;
   gap: var(--space-3);
+  align-content: start;
 }
 
 .guide-table-panel .table-wrap {

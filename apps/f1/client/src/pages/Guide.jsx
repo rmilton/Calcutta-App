@@ -50,10 +50,10 @@ export default function Guide() {
           </p>
           <div className="row wrap gap-sm">
             <Link className="btn" to="/join">Join Pool</Link>
-            <Link className="btn btn-outline" to="/join">Admin Login</Link>
-            <Link className="btn btn-outline" to="/built-with-ai">Built With AI</Link>
           </div>
-          <p className="muted small">Admin login uses the Admin tab on the join screen.</p>
+          <p className="muted small">
+            Interested in how this app was built with AI? <Link className="join-guide-link-inline" to="/built-with-ai">See the story behind it</Link>.
+          </p>
         </div>
         <nav className="guide-section-nav" aria-label="Guide sections">
           {GUIDE_SECTION_LINKS.map((section) => (

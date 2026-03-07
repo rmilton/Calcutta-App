@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   clearAllTestData as clearAllTestDataApi,
+  drawRandomPosition as drawRandomPositionApi,
   loadHistoricalSeasonData as loadHistoricalSeasonDataApi,
   normalizeRulesPayload,
   normalizeSettingsPayload,
@@ -110,6 +111,16 @@ export default function useAdminData() {
       await loadAll({ silent: true });
     } catch (error) {
       setMessage(error.message || 'Event sync failed.');
+    }
+  }, [loadAll]);
+
+  const drawRandomPosition = useCallback(async (eventId) => {
+    try {
+      const result = await drawRandomPositionApi(eventId);
+      setMessage(result.message || `Random bonus position set to P${result.randomBonusPosition}.`);
+      await loadAll({ silent: true });
+    } catch (error) {
+      setMessage(error.message || 'Random position draw failed.');
     }
   }, [loadAll]);
 
@@ -249,6 +260,7 @@ export default function useAdminData() {
     restoreSeeded2026Data,
     syncNext,
     syncEvent,
+    drawRandomPosition,
     recalcSeasonBonuses,
     rescoreSeasonEvents,
     updateRules,
@@ -276,6 +288,7 @@ export default function useAdminData() {
     restoreSeeded2026Data,
     syncNext,
     syncEvent,
+    drawRandomPosition,
     recalcSeasonBonuses,
     rescoreSeasonEvents,
     updateRules,

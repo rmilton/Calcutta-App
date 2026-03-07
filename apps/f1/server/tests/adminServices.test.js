@@ -178,6 +178,46 @@ test('results admin refreshDrivers updates seeded drivers without changing ident
   });
 });
 
+test('results admin can pre-draw and preserve an event random bonus position', () => {
+  const {
+    db,
+    getActiveSeasonId,
+    resultsAdminService,
+  } = setupDb();
+
+  const seasonId = getActiveSeasonId();
+  const event = db.prepare(`
+    SELECT id, random_bonus_position, random_bonus_drawn_at
+    FROM events
+    WHERE season_id = ?
+    ORDER BY round_number ASC
+    LIMIT 1
+  `).get(seasonId);
+
+  assert.equal(event.random_bonus_position, null);
+  assert.equal(event.random_bonus_drawn_at, null);
+
+  const first = resultsAdminService.drawRandomPositionForEvent({ seasonId, eventId: event.id });
+  assert.equal(first.ok, true);
+  assert.ok(first.randomBonusPosition >= 4 && first.randomBonusPosition <= 20);
+  assert.ok(Number(first.randomBonusDrawnAt) > 0);
+
+  const second = resultsAdminService.drawRandomPositionForEvent({ seasonId, eventId: event.id });
+  assert.equal(second.ok, false);
+  assert.equal(second.status, 409);
+  assert.equal(second.randomBonusPosition, first.randomBonusPosition);
+  assert.equal(second.randomBonusDrawnAt, first.randomBonusDrawnAt);
+  assert.match(second.error, /already set to P/i);
+
+  const stored = db.prepare(`
+    SELECT random_bonus_position, random_bonus_drawn_at
+    FROM events
+    WHERE id = ?
+  `).get(event.id);
+  assert.equal(stored.random_bonus_position, first.randomBonusPosition);
+  assert.equal(stored.random_bonus_drawn_at, first.randomBonusDrawnAt);
+});
+
 test('results admin refreshDrivers rebuilds clean season roster when provider lineup drifts from the seed', async () => {
   const {
     db,

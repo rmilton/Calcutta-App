@@ -291,12 +291,81 @@ function StandingsCards({ rows }) {
   );
 }
 
+function formatBriefingHistoryLabel(briefing) {
+  const eventName = briefing?.eventName || 'Saved Briefing';
+  const phase = briefing?.phaseLabel || 'Saved';
+  return `${eventName} • ${phase}`;
+}
+
+function BriefingHistoryNav({ history, selectedId, onSelect }) {
+  if (!history?.length) return null;
+
+  return (
+    <div className="dashboard-briefing-history" role="tablist" aria-label="Briefing history">
+      {history.map((entry) => (
+        <button
+          key={entry.id || `${entry.generatedAt || 'briefing'}-${entry.snapshotHash || ''}`}
+          type="button"
+          role="tab"
+          aria-selected={selectedId === entry.id}
+          className={`dashboard-briefing-nav-btn ${selectedId === entry.id ? 'active' : ''}`}
+          onClick={() => onSelect(entry.id)}
+        >
+          <strong>{entry.eventName || 'Saved Briefing'}</strong>
+          <span>{entry.phaseLabel || 'Saved'}{entry.generatedAt ? ` • ${fmtWhen(entry.generatedAt)}` : ''}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function BriefingContent({ briefing }) {
+  if (!briefing) {
+    return <p className="muted">Generate a briefing when you want a concise race-and-standings summary.</p>;
+  }
+
+  return (
+    <div className="dashboard-briefing-body">
+      <div className="dashboard-briefing-meta">
+        <div>
+          <h3>{briefing.title || formatBriefingHistoryLabel(briefing)}</h3>
+          <p className="muted small">
+            {formatBriefingHistoryLabel(briefing)}
+            {briefing.generatedAt ? ` • ${fmtWhen(briefing.generatedAt)}` : ''}
+          </p>
+        </div>
+        <span className={`dashboard-payout-status ${briefing.phase || 'pending'}`}>{briefing.phaseLabel || 'Saved'}</span>
+      </div>
+
+      {briefing.summary ? <p className="dashboard-briefing-summary">{briefing.summary}</p> : null}
+
+      {Array.isArray(briefing.sections) && briefing.sections.length ? (
+        <div className="dashboard-briefing-sections">
+          {briefing.sections.map((section) => (
+            <section key={`${briefing.id || briefing.generatedAt}-${section.heading}`} className="dashboard-briefing-section">
+              <h4>{section.heading}</h4>
+              <ul>
+                {(section.bullets || []).map((bullet) => (
+                  <li key={`${section.heading}-${bullet}`}>{bullet}</li>
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
+      ) : briefing.text ? (
+        <p className="dashboard-briefing-text">{briefing.text}</p>
+      ) : null}
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const isMobileCards = useMediaQuery('(max-width: 760px)');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [briefing, setBriefing] = useState(null);
+  const [briefingHistory, setBriefingHistory] = useState([]);
+  const [selectedBriefingId, setSelectedBriefingId] = useState(null);
   const [briefingLoading, setBriefingLoading] = useState(false);
   const [briefingError, setBriefingError] = useState('');
 
@@ -309,7 +378,14 @@ export default function Dashboard() {
 
     setData(payload);
     setError('');
-    setBriefing(payload?.briefing || null);
+    const nextHistory = Array.isArray(payload?.briefingHistory)
+      ? payload.briefingHistory
+      : (payload?.briefing ? [payload.briefing] : []);
+    setBriefingHistory(nextHistory);
+    setSelectedBriefingId((currentId) => {
+      if (currentId && nextHistory.some((entry) => entry.id === currentId)) return currentId;
+      return nextHistory[0]?.id || null;
+    });
   }, []);
 
   useEffect(() => {
@@ -357,7 +433,11 @@ export default function Dashboard() {
         throw new Error(payload?.error || 'Dashboard briefing failed to load.');
       }
 
-      setBriefing(payload?.briefing || null);
+      const nextHistory = Array.isArray(payload?.briefingHistory)
+        ? payload.briefingHistory
+        : (payload?.briefing ? [payload.briefing] : []);
+      setBriefingHistory(nextHistory);
+      setSelectedBriefingId(payload?.briefing?.id || nextHistory[0]?.id || null);
       if (payload?.briefing?.error) setBriefingError(payload.briefing.error);
     } catch (loadError) {
       setBriefingError(loadError.message || 'Dashboard briefing failed to load.');
@@ -372,6 +452,11 @@ export default function Dashboard() {
   const liveSession = data?.liveSession || null;
   const payoutBoard = data?.payoutBoard || { rules: [] };
   const isAdmin = !!data?.viewer?.isAdmin;
+  const selectedBriefing = useMemo(
+    () => briefingHistory.find((entry) => entry.id === selectedBriefingId) || briefingHistory[0] || null,
+    [briefingHistory, selectedBriefingId],
+  );
+  const latestBriefing = briefingHistory[0] || null;
 
   const highlightedStandings = useMemo(() => standings.map((row, index) => ({
     ...row,
@@ -494,9 +579,9 @@ export default function Dashboard() {
             <button
               className="btn btn-outline"
               disabled={briefingLoading || !data?.briefingMeta?.available}
-              onClick={() => requestBriefing({ force: !!briefing?.generatedAt })}
+              onClick={() => requestBriefing({ force: !!latestBriefing?.generatedAt })}
             >
-              {briefingLoading ? 'Loading...' : (briefing?.generatedAt ? 'Refresh Briefing' : 'Generate Briefing')}
+              {briefingLoading ? 'Loading...' : (latestBriefing?.generatedAt ? 'Refresh Briefing' : 'Generate Briefing')}
             </button>
           </div>
 
@@ -504,16 +589,20 @@ export default function Dashboard() {
             <p className="muted">Anthropic is not configured for the F1 service yet.</p>
           ) : null}
 
-          {briefing?.text ? (
-            <>
-              <p className="dashboard-briefing-text">{briefing.text}</p>
-              <p className="muted small">
-                {briefing.cached ? 'Cached' : 'Fresh'} briefing{briefing.generatedAt ? ` • ${fmtWhen(briefing.generatedAt)}` : ''}.
-              </p>
-            </>
-          ) : (
-            <p className="muted">Generate a briefing when you want a concise race-and-standings summary.</p>
-          )}
+          <BriefingHistoryNav
+            history={briefingHistory}
+            selectedId={selectedBriefing?.id || null}
+            onSelect={setSelectedBriefingId}
+          />
+
+          <BriefingContent briefing={selectedBriefing} />
+
+          {selectedBriefing?.generatedAt ? (
+            <p className="muted small">
+              {selectedBriefing.cached ? 'Cached' : 'Saved'} briefing
+              {selectedBriefing.generatedAt ? ` • ${fmtWhen(selectedBriefing.generatedAt)}` : ''}.
+            </p>
+          ) : null}
 
           {briefingError ? <p className="error-text">{briefingError}</p> : null}
         </section>

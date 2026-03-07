@@ -3,6 +3,113 @@ function columnExists(db, tableName, columnName) {
   return rows.some((row) => row.name === columnName);
 }
 
+function tableExists(db, tableName) {
+  const row = db.prepare(`
+    SELECT name
+    FROM sqlite_master
+    WHERE type = 'table' AND name = ?
+  `).get(tableName);
+  return !!row;
+}
+
+function deriveLegacyBriefingPhase(eventRow, generatedAt) {
+  const generatedMs = Date.parse(generatedAt || '');
+  const startsAtMs = Date.parse(eventRow?.starts_at || '');
+
+  if (Number.isFinite(startsAtMs) && Number.isFinite(generatedMs) && generatedMs < startsAtMs) {
+    return 'pre_race';
+  }
+  if (String(eventRow?.status || '').toLowerCase() === 'scored') {
+    return 'post_race';
+  }
+  return 'live';
+}
+
+function migrateLegacyDashboardBriefings(db) {
+  if (!tableExists(db, 'dashboard_briefings') || !tableExists(db, 'dashboard_briefing_entries')) {
+    return;
+  }
+
+  const legacyRows = db.prepare(`
+    SELECT season_id, participant_id, event_id, snapshot_hash, briefing_text, source, generated_at, updated_at
+    FROM dashboard_briefings
+  `).all();
+
+  if (!legacyRows.length) return;
+
+  const findEvent = db.prepare(`
+    SELECT id, name, status, starts_at
+    FROM events
+    WHERE id = ?
+  `);
+  const insertEntry = db.prepare(`
+    INSERT INTO dashboard_briefing_entries
+      (
+        season_id,
+        participant_id,
+        event_id,
+        snapshot_hash,
+        briefing_phase,
+        briefing_title,
+        briefing_summary,
+        briefing_json,
+        source,
+        generated_at,
+        updated_at
+      )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const findDuplicate = db.prepare(`
+    SELECT id
+    FROM dashboard_briefing_entries
+    WHERE season_id = ?
+      AND participant_id = ?
+      AND COALESCE(event_id, 0) = COALESCE(?, 0)
+      AND snapshot_hash = ?
+      AND COALESCE(generated_at, '') = COALESCE(?, '')
+    LIMIT 1
+  `);
+
+  const transaction = db.transaction((rows) => {
+    rows.forEach((row) => {
+      if (findDuplicate.get(
+        row.season_id,
+        row.participant_id,
+        row.event_id || null,
+        String(row.snapshot_hash || ''),
+        row.generated_at || null,
+      )) {
+        return;
+      }
+
+      const eventRow = row.event_id ? findEvent.get(row.event_id) : null;
+      const phase = deriveLegacyBriefingPhase(eventRow, row.generated_at);
+      const title = eventRow?.name ? `${eventRow.name} Briefing` : 'Saved Dashboard Briefing';
+      const summary = String(row.briefing_text || '').trim();
+      const content = {
+        summary,
+        sections: summary ? [{ heading: 'Saved Briefing', bullets: [summary] }] : [],
+      };
+
+      insertEntry.run(
+        row.season_id,
+        row.participant_id,
+        row.event_id || null,
+        String(row.snapshot_hash || ''),
+        phase,
+        title,
+        summary,
+        JSON.stringify(content),
+        String(row.source || 'legacy'),
+        row.generated_at || null,
+        Number(row.updated_at) || Date.now(),
+      );
+    });
+  });
+
+  transaction(legacyRows);
+}
+
 function ensureSchema(db) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS settings (
@@ -185,6 +292,21 @@ function ensureSchema(db) {
       updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
       PRIMARY KEY (season_id, participant_id)
     );
+
+    CREATE TABLE IF NOT EXISTS dashboard_briefing_entries (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      season_id INTEGER NOT NULL REFERENCES seasons(id),
+      participant_id INTEGER NOT NULL REFERENCES participants(id),
+      event_id INTEGER REFERENCES events(id),
+      snapshot_hash TEXT NOT NULL,
+      briefing_phase TEXT NOT NULL,
+      briefing_title TEXT NOT NULL,
+      briefing_summary TEXT NOT NULL,
+      briefing_json TEXT NOT NULL,
+      source TEXT NOT NULL,
+      generated_at TEXT,
+      updated_at INTEGER NOT NULL DEFAULT (unixepoch())
+    );
   `);
 
   if (!columnExists(db, 'seasons', 'payout_model_version')) {
@@ -205,6 +327,8 @@ function ensureSchema(db) {
   if (!columnExists(db, 'event_results', 'slowest_pit_stop_seconds')) {
     db.exec('ALTER TABLE event_results ADD COLUMN slowest_pit_stop_seconds REAL');
   }
+
+  migrateLegacyDashboardBriefings(db);
 }
 
 module.exports = {

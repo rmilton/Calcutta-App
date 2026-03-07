@@ -2518,6 +2518,78 @@ tbody tr:hover {
   background: rgba(11, 15, 21, 0.6);
 }
 
+.dashboard-briefing-history {
+  display: flex;
+  gap: var(--space-2);
+  overflow-x: auto;
+  padding-bottom: 0.15rem;
+}
+
+.dashboard-briefing-nav-btn {
+  min-width: 190px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-sm);
+  background: rgba(10, 14, 20, 0.72);
+  color: var(--text);
+  padding: 0.55rem 0.65rem;
+  text-align: left;
+  display: grid;
+  gap: 0.18rem;
+  cursor: pointer;
+}
+
+.dashboard-briefing-nav-btn span {
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+.dashboard-briefing-nav-btn.active {
+  border-color: rgba(159, 63, 67, 0.48);
+  background: rgba(159, 63, 67, 0.14);
+}
+
+.dashboard-briefing-body {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.dashboard-briefing-meta {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.dashboard-briefing-meta h3,
+.dashboard-briefing-section h4 {
+  margin: 0;
+}
+
+.dashboard-briefing-summary {
+  margin: 0;
+  padding: 0.75rem 0.85rem;
+  border: 1px solid rgba(159, 63, 67, 0.22);
+  border-radius: var(--radius-md);
+  background: rgba(11, 15, 21, 0.52);
+}
+
+.dashboard-briefing-sections {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.dashboard-briefing-section {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: var(--space-2);
+}
+
+.dashboard-briefing-section ul {
+  margin: 0.45rem 0 0;
+  padding-left: 1rem;
+  display: grid;
+  gap: 0.45rem;
+}
+
 .dashboard-ranking-list {
   margin-top: 0;
 }
@@ -2577,10 +2649,17 @@ tbody tr:hover {
 }
 
 .dashboard-payout-status.pending,
-.dashboard-payout-status.draw_pending {
+.dashboard-payout-status.draw_pending,
+.dashboard-payout-status.pre_race {
   color: #d9c38d;
   border-color: rgba(217, 195, 141, 0.34);
   background: rgba(217, 195, 141, 0.08);
+}
+
+.dashboard-payout-status.post_race {
+  color: #c3cde0;
+  border-color: rgba(159, 177, 208, 0.24);
+  background: rgba(159, 177, 208, 0.08);
 }
 
 .dashboard-payout-status.unavailable {
@@ -3032,6 +3111,10 @@ tbody tr:hover {
     width: fit-content;
     margin-bottom: var(--space-2);
   }
+
+  .dashboard-briefing-nav-btn {
+    min-width: 160px;
+  }
 }
 
 @media (max-width: 720px) {
@@ -3042,6 +3125,11 @@ tbody tr:hover {
 
   .dashboard-status-pill {
     white-space: normal;
+  }
+
+  .dashboard-briefing-meta {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
 

@@ -156,6 +156,14 @@ export async function syncEvent(eventId, { force = false } = {}) {
   return parseApiResponse(response, 'Event sync failed');
 }
 
+export async function drawRandomPosition(eventId) {
+  const response = await api(`/admin/results/draw-random-position/${eventId}`, {
+    method: 'POST',
+    body: '{}',
+  });
+  return parseApiResponse(response, 'Random position draw failed');
+}
+
 export async function recalcSeasonBonuses() {
   const response = await api('/admin/results/recalc-season-bonuses', {
     method: 'POST',

@@ -38,6 +38,10 @@ router.get('/dashboard', requireAuth, async (req, res) => {
       seasonId,
       participantId: req.participant.id,
     });
+    payload.briefingHistory = dashboardBriefingService.getBriefingHistory({
+      seasonId,
+      participantId: req.participant.id,
+    });
     return res.json(payload);
   } catch (error) {
     return res.status(502).json({ error: error.message || 'Dashboard data failed to load.' });
@@ -57,9 +61,14 @@ router.post('/dashboard/briefing', requireAuth, async (req, res) => {
       dashboardPayload,
       force: !!req.body?.force,
     });
+    const briefingHistory = dashboardBriefingService.getBriefingHistory({
+      seasonId,
+      participantId: req.participant.id,
+    });
 
     return res.json({
       briefing,
+      briefingHistory,
       briefingMeta: {
         ...dashboardPayload.briefingMeta,
         snapshotHash: briefing.snapshotHash,

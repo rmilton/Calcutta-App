@@ -36,6 +36,33 @@ function ensureRandomBonusPosition(event) {
   return drawn;
 }
 
+function drawEventRandomBonusPosition({ seasonId, eventId }) {
+  const event = getEventById(seasonId, eventId);
+  if (!event) return { ok: false, status: 404, error: 'Event not found' };
+
+  const existing = Number(event.random_bonus_position);
+  if (existing >= 4 && existing <= 20) {
+    return {
+      ok: false,
+      status: 409,
+      error: `Random bonus position already set to P${existing}.`,
+      randomBonusPosition: existing,
+      randomBonusDrawnAt: event.random_bonus_drawn_at || null,
+      event,
+    };
+  }
+
+  const drawnPosition = ensureRandomBonusPosition(event);
+  const updatedEvent = getEventById(seasonId, eventId);
+
+  return {
+    ok: true,
+    randomBonusPosition: drawnPosition,
+    randomBonusDrawnAt: updatedEvent?.random_bonus_drawn_at || null,
+    event: updatedEvent,
+  };
+}
+
 function scoreEvent({ seasonId, eventId, skipSeasonBonuses = false, ignoreLock = false }) {
   const event = getEventById(seasonId, eventId);
   if (!event) return { ok: false, status: 404, error: 'Event not found' };
@@ -436,6 +463,7 @@ async function syncNextEventFromProvider({
 }
 
 module.exports = {
+  drawEventRandomBonusPosition,
   scoreEvent,
   recalcSeasonBonuses,
   rescoreSeasonEvents,

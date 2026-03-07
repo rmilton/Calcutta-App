@@ -14,12 +14,13 @@ A dedicated Formula 1 Calcutta app for a full season pool.
 - Grand Prix novelty rule for slowest recorded pit stop via OpenF1 `stop_duration`
 - Season bonus payouts from remaining pool
 - Participant dashboard at `/dashboard` with personal KPIs, full standings, current-or-next race focus, and a live payout-category board driven by OpenF1 timing
-- On-demand Anthropic briefing on the dashboard for a concise personal race/standings summary, persisted per participant across refreshes and login sessions
+- On-demand Anthropic briefing on the dashboard with saved per-event history, contextual pre-race/live/post-race labels, and compact structured sections for faster reading
 - Participant mobile UX now uses a compact nav shell, join-first login layout, card-based dashboard/portfolio views, and a list-to-detail event flow instead of relying on wide desktop tables
 - Results sync via provider adapter (`openf1` for real data, `mock` for local/dev/test)
 - Admin controls for auction, sync, payout rules, and settings
 - Results Sync admin view shows collapsible driver/event lists after provider refreshes
 - Results Sync admin view exposes a live database backup download and a visible driver-roster freeze guard after auction/scoring activity begins
+- Results Sync admin view can pre-draw and reveal the random finishing bonus position for any event before scoring; once drawn it is locked and reused at score time
 - Payout Audit admin view supports rule-level CSV export, winner-detail CSV export, and copyable text summaries for payout review and dispute handling
 - Public-facing explainer pages for both pool rules (`/guide`) and the agentic build case study (`/built-with-ai`)
 
@@ -69,6 +70,8 @@ Server: `http://localhost:3002`
 - Admin Test Data page can rescore all scored events after payout-rule changes
 - Admin Results Sync page can download a live SQLite backup snapshot before auction night or race scoring operations
 - Admin Results Sync page disables `Refresh Drivers` once the season has bids, ownership, or scored payout activity so the auction roster is not changed casually after go-live
+- Admin Results Sync page can pre-draw the random event bonus position before race start so participants know the target position while watching live
+- Participant dashboard payout board now shows the drawn random bonus target for the current/next event when it has already been revealed
 - Admin Auction page can explicitly lock or unlock the season roster; Results Sync respects that lock in addition to activity-based safeguards
 - Admin Payout Audit page can export both rule-level and winner-detail CSVs, plus a concise text summary for payout review
 - Admin Auction page exposes a shareable invite link that deep-links to `/join` with the active invite code prefilled

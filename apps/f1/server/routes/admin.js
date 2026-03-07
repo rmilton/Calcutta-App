@@ -158,6 +158,18 @@ router.post('/results/sync-next', withAdmin, async (req, res) => {
   return runAndRespond(res, result, (payload) => ({ ok: true, ...payload }));
 });
 
+router.post('/results/draw-random-position/:id', withAdmin, (req, res) => {
+  const seasonId = getActiveSeasonId();
+  const eventId = parseIdFromParams(res, req.params.id);
+  if (eventId == null) return undefined;
+
+  const result = resultsAdminService.drawRandomPositionForEvent({
+    seasonId,
+    eventId,
+  });
+  return runAndRespond(res, result, (payload) => ({ ok: true, ...payload }));
+});
+
 router.get('/results/provider-status', withAdmin, (req, res) => {
   const seasonId = getActiveSeasonId();
   const provider = req.app.get('resultsProvider');

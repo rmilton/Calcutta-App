@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { api } from '../utils';
+import { api, readJsonSafely } from '../utils';
 
 const AuthContext = createContext(null);
 
@@ -8,7 +8,7 @@ export function AuthProvider({ children }) {
 
   const refresh = async () => {
     const response = await api('/auth/me');
-    const data = await response.json();
+    const data = await readJsonSafely(response);
     setParticipant(data.participant || null);
   };
 
@@ -21,8 +21,8 @@ export function AuthProvider({ children }) {
       method: 'POST',
       body: JSON.stringify({ name, inviteCode }),
     });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Join failed');
+    const data = await readJsonSafely(response);
+    if (!response.ok) throw new Error(data?.error || 'Join failed');
     setParticipant(data.participant);
     return data.participant;
   };
@@ -32,8 +32,9 @@ export function AuthProvider({ children }) {
       method: 'POST',
       body: JSON.stringify({ password }),
     });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'Login failed');
+    const data = await readJsonSafely(response);
+    if (!response.ok) throw new Error(data?.error || 'Login failed');
+    if (!data?.participant) throw new Error('Server returned an empty login response.');
     setParticipant(data.participant);
     return data.participant;
   };

@@ -2,7 +2,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import ParticipantAvatar from '../../components/ParticipantAvatar';
 import { useSocketEvent } from '../../context/SocketContext';
 import AdminLoadingState from './AdminLoadingState';
-import { buildInviteLink } from './adminApi';
+import { auctionResultsExportHref, buildInviteLink } from './adminApi';
 import useAdminOutletContext from './useAdminOutletContext';
 
 export default function AuctionPage() {
@@ -127,6 +127,7 @@ export default function AuctionPage() {
           <button className="btn btn-outline" onClick={() => runAuctionAction('/admin/auction/next')}>Start Next Driver</button>
           <button className="btn btn-outline" onClick={() => runAuctionAction('/admin/auction/shuffle')}>Shuffle Pending Order</button>
           <button className="btn btn-outline" onClick={() => runAuctionAction('/admin/auction/close')}>Close Active</button>
+          <a className="btn btn-outline" href={auctionResultsExportHref()}>Download Auction Results CSV</a>
         </div>
         <div className={`note-panel ${isRosterLocked ? 'note-panel-warning' : ''}`}>
           <strong>Season Roster {isRosterLocked ? 'Locked' : 'Unlocked'}</strong>

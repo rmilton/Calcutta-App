@@ -39,3 +39,8 @@ test('admin api helper normalizes settings and rules payloads', async () => {
   assert.equal(rules.sprint[0].bps, 30);
   assert.equal(rules.season_bonus[0].bps, 120);
 });
+
+test('admin api helper builds auction results export href', async () => {
+  const { auctionResultsExportHref } = await import(`file://${ADMIN_API_PATH}`);
+  assert.equal(auctionResultsExportHref(), '/api/admin/auction/export.csv');
+});

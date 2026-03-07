@@ -470,6 +470,46 @@ test('auction admin shufflePendingAuctionQueue reorders pending drivers only', (
   );
 });
 
+test('auction admin buildAuctionResultsCsv exports participant driver assignments and totals', () => {
+  const {
+    db,
+    getActiveSeasonId,
+    auctionAdminService,
+  } = setupDb();
+
+  const seasonId = getActiveSeasonId();
+  const participantId = db.prepare(`
+    INSERT INTO participants (name, color, session_token)
+    VALUES ('Auction Export Tester', '#112233', 'auction-export-token')
+  `).run().lastInsertRowid;
+  db.prepare('INSERT INTO season_participants (season_id, participant_id) VALUES (?, ?)').run(seasonId, participantId);
+
+  const drivers = db.prepare(`
+    SELECT id
+    FROM drivers
+    WHERE season_id = ?
+    ORDER BY id ASC
+    LIMIT 2
+  `).all(seasonId);
+
+  db.prepare(`
+    INSERT INTO ownership (season_id, driver_id, participant_id, purchase_price_cents)
+    VALUES (?, ?, ?, ?)
+  `).run(seasonId, drivers[0].id, participantId, 2300);
+  db.prepare(`
+    INSERT INTO ownership (season_id, driver_id, participant_id, purchase_price_cents)
+    VALUES (?, ?, ?, ?)
+  `).run(seasonId, drivers[1].id, participantId, 700);
+
+  const csv = auctionAdminService.buildAuctionResultsCsv({ seasonId });
+  const lines = csv.trim().split('\n');
+
+  assert.equal(lines[0], 'participant_name,participant_color,participant_driver_count,participant_total_spend_cents,participant_total_spend_usd,driver_name,driver_code,team_name,purchase_price_cents,purchase_price_usd');
+  assert.equal(lines.length, 3);
+  assert.match(lines[1], /^Auction Export Tester,#112233,2,3000,30\.00,/);
+  assert.match(lines[2], /^Auction Export Tester,#112233,2,3000,30\.00,/);
+});
+
 test('results admin refreshSchedule inserts missing sprint-weekend grand prix rows', async () => {
   const {
     db,

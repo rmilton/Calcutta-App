@@ -4,6 +4,17 @@ export const api = (path, opts = {}) => fetch(`/api${path}`, {
   ...opts,
 });
 
+export async function readJsonSafely(response) {
+  const text = await response.text();
+  if (!text) return null;
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error('Server returned an invalid response.');
+  }
+}
+
 export const fmtCents = (cents) => new Intl.NumberFormat('en-US', {
   style: 'currency',
   currency: 'USD',

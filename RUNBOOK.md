@@ -111,6 +111,13 @@ After deploy:
    - `Copy Summary` for a concise plain-text explanation
 4. Use these outputs when reviewing disputed race payouts with participants.
 
+### G) F1 Auction Results Export
+
+1. Open `Admin -> Auction`.
+2. Use `Download Auction Results CSV`.
+3. The export includes one row per assigned driver plus participant totals.
+4. Use it after the auction for participant ownership review, recap sharing, or offline record-keeping.
+
 ## Rollback Procedure
 
 1. Open service Deployments in Railway.

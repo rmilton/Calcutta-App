@@ -68,6 +68,13 @@ router.delete('/participants/:id', withAdmin, (req, res) => {
   return runAndRespond(res, auctionAdminService.removeParticipant({ seasonId, participantId }));
 });
 
+router.post('/participants/:id/reset-access', withAdmin, (req, res) => {
+  const seasonId = getActiveSeasonId();
+  const participantId = parseIdFromParams(res, req.params.id);
+  if (participantId == null) return undefined;
+  return runAndRespond(res, auctionAdminService.resetParticipantAccess({ seasonId, participantId }));
+});
+
 router.get('/auction/queue', withAdmin, (req, res) => {
   const seasonId = getActiveSeasonId();
   return res.json(auctionAdminService.listAuctionQueue({ seasonId }));

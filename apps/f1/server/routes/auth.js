@@ -8,6 +8,7 @@ const {
   getActiveSeasonId,
   getActiveSeason,
   getParticipantByToken,
+  getResolvedAuctionStatus,
 } = require('../db');
 
 const router = express.Router();
@@ -20,6 +21,61 @@ const COLORS = [
 
 function emitParticipantsUpdate(req, seasonId) {
   req.app.get('io')?.emit('participants:update', { seasonId });
+}
+
+function cookieOptions() {
+  return { httpOnly: true, maxAge: 30 * 24 * 60 * 60 * 1000 };
+}
+
+function getJoinPolicy(seasonId) {
+  const auctionStatus = getResolvedAuctionStatus(seasonId);
+  return {
+    auctionStatus,
+    creationLocked: auctionStatus === 'complete',
+  };
+}
+
+function findSeasonParticipantsByName(seasonId, cleanName) {
+  return db.prepare(`
+    SELECT p.*
+    FROM participants p
+    JOIN season_participants sp ON sp.participant_id = p.id
+    WHERE sp.season_id = ?
+      AND p.is_admin = 0
+      AND LOWER(p.name) = LOWER(?)
+  `).all(seasonId, cleanName);
+}
+
+function findParticipantsByName(cleanName) {
+  return db.prepare(`
+    SELECT *
+    FROM participants
+    WHERE is_admin = 0
+      AND LOWER(name) = LOWER(?)
+  `).all(cleanName);
+}
+
+function ensureParticipantToken(participant) {
+  if (participant.session_token) return participant.session_token;
+  const token = uuidv4();
+  db.prepare('UPDATE participants SET session_token = ? WHERE id = ?').run(token, participant.id);
+  return token;
+}
+
+function sendParticipantSession(res, participant, token) {
+  res.cookie('session', token, cookieOptions());
+  return res.json({
+    participant: {
+      id: participant.id,
+      name: participant.name,
+      color: participant.color,
+      isAdmin: !!participant.is_admin,
+    },
+  });
+}
+
+function logRejectedJoinAttempt({ seasonId, cleanName, reason }) {
+  console.warn(`[auth.join] rejected season=${seasonId} name="${cleanName}" reason=${reason}`);
 }
 
 router.get('/me', (req, res) => {
@@ -50,6 +106,12 @@ router.get('/me', (req, res) => {
   });
 });
 
+router.get('/join-policy', (req, res) => {
+  const season = getActiveSeason();
+  if (!season) return res.status(500).json({ error: 'No active season found' });
+  return res.json(getJoinPolicy(season.id));
+});
+
 router.post('/join', (req, res) => {
   const { name, inviteCode } = req.body;
   if (!name || !inviteCode) return res.status(400).json({ error: 'Name and invite code required' });
@@ -64,29 +126,44 @@ router.post('/join', (req, res) => {
   const cleanName = sanitizeParticipantName(name);
   if (!cleanName) return res.status(400).json({ error: 'Name cannot be empty' });
 
-  const existing = db.prepare('SELECT * FROM participants WHERE LOWER(name) = LOWER(?)').get(cleanName);
-  if (existing) {
-    const token = existing.session_token || uuidv4();
-    if (!existing.session_token) {
-      db.prepare('UPDATE participants SET session_token = ? WHERE id = ?').run(token, existing.id);
-    }
+  const joinPolicy = getJoinPolicy(season.id);
+  const seasonMatches = findSeasonParticipantsByName(season.id, cleanName);
+  if (seasonMatches.length > 1) {
+    logRejectedJoinAttempt({ seasonId: season.id, cleanName, reason: 'ambiguous-season-match' });
+    return res.status(409).json({
+      error: 'Multiple participants share that name in this season roster. Contact the admin.',
+    });
+  }
+  if (seasonMatches.length === 1) {
+    const existing = seasonMatches[0];
+    const token = ensureParticipantToken(existing);
+    emitParticipantsUpdate(req, season.id);
+    return sendParticipantSession(res, existing, token);
+  }
 
+  if (joinPolicy.creationLocked) {
+    logRejectedJoinAttempt({ seasonId: season.id, cleanName, reason: 'creation-locked-no-match' });
+    return res.status(403).json({
+      error: 'No participant found for that name in this season roster. Contact the admin.',
+    });
+  }
+
+  const globalMatches = findParticipantsByName(cleanName);
+  if (globalMatches.length > 1) {
+    logRejectedJoinAttempt({ seasonId: season.id, cleanName, reason: 'ambiguous-global-match' });
+    return res.status(409).json({
+      error: 'Multiple participants share that name. Contact the admin before joining.',
+    });
+  }
+  if (globalMatches.length === 1) {
+    const existing = globalMatches[0];
+    const token = ensureParticipantToken(existing);
     db.prepare(`
       INSERT OR IGNORE INTO season_participants (season_id, participant_id)
       VALUES (?, ?)
     `).run(season.id, existing.id);
-
     emitParticipantsUpdate(req, season.id);
-
-    res.cookie('session', token, { httpOnly: true, maxAge: 30 * 24 * 60 * 60 * 1000 });
-    return res.json({
-      participant: {
-        id: existing.id,
-        name: existing.name,
-        color: existing.color,
-        isAdmin: !!existing.is_admin,
-      },
-    });
+    return sendParticipantSession(res, existing, token);
   }
 
   const usedColors = db.prepare('SELECT color FROM participants').all().map((row) => row.color);
@@ -105,15 +182,34 @@ router.post('/join', (req, res) => {
 
   emitParticipantsUpdate(req, season.id);
 
-  res.cookie('session', token, { httpOnly: true, maxAge: 30 * 24 * 60 * 60 * 1000 });
-  return res.json({
-    participant: {
-      id: participantId,
-      name: cleanName,
-      color,
-      isAdmin: false,
-    },
-  });
+  return sendParticipantSession(res, {
+    id: participantId,
+    name: cleanName,
+    color,
+    is_admin: 0,
+  }, token);
+});
+
+router.get('/access/:token', (req, res) => {
+  const token = String(req.params.token || '').trim();
+  if (!token) return res.redirect('/join?error=invalid-access');
+
+  const participant = getParticipantByToken(token);
+  if (!participant) return res.redirect('/join?error=invalid-access');
+
+  const seasonId = getActiveSeasonId();
+  const inSeason = db.prepare(`
+    SELECT 1
+    FROM season_participants
+    WHERE season_id = ? AND participant_id = ?
+  `).get(seasonId, participant.id);
+
+  if (!participant.is_admin && !inSeason) {
+    return res.redirect('/join?error=invalid-access');
+  }
+
+  res.cookie('session', token, cookieOptions());
+  return res.redirect(participant.is_admin ? '/admin' : '/dashboard');
 });
 
 router.post('/admin', (req, res) => {
@@ -140,7 +236,7 @@ router.post('/admin', (req, res) => {
     VALUES (?, ?)
   `).run(getActiveSeasonId(), admin.id);
 
-  res.cookie('session', admin.session_token, { httpOnly: true, maxAge: 30 * 24 * 60 * 60 * 1000 });
+  res.cookie('session', admin.session_token, cookieOptions());
   return res.json({
     participant: {
       id: admin.id,

@@ -13,6 +13,7 @@ import {
   rescoreSeasonEvents as rescoreSeasonEventsApi,
   refreshDrivers as refreshDriversApi,
   refreshSchedule as refreshScheduleApi,
+  resetParticipantAccess as resetParticipantAccessApi,
   runAuctionAction as runAuctionActionApi,
   savePayoutRules,
   syncEvent as syncEventApi,
@@ -132,6 +133,17 @@ export default function useAdminData() {
     }
   }, [loadAll]);
 
+  const resetParticipantAccess = useCallback(async (participantId) => {
+    try {
+      const result = await resetParticipantAccessApi(participantId);
+      await loadAll({ silent: true });
+      return result;
+    } catch (error) {
+      setMessage(error.message || 'Failed to reset participant access.');
+      throw error;
+    }
+  }, [loadAll]);
+
   const recalcSeasonBonuses = useCallback(async () => {
     try {
       await recalcSeasonBonusesApi();
@@ -230,6 +242,7 @@ export default function useAdminData() {
     runAuctionAction,
     refreshDrivers,
     refreshSchedule,
+    resetParticipantAccess,
     clearAllTestData,
     resetAuctionOnly,
     loadHistoricalSeasonData,
@@ -256,6 +269,7 @@ export default function useAdminData() {
     runAuctionAction,
     refreshDrivers,
     refreshSchedule,
+    resetParticipantAccess,
     clearAllTestData,
     resetAuctionOnly,
     loadHistoricalSeasonData,

@@ -423,6 +423,63 @@ test('results admin refreshSchedule matches by round and type when provider name
   assert.equal(australianGp.name, 'FORMULA 1 LOUIS VUITTON AUSTRALIAN GRAND PRIX 2026');
 });
 
+test('auction admin participant list exposes access state and duplicate-name warnings', () => {
+  const {
+    db,
+    getActiveSeasonId,
+    auctionAdminService,
+  } = setupDb();
+
+  const seasonId = getActiveSeasonId();
+  const firstId = db.prepare(`
+    INSERT INTO participants (name, color, session_token)
+    VALUES ('Jamie Pace', '#111111', NULL)
+  `).run().lastInsertRowid;
+  const secondId = db.prepare(`
+    INSERT INTO participants (name, color, session_token)
+    VALUES ('jamie pace', '#222222', 'jamie-token')
+  `).run().lastInsertRowid;
+  db.prepare('INSERT INTO season_participants (season_id, participant_id) VALUES (?, ?)').run(seasonId, firstId);
+  db.prepare('INSERT INTO season_participants (season_id, participant_id) VALUES (?, ?)').run(seasonId, secondId);
+
+  const participants = auctionAdminService.listParticipants({ seasonId })
+    .filter((participant) => Number(participant.id) === Number(firstId) || Number(participant.id) === Number(secondId));
+
+  assert.equal(participants.length, 2);
+  assert.equal(participants[0].duplicate_name_count, 2);
+  assert.equal(participants[1].duplicate_name_count, 2);
+  assert.equal(participants[0].has_session_token, false);
+  assert.equal(participants[1].has_session_token, true);
+});
+
+test('auction admin resetParticipantAccess rotates the participant token and returns an access path', () => {
+  const {
+    db,
+    getActiveSeasonId,
+    auctionAdminService,
+  } = setupDb();
+
+  const seasonId = getActiveSeasonId();
+  const participantId = db.prepare(`
+    INSERT INTO participants (name, color, session_token)
+    VALUES ('Access Reset', '#123123', 'old-access-token')
+  `).run().lastInsertRowid;
+  db.prepare('INSERT INTO season_participants (season_id, participant_id) VALUES (?, ?)').run(seasonId, participantId);
+
+  const result = auctionAdminService.resetParticipantAccess({
+    seasonId,
+    participantId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.participantId, Number(participantId));
+  assert.match(result.accessPath, /^\/api\/auth\/access\//);
+
+  const updatedToken = db.prepare('SELECT session_token FROM participants WHERE id = ?').get(participantId).session_token;
+  assert.notEqual(updatedToken, 'old-access-token');
+  assert.match(result.accessPath, new RegExp(`${updatedToken}$`));
+});
+
 test('startup seeding preserves provider-refreshed schedule rows on init rerun', async () => {
   const {
     db,

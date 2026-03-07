@@ -13,7 +13,7 @@ A dedicated Formula 1 Calcutta app for a full season pool.
 - Auto-drawn random finishing position bonus per event
 - Grand Prix novelty rule for slowest recorded pit stop via OpenF1 `stop_duration`
 - Season bonus payouts from remaining pool
-- Participant dashboard at `/dashboard` with personal KPIs, full standings, current-or-next race focus, and live OpenF1 race widgets
+- Participant dashboard at `/dashboard` with personal KPIs, full standings, current-or-next race focus, and a live payout-category board driven by OpenF1 timing
 - On-demand Anthropic briefing on the dashboard for a concise personal race/standings summary, persisted per participant across refreshes and login sessions
 - Results sync via provider adapter (`openf1` for real data, `mock` for local/dev/test)
 - Admin controls for auction, sync, payout rules, and settings

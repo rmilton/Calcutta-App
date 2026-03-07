@@ -1,11 +1,15 @@
 const {
   getEvents,
+  getEventPayoutRules,
+  getDrivers,
+  getOwnership,
   getParticipantPortfolio,
   getSeasonParticipants,
   getStandings,
   getTotalPotCents,
 } = require('../db');
 const { dashboardBriefingService } = require('./dashboardBriefingService');
+const { evaluateCategoryRule } = require('./payoutRuleResolvers');
 
 const LIVE_CACHE_TTL_MS = 15_000;
 const ACTIVE_SESSION_GRACE_MS = 20 * 60 * 1000;
@@ -226,6 +230,226 @@ function buildPrimaryEvent(event, state, liveSession) {
   };
 }
 
+function normalizeNumber(value) {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : null;
+}
+
+function getRandomBonusPosition(event) {
+  const num = normalizeNumber(event?.random_bonus_position);
+  return num != null && num > 0 ? num : null;
+}
+
+function formatSignedValue(value) {
+  const num = normalizeNumber(value);
+  if (num == null) return null;
+  return `${num > 0 ? '+' : ''}${num}`;
+}
+
+function formatMetricDisplay(metricKey, value) {
+  const num = normalizeNumber(value);
+  if (num == null) return null;
+
+  switch (metricKey) {
+    case 'finish_position':
+    case 'best_finish_at_or_below':
+      return `P${num}`;
+    case 'positions_gained':
+      return formatSignedValue(num);
+    case 'slowest_pit_stop_seconds':
+      return `${num.toFixed(2)}s`;
+    default:
+      return String(value);
+  }
+}
+
+function buildLivePayoutRows({ liveSession, drivers }) {
+  const driversByExternalId = new Map(
+    (drivers || []).map((driver) => [Number(driver.external_id), driver]),
+  );
+
+  return (liveSession?.driverStates || [])
+    .map((state) => {
+      const externalDriverId = Number(state.external_driver_id);
+      if (!Number.isFinite(externalDriverId)) return null;
+
+      const seasonDriver = driversByExternalId.get(externalDriverId) || null;
+      return {
+        driver_id: seasonDriver?.id != null ? `driver:${seasonDriver.id}` : `external:${externalDriverId}`,
+        season_driver_id: seasonDriver?.id != null ? Number(seasonDriver.id) : null,
+        external_driver_id: externalDriverId,
+        driver_code: state.driver_code || seasonDriver?.code || null,
+        driver_name: state.driver_name || seasonDriver?.name || null,
+        team_name: state.team_name || seasonDriver?.team_name || null,
+        finish_position: normalizeNumber(state.position),
+        positions_gained: normalizeNumber(state.positionsGained),
+        slowest_pit_stop_seconds: normalizeNumber(state.slowestPitStopSeconds),
+      };
+    })
+    .filter((row) => row && row.finish_position != null);
+}
+
+function buildHolderDisplayValue({ category, row }) {
+  switch (category) {
+    case 'race_winner':
+    case 'sprint_winner':
+    case 'second_place':
+    case 'third_place':
+    case 'best_p6_or_lower':
+    case 'best_p11_or_lower':
+    case 'random_finish_bonus':
+      return row.finish_position != null ? `P${row.finish_position}` : null;
+    case 'most_positions_gained':
+      return formatSignedValue(row.positions_gained);
+    case 'slowest_pit_stop':
+      return formatMetricDisplay('slowest_pit_stop_seconds', row.slowest_pit_stop_seconds);
+    default:
+      return null;
+  }
+}
+
+function buildRuleMetric(evaluation) {
+  const metricKey = evaluation?.resolution?.metric || null;
+  const value = evaluation?.resolution?.target_value;
+  if (!metricKey || value == null) return null;
+
+  return {
+    key: metricKey,
+    value,
+    display: formatMetricDisplay(metricKey, value),
+  };
+}
+
+function buildRuleStatus({ selectionState, liveSession, category, event }) {
+  if (selectionState === 'upcoming') return 'pending';
+  if (selectionState !== 'live') return 'unavailable';
+  if (!liveSession?.available) return 'unavailable';
+  if (category === 'random_finish_bonus' && getRandomBonusPosition(event) == null) {
+    return 'draw_pending';
+  }
+  return 'live';
+}
+
+function buildRuleNote({ selectionState, liveSession, status, evaluation }) {
+  if (status === 'pending') {
+    return 'TBD until live timing data is available.';
+  }
+  if (status === 'draw_pending') {
+    return 'Random finish target has not been drawn yet.';
+  }
+  if (status === 'unavailable') {
+    if (selectionState === 'live') {
+      return liveSession?.degradedReason || 'Live data is unavailable right now.';
+    }
+    return 'No active live scoring session.';
+  }
+  if (!evaluation?.winnerDriverIds?.length) {
+    return 'No current holder yet.';
+  }
+  return evaluation?.resolution?.note || null;
+}
+
+function buildPayoutBoard({
+  event,
+  selectionState,
+  liveSession,
+  rules,
+  liveRows,
+  ownershipRows,
+  viewerId,
+}) {
+  if (!event) {
+    return {
+      eventType: null,
+      isLive: false,
+      rules: [],
+    };
+  }
+
+  const ownershipByDriverId = new Map(
+    (ownershipRows || []).map((row) => [
+      Number(row.driver_id),
+      {
+        participantId: Number(row.participant_id),
+        participantName: row.owner_name,
+        participantColor: row.owner_color,
+      },
+    ]),
+  );
+  const liveRowsByResolverId = new Map(
+    (liveRows || []).map((row) => [row.driver_id, row]),
+  );
+
+  return {
+    eventType: event.type,
+    isLive: selectionState === 'live' && !!liveSession?.available,
+    rules: (rules || []).map((rule) => {
+      const status = buildRuleStatus({
+        selectionState,
+        liveSession,
+        category: rule.category,
+        event,
+      });
+
+      if (status !== 'live') {
+        return {
+          category: rule.category,
+          label: rule.label,
+          bps: Number(rule.bps || 0),
+          status,
+          holders: [],
+          metric: status === 'draw_pending'
+            ? {
+                key: 'finish_position',
+                value: null,
+                display: 'Pending',
+              }
+            : null,
+          note: buildRuleNote({ selectionState, liveSession, status, evaluation: null }),
+        };
+      }
+
+      const evaluation = evaluateCategoryRule({
+        category: rule.category,
+        rows: liveRows,
+        event,
+        rankOrder: Number(rule.rank_order || 1),
+      });
+
+      const holders = (evaluation.winnerDriverIds || [])
+        .map((resolverId) => liveRowsByResolverId.get(resolverId))
+        .filter(Boolean)
+        .map((row) => {
+          const owner = row.season_driver_id != null
+            ? ownershipByDriverId.get(Number(row.season_driver_id)) || null
+            : null;
+
+          return {
+            driverId: row.season_driver_id,
+            driverCode: row.driver_code,
+            driverName: row.driver_name,
+            teamName: row.team_name,
+            participantId: owner?.participantId || null,
+            participantName: owner?.participantName || null,
+            participantColor: owner?.participantColor || null,
+            isViewerOwner: owner ? Number(owner.participantId) === Number(viewerId) : false,
+            displayValue: buildHolderDisplayValue({ category: rule.category, row }),
+          };
+        });
+
+      return {
+        category: rule.category,
+        label: rule.label,
+        bps: Number(rule.bps || 0),
+        status,
+        holders,
+        metric: buildRuleMetric(evaluation),
+        note: buildRuleNote({ selectionState, liveSession, status, evaluation }),
+      };
+    }),
+  };
+}
+
 function buildFallbackLiveState({ event, session, state, error }) {
   if (!event) {
     return {
@@ -282,6 +506,11 @@ async function buildDashboardPayload({
       });
 
   const selection = await selectPrimaryEvent({ events, provider, now });
+  const [drivers, ownershipRows, eventRules] = await Promise.all([
+    Promise.resolve(getDrivers(seasonId)),
+    Promise.resolve(getOwnership(seasonId)),
+    selection.event ? Promise.resolve(getEventPayoutRules(seasonId, selection.event.type)) : Promise.resolve([]),
+  ]);
 
   let liveSession = buildFallbackLiveState({
     event: selection.event,
@@ -324,6 +553,16 @@ async function buildDashboardPayload({
     };
   }
 
+  const payoutBoard = buildPayoutBoard({
+    event: selection.event,
+    selectionState: selection.state,
+    liveSession,
+    rules: eventRules,
+    liveRows: buildLivePayoutRows({ liveSession, drivers }),
+    ownershipRows,
+    viewerId: viewer.id,
+  });
+
   const summary = buildStandingsSummary({
     viewer: viewerShape,
     standings,
@@ -346,6 +585,7 @@ async function buildDashboardPayload({
     primaryEvent: buildPrimaryEvent(selection.event, selection.state, liveSession),
     liveSession,
     portfolio,
+    payoutBoard,
   };
 
   payload.briefingMeta = dashboardBriefingService.getMeta({ dashboardPayload: payload });

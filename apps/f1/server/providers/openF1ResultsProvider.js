@@ -623,12 +623,20 @@ class OpenF1ResultsProvider {
     });
 
     const latestPitByDriver = new Map();
+    const slowestPitByDriver = new Map();
     (pitStops || []).forEach((row) => {
       const driverNumber = Number(row.driver_number);
       if (!Number.isFinite(driverNumber)) return;
       const current = latestPitByDriver.get(driverNumber);
       const candidate = pickMostRecentRow([current, row].filter(Boolean), ['date', 'date_of_pit_in', 'date_of_pit_out']);
       latestPitByDriver.set(driverNumber, candidate);
+
+      const stopDuration = Number(row.stop_duration);
+      if (!Number.isFinite(stopDuration) || stopDuration <= 0) return;
+      const currentSlowest = slowestPitByDriver.get(driverNumber);
+      if (currentSlowest == null || stopDuration > currentSlowest) {
+        slowestPitByDriver.set(driverNumber, stopDuration);
+      }
     });
 
     const championshipByDriver = new Map();
@@ -659,6 +667,7 @@ class OpenF1ResultsProvider {
           intervalToAhead: intervalRow?.interval || intervalRow?.interval_to_position_ahead || null,
           status: positionRow?.status || intervalRow?.status || null,
           lastPitStopSeconds: Number(pitRow?.stop_duration) > 0 ? Number(pitRow.stop_duration) : null,
+          slowestPitStopSeconds: slowestPitByDriver.get(driverNumber) ?? null,
           lastPitAt: parseIsoDate(pitRow?.date || pitRow?.date_of_pit_out || pitRow?.date_of_pit_in),
           championshipPosition: Number(championshipRow?.position) || null,
           championshipPoints: Number(championshipRow?.points) || null,

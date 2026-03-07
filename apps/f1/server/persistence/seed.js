@@ -40,6 +40,7 @@ function seedSeasonData(db, seasonId) {
       name = excluded.name,
       starts_at = excluded.starts_at,
       lock_at = excluded.lock_at
+    WHERE events.external_event_id IS NULL OR events.external_event_id LIKE 'mock-%'
   `);
   const insertEventRule = db.prepare(`
     INSERT OR IGNORE INTO event_payout_rules

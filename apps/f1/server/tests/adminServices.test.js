@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('path');
 const os = require('os');
+const { EVENTS_2026 } = require('../data/events2026');
 
 function freshModules() {
   for (const key of Object.keys(require.cache)) {
@@ -422,6 +423,99 @@ test('results admin refreshSchedule matches by round and type when provider name
   assert.equal(australianGp.name, 'FORMULA 1 LOUIS VUITTON AUSTRALIAN GRAND PRIX 2026');
 });
 
+test('startup seeding preserves provider-refreshed schedule rows on init rerun', async () => {
+  const {
+    db,
+    init,
+    getActiveSeasonId,
+    resultsAdminService,
+  } = setupDb();
+
+  const seasonId = getActiveSeasonId();
+  const provider = {
+    name: 'openf1',
+    async fetchSeasonSchedule() {
+      return [
+        {
+          external_event_id: 'persist-9001',
+          round_number: 1,
+          name: 'Australian Grand Prix',
+          type: 'grand_prix',
+          starts_at: '2026-03-09T04:00:00.000Z',
+          lock_at: '2026-03-09T03:50:00.000Z',
+        },
+      ];
+    },
+  };
+
+  const result = await resultsAdminService.refreshScheduleFromProvider({
+    seasonId,
+    provider,
+  });
+
+  assert.equal(result.ok, true);
+
+  const beforeRestart = db.prepare(`
+    SELECT external_event_id, name, starts_at, lock_at
+    FROM events
+    WHERE season_id = ? AND round_number = 1 AND type = 'grand_prix'
+  `).get(seasonId);
+
+  assert.deepEqual(beforeRestart, {
+    external_event_id: 'persist-9001',
+    name: 'Australian Grand Prix',
+    starts_at: '2026-03-09T04:00:00.000Z',
+    lock_at: '2026-03-09T03:50:00.000Z',
+  });
+
+  init();
+
+  const afterRestart = db.prepare(`
+    SELECT external_event_id, name, starts_at, lock_at
+    FROM events
+    WHERE season_id = ? AND round_number = 1 AND type = 'grand_prix'
+  `).get(seasonId);
+
+  assert.deepEqual(afterRestart, beforeRestart);
+});
+
+test('startup seeding still repairs drifted mock schedule rows on init rerun', () => {
+  const {
+    db,
+    init,
+    getActiveSeasonId,
+  } = setupDb();
+
+  const seasonId = getActiveSeasonId();
+  const canonicalEvent = EVENTS_2026.find((event) => (
+    event.round_number === 1 && event.type === 'grand_prix'
+  ));
+
+  db.prepare(`
+    UPDATE events
+    SET external_event_id = 'mock-1',
+        name = 'Drifted Australian Grand Prix',
+        starts_at = '2001-01-01T00:00:00.000Z',
+        lock_at = '2000-12-31T23:50:00.000Z'
+    WHERE season_id = ? AND round_number = 1 AND type = 'grand_prix'
+  `).run(seasonId);
+
+  init();
+
+  const repaired = db.prepare(`
+    SELECT external_event_id, name, starts_at, lock_at
+    FROM events
+    WHERE season_id = ? AND round_number = 1 AND type = 'grand_prix'
+  `).get(seasonId);
+
+  assert.deepEqual(repaired, {
+    external_event_id: 'mock-1',
+    name: canonicalEvent.name,
+    starts_at: canonicalEvent.starts_at,
+    lock_at: canonicalEvent.lock_at,
+  });
+});
+
 test('auction admin shufflePendingAuctionQueue reorders pending drivers only', () => {
   const {
     db,
@@ -518,6 +612,10 @@ test('results admin refreshSchedule inserts missing sprint-weekend grand prix ro
   } = setupDb();
 
   const seasonId = getActiveSeasonId();
+  db.prepare(`
+    DELETE FROM events
+    WHERE season_id = ? AND round_number = 2 AND type = 'grand_prix'
+  `).run(seasonId);
 
   const provider = {
     name: 'openf1',
@@ -569,6 +667,10 @@ test('results admin refreshSchedule removes stale unmatched pending events', asy
   } = setupDb();
 
   const seasonId = getActiveSeasonId();
+  db.prepare(`
+    INSERT INTO events (season_id, external_event_id, round_number, name, type, starts_at, lock_at)
+    VALUES (?, 'stale-sprint', 99, 'Stale Test Sprint', 'sprint', '2026-12-31T00:00:00Z', '2026-12-30T23:50:00Z')
+  `).run(seasonId);
 
   const provider = {
     name: 'openf1',
@@ -589,7 +691,7 @@ test('results admin refreshSchedule removes stale unmatched pending events', asy
   const before = db.prepare(`
     SELECT COUNT(*) as c
     FROM events
-    WHERE season_id = ? AND round_number = 12 AND type = 'sprint'
+    WHERE season_id = ? AND external_event_id = 'stale-sprint'
   `).get(seasonId).c;
 
   const result = await resultsAdminService.refreshScheduleFromProvider({
@@ -603,7 +705,7 @@ test('results admin refreshSchedule removes stale unmatched pending events', asy
   const after = db.prepare(`
     SELECT COUNT(*) as c
     FROM events
-    WHERE season_id = ? AND round_number = 12 AND type = 'sprint'
+    WHERE season_id = ? AND external_event_id = 'stale-sprint'
   `).get(seasonId).c;
 
   assert.equal(before, 1);
@@ -1080,9 +1182,9 @@ test('results admin restoreSeededSeasonMetadata rebuilds canonical 2026 drivers 
 
   assert.equal(result.ok, true);
   assert.equal(result.driverCount, 20);
-  assert.equal(result.eventCount, 24);
+  assert.equal(result.eventCount, EVENTS_2026.length);
   assert.equal(db.prepare('SELECT COUNT(*) as c FROM drivers WHERE season_id = ?').get(seasonId).c, 20);
-  assert.equal(db.prepare('SELECT COUNT(*) as c FROM events WHERE season_id = ?').get(seasonId).c, 24);
+  assert.equal(db.prepare('SELECT COUNT(*) as c FROM events WHERE season_id = ?').get(seasonId).c, EVENTS_2026.length);
   assert.equal(db.prepare('SELECT COUNT(*) as c FROM auction_items WHERE season_id = ?').get(seasonId).c, 20);
   assert.equal(db.prepare('SELECT COUNT(*) as c FROM season_participants WHERE season_id = ?').get(seasonId).c, 0);
 

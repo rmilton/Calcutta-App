@@ -1,6 +1,6 @@
 # HEARTBEAT.md
 
-Last updated: 2026-03-05
+Last updated: 2026-03-07
 Owner: On-call engineer / active implementer
 
 ## Status At A Glance
@@ -33,6 +33,7 @@ Owner: On-call engineer / active implementer
 - F1 participant navigation now centers on `/dashboard`, which combines personal standings, full league standings, and current-or-next scoring-session race context.
 - F1 dashboard now supports brief live OpenF1 session snapshots with short-lived caching and an optional on-demand Anthropic participant briefing.
 - The latest F1 dashboard briefing is now persisted per participant so it survives polling refreshes, logout/login, and process restarts.
+- F1 startup seeding now preserves provider-refreshed schedule rows across restart/deploy cycles instead of silently reverting them to mock seed dates.
 
 ## Active Priorities
 
@@ -56,6 +57,7 @@ Owner: On-call engineer / active implementer
 2. Converted handoff docs to compatibility stubs.
 3. Hardened NCAA/F1 shutdown behavior to avoid false deployment-failure exits.
 4. Added F1 OpenF1 provider integration with provider diagnostics, metadata refresh controls, optional auto-poll, and live-session auth support.
+5. Fixed F1 startup schedule seeding so provider-refreshed event dates persist after restart/deploy.
 
 ## Next Suggested Actions
 

@@ -13,6 +13,7 @@ const EVENT_NAME_OVERRIDES = {
   'miami gardens': 'Miami Grand Prix',
   'monte carlo': 'Monaco Grand Prix',
   barcelona: 'Spanish Grand Prix',
+  catalunya: 'Barcelona-Catalunya Grand Prix',
   spielberg: 'Austrian Grand Prix',
   silverstone: 'British Grand Prix',
   spa: 'Belgian Grand Prix',

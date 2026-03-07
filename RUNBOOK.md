@@ -92,6 +92,7 @@ After deploy:
 4. Run admin `Refresh Drivers` and `Refresh Schedule` before syncing event results.
 5. If OpenF1 returns `429`, wait briefly and retry; the F1 provider now serializes requests, spaces them, retries boundedly, and enforces a rolling minute budget, but repeated manual clicks can still queue work and extend refresh latency.
 6. If provider responses are incomplete or unmapped, use manual results entry and do not force-score partial provider data.
+7. Schedule refresh is now durable across restart/deploy cycles; if dates drift again, inspect the stored event rows and provider sync state instead of assuming startup reseeding will correct them.
 
 ### E) F1 Backup / Export
 

@@ -56,6 +56,7 @@ Server: `http://localhost:3002`
 - Event result sync now preserves unknown substitute/new race drivers by inserting them as inactive season drivers with no auction item; their results still score, but any resulting payouts remain unowned/undistributed unless an owner exists
 - The participant dashboard reads live scoring-session data from OpenF1 server-side, caches session snapshots briefly to avoid request spikes, and degrades to schedule-only cards when live endpoints are unavailable
 - If the active season has no bids, ownership, or scored race data yet, driver refresh can now rebuild the season roster directly from OpenF1 when the provider lineup has drifted from the seeded 2026 driver list
+- Startup seeding now treats the 2026 event list as bootstrap-only data: provider-refreshed schedule rows survive restart/deploy cycles, while still-mock rows can still be repaired from the canonical seed list
 - OpenF1 requests are now serialized, spaced, bounded-retried on `429`, and limited against a rolling per-minute budget to match the provider's published rate limits more closely
 - Optional auto-poll:
   - `F1_AUTO_POLL_ENABLED=1`

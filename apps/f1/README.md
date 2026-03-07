@@ -66,6 +66,7 @@ Server: `http://localhost:3002`
 - Admin Auction page can explicitly lock or unlock the season roster; Results Sync respects that lock in addition to activity-based safeguards
 - Admin Payout Audit page can export both rule-level and winner-detail CSVs, plus a concise text summary for payout review
 - Admin Auction page exposes a shareable invite link that deep-links to `/join` with the active invite code prefilled
+- Admin Auction page can export auction ownership results as CSV for post-auction sharing and record-keeping
 
 ## Engineering Docs
 

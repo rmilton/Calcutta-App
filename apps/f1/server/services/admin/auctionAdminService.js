@@ -5,8 +5,22 @@ const {
   updateSeasonSettings,
   getSeasonParticipants,
   getAuctionItems,
+  getOwnership,
 } = require('../../db');
 const { shuffleArray } = require('../../lib/shuffle');
+
+function csvCell(value) {
+  if (value == null) return '';
+  const text = String(value);
+  if (/[",\n]/.test(text)) {
+    return `"${text.replace(/"/g, '""')}"`;
+  }
+  return text;
+}
+
+function formatCurrency(cents) {
+  return (Number(cents || 0) / 100).toFixed(2);
+}
 
 function getSettings({ seasonId }) {
   return getSeasonSettings(seasonId);
@@ -101,6 +115,77 @@ function closeActiveAuction({ seasonId, auctionService }) {
   return auctionService.closeActiveAuction({ seasonId });
 }
 
+function buildAuctionResultsCsv({ seasonId }) {
+  const participants = getSeasonParticipants(seasonId)
+    .filter((participant) => !participant.is_admin);
+  const ownership = getOwnership(seasonId);
+
+  const totalsByParticipantId = ownership.reduce((acc, row) => {
+    const existing = acc.get(row.participant_id) || {
+      driverCount: 0,
+      spendCents: 0,
+    };
+    existing.driverCount += 1;
+    existing.spendCents += Number(row.purchase_price_cents || 0);
+    acc.set(row.participant_id, existing);
+    return acc;
+  }, new Map());
+
+  const rows = [[
+    'participant_name',
+    'participant_color',
+    'participant_driver_count',
+    'participant_total_spend_cents',
+    'participant_total_spend_usd',
+    'driver_name',
+    'driver_code',
+    'team_name',
+    'purchase_price_cents',
+    'purchase_price_usd',
+  ]];
+
+  participants.forEach((participant) => {
+    const participantRows = ownership.filter((row) => row.participant_id === participant.id);
+    const totals = totalsByParticipantId.get(participant.id) || {
+      driverCount: 0,
+      spendCents: 0,
+    };
+
+    if (!participantRows.length) {
+      rows.push([
+        participant.name,
+        participant.color,
+        totals.driverCount,
+        totals.spendCents,
+        formatCurrency(totals.spendCents),
+        '',
+        '',
+        '',
+        '',
+        '',
+      ]);
+      return;
+    }
+
+    participantRows.forEach((row) => {
+      rows.push([
+        participant.name,
+        participant.color,
+        totals.driverCount,
+        totals.spendCents,
+        formatCurrency(totals.spendCents),
+        row.driver_name,
+        row.driver_code,
+        row.team_name,
+        row.purchase_price_cents,
+        formatCurrency(row.purchase_price_cents),
+      ]);
+    });
+  });
+
+  return rows.map((row) => row.map(csvCell).join(',')).join('\n');
+}
+
 module.exports = {
   getSettings,
   updateSettingsForSeason,
@@ -113,4 +198,5 @@ module.exports = {
   setAuctionStatus,
   startNextAuction,
   closeActiveAuction,
+  buildAuctionResultsCsv,
 };

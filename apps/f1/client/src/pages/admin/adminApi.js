@@ -1,9 +1,9 @@
-import { api } from '../../utils.js';
+import { api, readJsonSafely } from '../../utils.js';
 
 async function parseApiResponse(response, fallbackMessage) {
-  const data = await response.json();
+  const data = await readJsonSafely(response);
   if (!response.ok) {
-    throw new Error(data.error || fallbackMessage);
+    throw new Error(data?.error || fallbackMessage);
   }
   return data;
 }
@@ -64,6 +64,10 @@ export async function readProviderStatus() {
 
 export function databaseBackupHref() {
   return '/api/admin/ops/database-backup';
+}
+
+export function auctionResultsExportHref() {
+  return '/api/admin/auction/export.csv';
 }
 
 export function buildInviteLink(inviteCode, origin = window.location.origin) {

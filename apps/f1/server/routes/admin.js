@@ -114,6 +114,15 @@ router.post('/auction/shuffle', withAdmin, (req, res) => {
   return runAndRespond(res, result, (payload) => ({ ok: true, ...payload }));
 });
 
+router.get('/auction/export.csv', withAdmin, (req, res) => {
+  const seasonId = getActiveSeasonId();
+  const csv = auctionAdminService.buildAuctionResultsCsv({ seasonId });
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="f1-auction-results-${timestamp}.csv"`);
+  return res.send(csv);
+});
+
 router.get('/payout-rules', withAdmin, (req, res) => {
   const seasonId = getActiveSeasonId();
   return res.json(payoutRulesAdminService.getPayoutRulesForSeason({ seasonId }));

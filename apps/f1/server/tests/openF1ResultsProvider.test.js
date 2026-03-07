@@ -416,6 +416,7 @@ test('OpenF1ResultsProvider fetchLiveSessionSnapshot normalizes live race data',
       { driver_number: 81, interval: 'LEADER', gap_to_leader: 'LEADER', date: '2026-02-22T04:20:01Z' },
     ],
     '/v1/pit?session_key=9001': [
+      { driver_number: 1, stop_duration: 5.41, date_of_pit_out: '2026-02-22T04:08:00Z' },
       { driver_number: 1, stop_duration: 2.98, date_of_pit_out: '2026-02-22T04:10:00Z' },
     ],
     '/v1/race_control?session_key=9001': [
@@ -451,6 +452,7 @@ test('OpenF1ResultsProvider fetchLiveSessionSnapshot normalizes live race data',
   assert.equal(snapshot.leaders[1].positionsGained, 2);
   assert.equal(snapshot.trackStatus.flag, 'SC');
   assert.equal(snapshot.driverStates[1].lastPitStopSeconds, 2.98);
+  assert.equal(snapshot.driverStates[1].slowestPitStopSeconds, 5.41);
   assert.equal(snapshot.championshipDrivers[0].championshipPosition, 1);
 });
 

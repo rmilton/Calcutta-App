@@ -11,12 +11,6 @@ import {
   toTimestampMs,
 } from '../utils';
 
-function formatSignedNumber(value) {
-  if (value == null || !Number.isFinite(Number(value))) return '0';
-  const num = Number(value);
-  return `${num > 0 ? '+' : ''}${num}`;
-}
-
 function formatCountdown(iso) {
   const targetMs = toTimestampMs(iso);
   if (targetMs == null) return 'TBD';
@@ -50,9 +44,22 @@ function LiveStatusPill({ liveSession, primaryEvent }) {
   return <span className={liveClassName}>{label}</span>;
 }
 
-function DriverTrackerTable({ rows, emptyText }) {
-  if (!rows?.length) {
-    return <p className="muted">{emptyText}</p>;
+function formatBpsPercent(bps) {
+  const num = Number(bps);
+  if (!Number.isFinite(num)) return '-';
+  return `${(num / 100).toFixed(2)}%`;
+}
+
+function payoutStatusLabel(rule) {
+  if (rule?.status === 'draw_pending') return 'Draw Pending';
+  if (rule?.status === 'pending') return 'TBD';
+  if (rule?.status === 'unavailable') return 'Live Unavailable';
+  return 'Live';
+}
+
+function PayoutBoardTable({ rules }) {
+  if (!rules?.length) {
+    return <p className="muted">No payout categories are configured for this event.</p>;
   }
 
   return (
@@ -60,56 +67,94 @@ function DriverTrackerTable({ rows, emptyText }) {
       <table>
         <thead>
           <tr>
-            <th>Driver</th>
-            <th>Pos</th>
-            <th>Delta</th>
-            <th>Gap</th>
-            <th>Pit</th>
+            <th>Category</th>
+            <th>Pool</th>
+            <th>Current Holder</th>
+            <th>Owner</th>
+            <th>Metric</th>
           </tr>
         </thead>
         <tbody>
-          {rows.map((driver) => (
-            <tr key={`${driver.external_driver_id || driver.driver_id}`}>
+          {rules.map((rule) => (
+            <tr key={rule.category}>
               <td>
-                <DriverIdentity
-                  driverName={driver.driver_name}
-                  driverCode={driver.driver_code}
-                  teamName={driver.team_name}
-                  compact
-                  showCode={false}
-                />
+                <div className="dashboard-payout-cell">
+                  <strong>{rule.label}</strong>
+                  <span className={`dashboard-payout-status ${rule.status}`}>{payoutStatusLabel(rule)}</span>
+                  {rule.note ? <span className="muted small">{rule.note}</span> : null}
+                </div>
               </td>
-              <td>{driver.position ? `P${driver.position}` : '-'}</td>
-              <td className={(driver.positionsGained || 0) >= 0 ? 'text-pos' : 'text-neg'}>
-                {driver.positionsGained == null ? '-' : formatSignedNumber(driver.positionsGained)}
+              <td>{formatBpsPercent(rule.bps)}</td>
+              <td>
+                {rule.holders?.length ? (
+                  <div className="dashboard-payout-stack">
+                    {rule.holders.map((holder) => (
+                      <div
+                        key={`${rule.category}-${holder.driverId || holder.driverCode || holder.driverName}`}
+                        className="dashboard-payout-holder"
+                      >
+                        <DriverIdentity
+                          driverName={holder.driverName}
+                          driverCode={holder.driverCode}
+                          teamName={holder.teamName}
+                          compact
+                          showCode={false}
+                        />
+                        {holder.isViewerOwner ? <span className="dashboard-owner-badge">Yours</span> : null}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="muted">{payoutStatusLabel(rule)}</span>
+                )}
               </td>
-              <td>{driver.gapToLeader || driver.intervalToAhead || '-'}</td>
-              <td>{driver.lastPitStopSeconds ? `${Number(driver.lastPitStopSeconds).toFixed(2)}s` : '-'}</td>
+              <td>
+                {rule.holders?.length ? (
+                  <div className="dashboard-payout-stack">
+                    {rule.holders.map((holder) => (
+                      <div key={`${rule.category}-owner-${holder.driverId || holder.driverCode || holder.driverName}`} className="dashboard-owner-line">
+                        {holder.participantName ? (
+                          <>
+                            <span
+                              className="avatar dashboard-participant-avatar"
+                              style={{
+                                backgroundColor: `${holder.participantColor || '#e10600'}22`,
+                                color: holder.participantColor || '#e10600',
+                                borderColor: `${holder.participantColor || '#e10600'}66`,
+                              }}
+                            >
+                              {(holder.participantName || '?').trim().charAt(0).toUpperCase() || '?'}
+                            </span>
+                            <span>{holder.participantName}</span>
+                          </>
+                        ) : (
+                          <span className="muted">Unowned</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="muted">-</span>
+                )}
+              </td>
+              <td>
+                {rule.holders?.length ? (
+                  <div className="dashboard-payout-stack">
+                    {rule.holders.map((holder) => (
+                      <div key={`${rule.category}-metric-${holder.driverId || holder.driverCode || holder.driverName}`}>
+                        {holder.displayValue || rule.metric?.display || '-'}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="muted">{rule.metric?.display || '-'}</span>
+                )}
+              </td>
             </tr>
           ))}
         </tbody>
       </table>
     </div>
-  );
-}
-
-function CompactRankingList({ rows, emptyText, valueLabel }) {
-  if (!rows?.length) return <p className="muted">{emptyText}</p>;
-
-  return (
-    <ul className="list dashboard-ranking-list">
-      {rows.map((row) => (
-        <li key={`${row.external_driver_id || row.driver_code || row.driver_name}`}>
-          <div className="dashboard-ranking-main">
-            <strong>{row.driver_name || row.driver_code || 'Driver'}</strong>
-            <span className="muted small">{row.team_name || 'Team N/A'}</span>
-          </div>
-          <div className="dashboard-ranking-value">
-            <strong>{valueLabel(row)}</strong>
-          </div>
-        </li>
-      ))}
-    </ul>
   );
 }
 
@@ -191,6 +236,7 @@ export default function Dashboard() {
   const summary = data?.summary || {};
   const primaryEvent = data?.primaryEvent || null;
   const liveSession = data?.liveSession || null;
+  const payoutBoard = data?.payoutBoard || { rules: [] };
   const isAdmin = !!data?.viewer?.isAdmin;
 
   const highlightedStandings = useMemo(() => standings.map((row, index) => ({
@@ -199,10 +245,6 @@ export default function Dashboard() {
     net_cents: rowNet(row),
     isViewer: Number(row.id) === Number(data?.viewer?.id),
   })), [standings, data?.viewer?.id]);
-
-  const raceLeaders = liveSession?.leaders || [];
-  const ownedDrivers = liveSession?.ownedDrivers || [];
-  const championshipDrivers = liveSession?.championshipDrivers || [];
 
   if (loading && !data) {
     return <section className="loading-panel">Loading dashboard...</section>;
@@ -343,70 +385,21 @@ export default function Dashboard() {
         </section>
       </div>
 
-      <div className="dashboard-main-grid">
-        <section className="panel stack">
-          <div className="dashboard-card-head">
-            <div>
-              <h2>{isAdmin ? 'Race Leaders' : 'My Drivers Live'}</h2>
-              <p className="muted">
-                {isAdmin
-                  ? 'Top runners in the current scoring session.'
-                  : 'Your purchased drivers with live position, gains, and pit context.'}
-              </p>
-            </div>
-            {!isAdmin ? (
-              <Link className="btn btn-outline" to="/my-drivers">Open My Drivers</Link>
-            ) : null}
+      <section className="panel stack dashboard-payout-board">
+        <div className="dashboard-card-head">
+          <div>
+            <h2>Live Payout Board</h2>
+            <p className="muted">
+              Current holders for the active payout categories on this {primaryEvent ? eventTypeLabel(payoutBoard?.eventType || primaryEvent?.type) : 'scoring event'}.
+            </p>
           </div>
-
-          <DriverTrackerTable
-            rows={isAdmin ? raceLeaders : ownedDrivers}
-            emptyText={isAdmin ? 'No live leaders available right now.' : 'No owned drivers are currently showing live race data.'}
-          />
-        </section>
-
-        <section className="panel stack">
-          <div className="dashboard-card-head">
-            <div>
-              <h2>{isAdmin ? 'Championship Snapshot' : 'Race Context'}</h2>
-              <p className="muted">
-                {isAdmin
-                  ? 'Driver standings from the live session payload.'
-                  : 'Session leaders and championship context for the current weekend.'}
-              </p>
-            </div>
-          </div>
-
           {!isAdmin ? (
-            <>
-              <CompactRankingList
-                rows={raceLeaders}
-                emptyText="Leader board will populate when live data is available."
-                valueLabel={(row) => (row.position ? `P${row.position}` : '-')}
-              />
-              <CompactRankingList
-                rows={championshipDrivers}
-                emptyText="Championship positions are unavailable right now."
-                valueLabel={(row) => (
-                  row.championshipPosition
-                    ? `P${row.championshipPosition} • ${row.championshipPoints ?? 0} pts`
-                    : '-'
-                )}
-              />
-            </>
-          ) : (
-            <CompactRankingList
-              rows={championshipDrivers}
-              emptyText="Championship data is unavailable right now."
-              valueLabel={(row) => (
-                row.championshipPosition
-                  ? `P${row.championshipPosition} • ${row.championshipPoints ?? 0} pts`
-                  : '-'
-              )}
-            />
-          )}
-        </section>
-      </div>
+            <Link className="btn btn-outline" to="/my-drivers">Open My Drivers</Link>
+          ) : null}
+        </div>
+
+        <PayoutBoardTable rules={payoutBoard.rules} />
+      </section>
 
       <section className="panel">
         <div className="dashboard-card-head">

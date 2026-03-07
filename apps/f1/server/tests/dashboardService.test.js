@@ -178,6 +178,8 @@ test('GET /api/standings/dashboard returns participant summary, portfolio, and f
   assert.equal(payload.briefingMeta.mode, 'on_demand');
   assert.equal(payload.briefing.text, 'Persistent participant briefing.');
   assert.ok(payload.primaryEvent);
+  assert.ok(Array.isArray(payload.payoutBoard.rules));
+  assert.ok(payload.payoutBoard.rules.length > 0);
   assert.equal(Array.isArray(payload.standings), true);
 });
 
@@ -324,6 +326,265 @@ test('selectPrimaryEvent prefers live, then upcoming, then most recent', async (
   });
   assert.equal(recentSelection.event.id, 2);
   assert.equal(recentSelection.state, 'recent');
+});
+
+test('buildDashboardPayload resolves live grand prix payout board with ownership and draw pending state', async () => {
+  const { db, getActiveSeasonId, dashboardService } = setupDb();
+  const seasonId = getActiveSeasonId();
+  const alphaId = createParticipant(db, seasonId, {
+    name: 'Alpha',
+    token: 'alpha-live-gp',
+    color: '#ff0000',
+  });
+  const bravoId = createParticipant(db, seasonId, {
+    name: 'Bravo',
+    token: 'bravo-live-gp',
+    color: '#00ff00',
+  });
+
+  const drivers = db.prepare(`
+    SELECT id, external_id, code, name, team_name
+    FROM drivers
+    WHERE season_id = ?
+    ORDER BY id ASC
+    LIMIT 5
+  `).all(seasonId);
+
+  db.prepare(`
+    UPDATE events
+    SET external_event_id = '9001'
+    WHERE season_id = ? AND round_number = 1 AND type = 'grand_prix'
+  `).run(seasonId);
+
+  db.prepare(`
+    INSERT INTO ownership (season_id, driver_id, participant_id, purchase_price_cents)
+    VALUES (?, ?, ?, ?)
+  `).run(seasonId, drivers[0].id, alphaId, 2500);
+  db.prepare(`
+    INSERT INTO ownership (season_id, driver_id, participant_id, purchase_price_cents)
+    VALUES (?, ?, ?, ?)
+  `).run(seasonId, drivers[3].id, bravoId, 1900);
+
+  const payload = await dashboardService.buildDashboardPayload({
+    seasonId,
+    viewer: {
+      id: alphaId,
+      name: 'Alpha',
+      color: '#ff0000',
+      is_admin: 0,
+    },
+    nowImpl: () => Date.parse('2026-03-08T05:00:00Z'),
+    provider: {
+      name: 'openf1',
+      async fetchSessionMetadata() {
+        return {
+          date_start: '2026-03-08T04:00:00Z',
+          date_end: '2026-03-08T06:00:00Z',
+        };
+      },
+      async fetchLiveSessionSnapshot() {
+        return {
+          available: true,
+          isLive: true,
+          fetchedAt: '2026-03-08T05:00:05Z',
+          headline: 'Live snapshot',
+          statusText: 'Race live',
+          trackStatus: null,
+          driverStates: [
+            { external_driver_id: drivers[0].external_id, driver_code: drivers[0].code, driver_name: drivers[0].name, team_name: drivers[0].team_name, position: 1, positionsGained: 0, slowestPitStopSeconds: null },
+            { external_driver_id: drivers[1].external_id, driver_code: drivers[1].code, driver_name: drivers[1].name, team_name: drivers[1].team_name, position: 2, positionsGained: -1, slowestPitStopSeconds: null },
+            { external_driver_id: drivers[2].external_id, driver_code: drivers[2].code, driver_name: drivers[2].name, team_name: drivers[2].team_name, position: 3, positionsGained: 1, slowestPitStopSeconds: null },
+            { external_driver_id: drivers[3].external_id, driver_code: drivers[3].code, driver_name: drivers[3].name, team_name: drivers[3].team_name, position: 6, positionsGained: 3, slowestPitStopSeconds: 5.12 },
+            { external_driver_id: drivers[4].external_id, driver_code: drivers[4].code, driver_name: drivers[4].name, team_name: drivers[4].team_name, position: 11, positionsGained: 4, slowestPitStopSeconds: 3.21 },
+          ],
+          leaders: [],
+          championshipDrivers: [],
+          ownedDrivers: [],
+        };
+      },
+    },
+  });
+
+  assert.equal(payload.payoutBoard.eventType, 'grand_prix');
+  assert.equal(payload.payoutBoard.isLive, true);
+  assert.deepEqual(
+    payload.payoutBoard.rules.map((rule) => rule.category),
+    [
+      'race_winner',
+      'second_place',
+      'third_place',
+      'best_p6_or_lower',
+      'best_p11_or_lower',
+      'most_positions_gained',
+      'slowest_pit_stop',
+      'random_finish_bonus',
+    ],
+  );
+
+  const raceWinner = payload.payoutBoard.rules.find((rule) => rule.category === 'race_winner');
+  assert.equal(raceWinner.status, 'live');
+  assert.equal(raceWinner.holders[0].driverId, drivers[0].id);
+  assert.equal(raceWinner.holders[0].participantName, 'Alpha');
+  assert.equal(raceWinner.holders[0].isViewerOwner, true);
+  assert.equal(raceWinner.holders[0].displayValue, 'P1');
+
+  const bestP6 = payload.payoutBoard.rules.find((rule) => rule.category === 'best_p6_or_lower');
+  assert.equal(bestP6.holders[0].driverId, drivers[3].id);
+  assert.equal(bestP6.holders[0].participantName, 'Bravo');
+  assert.equal(bestP6.metric.display, 'P6');
+
+  const bestP11 = payload.payoutBoard.rules.find((rule) => rule.category === 'best_p11_or_lower');
+  assert.equal(bestP11.holders[0].driverId, drivers[4].id);
+  assert.equal(bestP11.holders[0].participantName, null);
+
+  const mostGained = payload.payoutBoard.rules.find((rule) => rule.category === 'most_positions_gained');
+  assert.equal(mostGained.holders[0].driverId, drivers[4].id);
+  assert.equal(mostGained.holders[0].displayValue, '+4');
+  assert.equal(mostGained.metric.display, '+4');
+
+  const slowestPit = payload.payoutBoard.rules.find((rule) => rule.category === 'slowest_pit_stop');
+  assert.equal(slowestPit.holders[0].driverId, drivers[3].id);
+  assert.equal(slowestPit.holders[0].displayValue, '5.12s');
+  assert.equal(slowestPit.metric.display, '5.12s');
+
+  const randomBonus = payload.payoutBoard.rules.find((rule) => rule.category === 'random_finish_bonus');
+  assert.equal(randomBonus.status, 'draw_pending');
+  assert.equal(randomBonus.holders.length, 0);
+});
+
+test('buildDashboardPayload limits sprint payout board to sprint-active categories', async () => {
+  const { db, getActiveSeasonId, dashboardService } = setupDb();
+  const seasonId = getActiveSeasonId();
+  const viewerId = createParticipant(db, seasonId, {
+    name: 'Sprint Viewer',
+    token: 'sprint-viewer',
+    color: '#112233',
+  });
+
+  const drivers = db.prepare(`
+    SELECT id, external_id, code, name, team_name
+    FROM drivers
+    WHERE season_id = ?
+    ORDER BY id ASC
+    LIMIT 3
+  `).all(seasonId);
+
+  db.prepare(`
+    UPDATE events
+    SET external_event_id = '9002'
+    WHERE season_id = ? AND round_number = 2 AND type = 'sprint'
+  `).run(seasonId);
+
+  const payload = await dashboardService.buildDashboardPayload({
+    seasonId,
+    viewer: {
+      id: viewerId,
+      name: 'Sprint Viewer',
+      color: '#112233',
+      is_admin: 0,
+    },
+    nowImpl: () => Date.parse('2026-03-14T03:15:00Z'),
+    provider: {
+      name: 'openf1',
+      async fetchSessionMetadata() {
+        return {
+          date_start: '2026-03-14T03:00:00Z',
+          date_end: '2026-03-14T04:00:00Z',
+        };
+      },
+      async fetchLiveSessionSnapshot() {
+        return {
+          available: true,
+          isLive: true,
+          fetchedAt: '2026-03-14T03:15:00Z',
+          statusText: 'Sprint live',
+          driverStates: [
+            { external_driver_id: drivers[0].external_id, driver_code: drivers[0].code, driver_name: drivers[0].name, team_name: drivers[0].team_name, position: 1, positionsGained: 0, slowestPitStopSeconds: null },
+            { external_driver_id: drivers[1].external_id, driver_code: drivers[1].code, driver_name: drivers[1].name, team_name: drivers[1].team_name, position: 6, positionsGained: 2, slowestPitStopSeconds: null },
+            { external_driver_id: drivers[2].external_id, driver_code: drivers[2].code, driver_name: drivers[2].name, team_name: drivers[2].team_name, position: 8, positionsGained: 4, slowestPitStopSeconds: null },
+          ],
+          leaders: [],
+          championshipDrivers: [],
+          ownedDrivers: [],
+        };
+      },
+    },
+  });
+
+  assert.equal(payload.payoutBoard.eventType, 'sprint');
+  assert.deepEqual(
+    payload.payoutBoard.rules.map((rule) => rule.category),
+    ['sprint_winner', 'best_p6_or_lower', 'most_positions_gained', 'random_finish_bonus'],
+  );
+});
+
+test('buildDashboardPayload returns pending payout board for upcoming events', async () => {
+  const { db, getActiveSeasonId, dashboardService } = setupDb();
+  const seasonId = getActiveSeasonId();
+  const viewerId = createParticipant(db, seasonId, {
+    name: 'Pending Viewer',
+    token: 'pending-viewer',
+    color: '#334455',
+  });
+
+  const payload = await dashboardService.buildDashboardPayload({
+    seasonId,
+    viewer: {
+      id: viewerId,
+      name: 'Pending Viewer',
+      color: '#334455',
+      is_admin: 0,
+    },
+    nowImpl: () => Date.parse('2026-03-07T12:00:00Z'),
+    provider: { name: 'mock' },
+  });
+
+  assert.ok(payload.payoutBoard.rules.length > 0);
+  assert.ok(payload.payoutBoard.rules.every((rule) => rule.status === 'pending'));
+  assert.ok(payload.payoutBoard.rules.every((rule) => rule.note === 'TBD until live timing data is available.'));
+});
+
+test('buildDashboardPayload marks payout board unavailable when live session load fails', async () => {
+  const { db, getActiveSeasonId, dashboardService } = setupDb();
+  const seasonId = getActiveSeasonId();
+  const viewerId = createParticipant(db, seasonId, {
+    name: 'Fallback Viewer',
+    token: 'fallback-viewer',
+    color: '#556677',
+  });
+
+  db.prepare(`
+    UPDATE events
+    SET external_event_id = '9001'
+    WHERE season_id = ? AND round_number = 1 AND type = 'grand_prix'
+  `).run(seasonId);
+
+  const payload = await dashboardService.buildDashboardPayload({
+    seasonId,
+    viewer: {
+      id: viewerId,
+      name: 'Fallback Viewer',
+      color: '#556677',
+      is_admin: 0,
+    },
+    nowImpl: () => Date.parse('2026-03-08T05:00:00Z'),
+    provider: {
+      name: 'openf1',
+      async fetchSessionMetadata() {
+        return {
+          date_start: '2026-03-08T04:00:00Z',
+          date_end: '2026-03-08T06:00:00Z',
+        };
+      },
+      async fetchLiveSessionSnapshot() {
+        throw new Error('OpenF1 temporarily unavailable.');
+      },
+    },
+  });
+
+  assert.ok(payload.payoutBoard.rules.length > 0);
+  assert.ok(payload.payoutBoard.rules.every((rule) => rule.status === 'unavailable'));
+  assert.match(payload.payoutBoard.rules[0].note, /temporarily unavailable/i);
 });
 
 test('dashboard briefing service caches and refreshes on force', async () => {

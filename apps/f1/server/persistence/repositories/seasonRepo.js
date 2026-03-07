@@ -19,7 +19,11 @@ function getParticipantByToken(db, token) {
 
 function getSeasonParticipants(db, seasonId) {
   return db.prepare(`
-    SELECT p.id, p.name, p.color, p.is_admin
+    SELECT p.id, p.name, p.color, p.is_admin,
+           CASE
+             WHEN p.session_token IS NOT NULL AND TRIM(p.session_token) <> '' THEN 1
+             ELSE 0
+           END as has_session_token
     FROM participants p
     JOIN season_participants sp ON sp.participant_id = p.id
     WHERE sp.season_id = ?

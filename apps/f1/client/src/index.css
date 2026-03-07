@@ -456,6 +456,15 @@ button {
   line-height: 1.45;
 }
 
+.join-policy-note {
+  margin: 0;
+  padding: 0.65rem 0.7rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(7, 11, 18, 0.6);
+  line-height: 1.45;
+}
+
 .join-auth-panel .error-text {
   margin-top: 0.7rem;
 }
@@ -2106,6 +2115,10 @@ tbody tr:hover {
 
 .admin-participant-identity strong {
   display: block;
+}
+
+.admin-participant-identity .error-text {
+  margin: 0;
 }
 
 .admin-participant-swatch {

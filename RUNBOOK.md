@@ -46,6 +46,7 @@ Operational guide for deploying, validating, and recovering NCAA/F1 services.
 4. Do not set `F1_PORT` in Railway.
 5. Keep `F1_AUTO_POLL_ENABLED=0` until one successful manual OpenF1 verification pass is complete.
 6. The `/dashboard` participant experience uses live OpenF1 session reads when the active provider is `openf1`; otherwise it falls back to schedule-only race cards.
+7. After the auction is complete, participant join no longer creates new users; rostered participants must log in with their exact auction name or use an admin-issued access link.
 
 ## Deploy Validation
 
@@ -94,7 +95,15 @@ After deploy:
 6. If provider responses are incomplete or unmapped, use manual results entry and do not force-score partial provider data.
 7. Schedule refresh is now durable across restart/deploy cycles; if dates drift again, inspect the stored event rows and provider sync state instead of assuming startup reseeding will correct them.
 
-### E) F1 Backup / Export
+### E) F1 Participant Login / Access Recovery
+
+1. After the auction is complete, the join form only attaches to an existing participant already in the active season roster.
+2. If a participant cannot log in because their typed name does not match exactly, do not tell them to retry variants repeatedly.
+3. Open `Admin -> Auction`.
+4. In `Joined Participants`, use `Create Access Link` or `Reset Access Link`.
+5. Share the copied link with that participant; opening it signs them into the active season directly.
+
+### F) F1 Backup / Export
 
 1. Open `Admin -> Results Sync`.
 2. Use `Download DB Backup`.
@@ -103,7 +112,7 @@ After deploy:
    - before the first real race sync
    - before any destructive test-data reset
 
-### F) F1 Payout Audit Export
+### G) F1 Payout Audit Export
 
 1. Open `Admin -> Payout Audit`.
 2. Select the event in question.
@@ -113,7 +122,7 @@ After deploy:
    - `Copy Summary` for a concise plain-text explanation
 4. Use these outputs when reviewing disputed race payouts with participants.
 
-### G) F1 Auction Results Export
+### H) F1 Auction Results Export
 
 1. Open `Admin -> Auction`.
 2. Use `Download Auction Results CSV`.

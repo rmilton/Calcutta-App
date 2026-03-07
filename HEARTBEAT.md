@@ -30,6 +30,9 @@ Owner: On-call engineer / active implementer
 - F1 OpenF1 access now rate-limits outbound provider calls against both short-burst and rolling minute windows to reduce `429` failures during admin refresh/sync operations.
 - F1 Results Sync now exposes a DB backup/export path and a visible driver-roster freeze guard once auction or scoring activity exists.
 - F1 now has an explicit season roster lock setting in admin so post-auction driver refresh policy is visible and deliberate.
+- F1 participant navigation now centers on `/dashboard`, which combines personal standings, full league standings, and current-or-next scoring-session race context.
+- F1 dashboard now supports brief live OpenF1 session snapshots with short-lived caching and an optional on-demand Anthropic participant briefing.
+- The latest F1 dashboard briefing is now persisted per participant so it survives polling refreshes, logout/login, and process restarts.
 
 ## Active Priorities
 

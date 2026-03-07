@@ -36,7 +36,7 @@ Operational guide for deploying, validating, and recovering NCAA/F1 services.
 - `F1_RESULTS_PROVIDER=openf1`
 - `OPENF1_USERNAME`
 - `OPENF1_PASSWORD`
-- optional: `F1_CLIENT_ORIGIN`, `F1_AUTO_POLL_ENABLED`, `F1_AUTO_POLL_INTERVAL_SECONDS`, `OPENF1_BASE_URL`, `OPENF1_TOKEN_URL`
+- optional: `F1_CLIENT_ORIGIN`, `F1_AUTO_POLL_ENABLED`, `F1_AUTO_POLL_INTERVAL_SECONDS`, `OPENF1_BASE_URL`, `OPENF1_TOKEN_URL`, `ANTHROPIC_API_KEY`
 
 ## F1 Provider Defaults
 
@@ -45,6 +45,7 @@ Operational guide for deploying, validating, and recovering NCAA/F1 services.
 3. `mock` is intended for local/dev/test only.
 4. Do not set `F1_PORT` in Railway.
 5. Keep `F1_AUTO_POLL_ENABLED=0` until one successful manual OpenF1 verification pass is complete.
+6. The `/dashboard` participant experience uses live OpenF1 session reads when the active provider is `openf1`; otherwise it falls back to schedule-only race cards.
 
 ## Deploy Validation
 

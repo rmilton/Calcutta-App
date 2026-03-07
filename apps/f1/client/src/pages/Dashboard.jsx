@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import DriverIdentity from '../components/DriverIdentity';
 import { useSocketEvent } from '../context/SocketContext';
+import useMediaQuery from '../useMediaQuery';
 import {
   api,
   eventTypeLabel,
@@ -57,6 +58,10 @@ function payoutStatusLabel(rule) {
   return 'Live';
 }
 
+function HolderKey(prefix, holder) {
+  return `${prefix}-${holder.driverId || holder.driverCode || holder.driverName}`;
+}
+
 function PayoutBoardTable({ rules }) {
   if (!rules?.length) {
     return <p className="muted">No payout categories are configured for this event.</p>;
@@ -90,7 +95,7 @@ function PayoutBoardTable({ rules }) {
                   <div className="dashboard-payout-stack">
                     {rule.holders.map((holder) => (
                       <div
-                        key={`${rule.category}-${holder.driverId || holder.driverCode || holder.driverName}`}
+                        key={HolderKey(rule.category, holder)}
                         className="dashboard-payout-holder"
                       >
                         <DriverIdentity
@@ -112,7 +117,7 @@ function PayoutBoardTable({ rules }) {
                 {rule.holders?.length ? (
                   <div className="dashboard-payout-stack">
                     {rule.holders.map((holder) => (
-                      <div key={`${rule.category}-owner-${holder.driverId || holder.driverCode || holder.driverName}`} className="dashboard-owner-line">
+                      <div key={HolderKey(`${rule.category}-owner`, holder)} className="dashboard-owner-line">
                         {holder.participantName ? (
                           <>
                             <span
@@ -141,7 +146,7 @@ function PayoutBoardTable({ rules }) {
                 {rule.holders?.length ? (
                   <div className="dashboard-payout-stack">
                     {rule.holders.map((holder) => (
-                      <div key={`${rule.category}-metric-${holder.driverId || holder.driverCode || holder.driverName}`}>
+                      <div key={HolderKey(`${rule.category}-metric`, holder)}>
                         {holder.displayValue || rule.metric?.display || '-'}
                       </div>
                     ))}
@@ -158,7 +163,136 @@ function PayoutBoardTable({ rules }) {
   );
 }
 
+function PayoutBoardCards({ rules }) {
+  if (!rules?.length) {
+    return <p className="muted">No payout categories are configured for this event.</p>;
+  }
+
+  return (
+    <div className="mobile-card-list">
+      {rules.map((rule) => (
+        <article key={rule.category} className="mobile-info-card">
+          <div className="mobile-info-card-head">
+            <div>
+              <strong>{rule.label}</strong>
+              <div className="muted small">Pool {formatBpsPercent(rule.bps)}</div>
+            </div>
+            <span className={`dashboard-payout-status ${rule.status}`}>{payoutStatusLabel(rule)}</span>
+          </div>
+
+          {rule.note ? <p className="muted small mobile-card-note">{rule.note}</p> : null}
+
+          {rule.holders?.length ? (
+            <div className="mobile-card-stack">
+              {rule.holders.map((holder) => (
+                <div key={HolderKey(rule.category, holder)} className="mobile-holder-card">
+                  <DriverIdentity
+                    driverName={holder.driverName}
+                    driverCode={holder.driverCode}
+                    teamName={holder.teamName}
+                    compact
+                    showCode={false}
+                  />
+                  <div className="mobile-holder-meta">
+                    <div className="dashboard-owner-line">
+                      {holder.participantName ? (
+                        <>
+                          <span
+                            className="avatar dashboard-participant-avatar"
+                            style={{
+                              backgroundColor: `${holder.participantColor || '#e10600'}22`,
+                              color: holder.participantColor || '#e10600',
+                              borderColor: `${holder.participantColor || '#e10600'}66`,
+                            }}
+                          >
+                            {(holder.participantName || '?').trim().charAt(0).toUpperCase() || '?'}
+                          </span>
+                          <span>{holder.participantName}</span>
+                        </>
+                      ) : (
+                        <span className="muted">Unowned</span>
+                      )}
+                      {holder.isViewerOwner ? <span className="dashboard-owner-badge">Yours</span> : null}
+                    </div>
+                    <div className="mobile-stat-grid">
+                      <div>
+                        <span className="label">Metric</span>
+                        <strong>{holder.displayValue || rule.metric?.display || '-'}</strong>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="mobile-stat-grid">
+              <div>
+                <span className="label">Current Holder</span>
+                <strong>{payoutStatusLabel(rule)}</strong>
+              </div>
+              <div>
+                <span className="label">Metric</span>
+                <strong>{rule.metric?.display || '-'}</strong>
+              </div>
+            </div>
+          )}
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function StandingsCards({ rows }) {
+  return (
+    <div className="mobile-card-list">
+      {rows.map((row) => (
+        <article key={row.id} className={`mobile-info-card ${row.isViewer ? 'mobile-info-card-active' : ''}`}>
+          <div className="mobile-info-card-head">
+            <div className="dashboard-participant-cell">
+              <span
+                className="avatar dashboard-participant-avatar"
+                style={{
+                  backgroundColor: `${row.color || '#e10600'}22`,
+                  color: row.color || '#e10600',
+                  borderColor: `${row.color || '#e10600'}66`,
+                }}
+              >
+                {(row.name || '?').trim().charAt(0).toUpperCase() || '?'}
+              </span>
+              <div>
+                <strong>{row.name}</strong>
+                <div className="muted small">Rank #{row.rank}</div>
+              </div>
+            </div>
+            {row.isViewer ? <span className="dashboard-owner-badge">You</span> : null}
+          </div>
+
+          <div className="mobile-stat-grid">
+            <div>
+              <span className="label">Drivers</span>
+              <strong>{row.drivers_owned}</strong>
+            </div>
+            <div>
+              <span className="label">Spent</span>
+              <strong>{fmtCents(row.total_spent_cents)}</strong>
+            </div>
+            <div>
+              <span className="label">Earned</span>
+              <strong>{fmtCents(row.total_earned_cents)}</strong>
+            </div>
+            <div>
+              <span className="label">Net</span>
+              <strong className={row.net_cents >= 0 ? 'text-pos' : 'text-neg'}>{fmtCents(row.net_cents)}</strong>
+            </div>
+          </div>
+        </article>
+      ))}
+    </div>
+  );
+}
+
 export default function Dashboard() {
+  const isMobileCards = useMediaQuery('(max-width: 760px)');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -398,7 +532,7 @@ export default function Dashboard() {
           ) : null}
         </div>
 
-        <PayoutBoardTable rules={payoutBoard.rules} />
+        {isMobileCards ? <PayoutBoardCards rules={payoutBoard.rules} /> : <PayoutBoardTable rules={payoutBoard.rules} />}
       </section>
 
       <section className="panel">
@@ -411,46 +545,50 @@ export default function Dashboard() {
 
         {error ? <p className="error-text">{error}</p> : null}
 
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Participant</th>
-                <th>Drivers</th>
-                <th>Spent</th>
-                <th>Earned</th>
-                <th>Net</th>
-              </tr>
-            </thead>
-            <tbody>
-              {highlightedStandings.map((row) => (
-                <tr key={row.id} className={row.isViewer ? 'dashboard-table-row-active' : ''}>
-                  <td>{row.rank}</td>
-                  <td>
-                    <div className="dashboard-participant-cell">
-                      <span
-                        className="avatar dashboard-participant-avatar"
-                        style={{
-                          backgroundColor: `${row.color || '#e10600'}22`,
-                          color: row.color || '#e10600',
-                          borderColor: `${row.color || '#e10600'}66`,
-                        }}
-                      >
-                        {(row.name || '?').trim().charAt(0).toUpperCase() || '?'}
-                      </span>
-                      <span>{row.name}</span>
-                    </div>
-                  </td>
-                  <td>{row.drivers_owned}</td>
-                  <td>{fmtCents(row.total_spent_cents)}</td>
-                  <td>{fmtCents(row.total_earned_cents)}</td>
-                  <td className={row.net_cents >= 0 ? 'text-pos' : 'text-neg'}>{fmtCents(row.net_cents)}</td>
+        {isMobileCards ? (
+          <StandingsCards rows={highlightedStandings} />
+        ) : (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Participant</th>
+                  <th>Drivers</th>
+                  <th>Spent</th>
+                  <th>Earned</th>
+                  <th>Net</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {highlightedStandings.map((row) => (
+                  <tr key={row.id} className={row.isViewer ? 'dashboard-table-row-active' : ''}>
+                    <td>{row.rank}</td>
+                    <td>
+                      <div className="dashboard-participant-cell">
+                        <span
+                          className="avatar dashboard-participant-avatar"
+                          style={{
+                            backgroundColor: `${row.color || '#e10600'}22`,
+                            color: row.color || '#e10600',
+                            borderColor: `${row.color || '#e10600'}66`,
+                          }}
+                        >
+                          {(row.name || '?').trim().charAt(0).toUpperCase() || '?'}
+                        </span>
+                        <span>{row.name}</span>
+                      </div>
+                    </td>
+                    <td>{row.drivers_owned}</td>
+                    <td>{fmtCents(row.total_spent_cents)}</td>
+                    <td>{fmtCents(row.total_earned_cents)}</td>
+                    <td className={row.net_cents >= 0 ? 'text-pos' : 'text-neg'}>{fmtCents(row.net_cents)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
     </div>
   );

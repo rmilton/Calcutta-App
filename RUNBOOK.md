@@ -112,7 +112,15 @@ After deploy:
    - before the first real race sync
    - before any destructive test-data reset
 
-### G) F1 Payout Audit Export
+### G) F1 Pre-Draw Random Bonus Position
+
+1. Open `Admin -> Results Sync`.
+2. Find the event you want to reveal before the race.
+3. Use `Draw Random`.
+4. The drawn event row will then show the persisted random finishing position.
+5. Later scoring will reuse that same position; it is not redrawn at score time.
+
+### H) F1 Payout Audit Export
 
 1. Open `Admin -> Payout Audit`.
 2. Select the event in question.
@@ -122,7 +130,7 @@ After deploy:
    - `Copy Summary` for a concise plain-text explanation
 4. Use these outputs when reviewing disputed race payouts with participants.
 
-### H) F1 Auction Results Export
+### I) F1 Auction Results Export
 
 1. Open `Admin -> Auction`.
 2. Use `Download Auction Results CSV`.

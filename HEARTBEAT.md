@@ -33,6 +33,7 @@ Owner: On-call engineer / active implementer
 - F1 participant navigation now centers on `/dashboard`, which combines personal standings, full league standings, and current-or-next scoring-session race context.
 - F1 dashboard now supports brief live OpenF1 session snapshots with short-lived caching and an optional on-demand Anthropic participant briefing.
 - The latest F1 dashboard briefing is now persisted per participant so it survives polling refreshes, logout/login, and process restarts.
+- F1 dashboard briefing history now stores structured per-event entries so participants can revisit prior pre-race/live/post-race AI summaries instead of only the latest generated text.
 - F1 post-auction participant login is now locked to the existing season roster; unmatched invite-code joins fail closed and admin can issue/reset direct participant access links from the Auction page.
 - F1 startup seeding now preserves provider-refreshed schedule rows across restart/deploy cycles instead of silently reverting them to mock seed dates.
 

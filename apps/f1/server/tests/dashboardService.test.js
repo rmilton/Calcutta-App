@@ -149,7 +149,18 @@ test('GET /api/standings/dashboard returns participant summary, portfolio, and f
   saveDashboardBriefing(seasonId, alphaId, {
     eventId: event.id,
     snapshotHash: 'persisted-snapshot',
-    text: 'Persistent participant briefing.',
+    phase: 'pre_race',
+    title: 'Pre-race Outlook',
+    summary: 'Persistent participant briefing.',
+    content: {
+      summary: 'Persistent participant briefing.',
+      sections: [
+        {
+          heading: 'Your Position',
+          bullets: ['You enter the weekend with the strongest net in the pool.'],
+        },
+      ],
+    },
     source: 'anthropic',
     generatedAt: '2026-03-07T12:00:00Z',
     updatedAt: Date.parse('2026-03-07T12:00:00Z'),
@@ -176,11 +187,68 @@ test('GET /api/standings/dashboard returns participant summary, portfolio, and f
   assert.equal(payload.liveSession.available, false);
   assert.match(payload.liveSession.degradedReason, /openf1 provider/i);
   assert.equal(payload.briefingMeta.mode, 'on_demand');
-  assert.equal(payload.briefing.text, 'Persistent participant briefing.');
+  assert.equal(payload.briefing.summary, 'Persistent participant briefing.');
+  assert.equal(payload.briefing.phase, 'pre_race');
+  assert.equal(payload.briefingHistory.length, 1);
   assert.ok(payload.primaryEvent);
   assert.ok(Array.isArray(payload.payoutBoard.rules));
   assert.ok(payload.payoutBoard.rules.length > 0);
   assert.equal(Array.isArray(payload.standings), true);
+});
+
+test('GET /api/standings/dashboard returns briefing history most recent first', async () => {
+  const { db, getActiveSeasonId, standingsRoutes, saveDashboardBriefing } = setupDb();
+  const seasonId = getActiveSeasonId();
+  const participantId = createParticipant(db, seasonId, {
+    name: 'History Tester',
+    token: 'history-session',
+    color: '#aa5500',
+  });
+
+  const events = db.prepare('SELECT id FROM events WHERE season_id = ? ORDER BY round_number ASC LIMIT 2').all(seasonId);
+
+  saveDashboardBriefing(seasonId, participantId, {
+    eventId: events[0].id,
+    snapshotHash: 'old-snapshot',
+    phase: 'pre_race',
+    title: 'Older Brief',
+    summary: 'Older saved briefing.',
+    content: {
+      summary: 'Older saved briefing.',
+      sections: [{ heading: 'Your Position', bullets: ['Older item.'] }],
+    },
+    source: 'anthropic',
+    generatedAt: '2026-03-06T10:00:00Z',
+    updatedAt: Date.parse('2026-03-06T10:00:00Z'),
+  });
+  saveDashboardBriefing(seasonId, participantId, {
+    eventId: events[1].id,
+    snapshotHash: 'new-snapshot',
+    phase: 'live',
+    title: 'Newer Brief',
+    summary: 'Newer saved briefing.',
+    content: {
+      summary: 'Newer saved briefing.',
+      sections: [{ heading: 'Your Position', bullets: ['Newer item.'] }],
+    },
+    source: 'anthropic',
+    generatedAt: '2026-03-07T10:00:00Z',
+    updatedAt: Date.parse('2026-03-07T10:00:00Z'),
+  });
+
+  const response = await invokeRoute({
+    router: standingsRoutes,
+    method: 'get',
+    path: '/dashboard',
+    provider: { name: 'mock' },
+    cookies: { session: 'history-session' },
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.body.briefingHistory.length, 2);
+  assert.equal(response.body.briefingHistory[0].summary, 'Newer saved briefing.');
+  assert.equal(response.body.briefingHistory[0].phase, 'live');
+  assert.equal(response.body.briefingHistory[1].summary, 'Older saved briefing.');
 });
 
 test('GET /api/standings/dashboard returns admin summary without portfolio', async () => {
@@ -544,6 +612,39 @@ test('buildDashboardPayload returns pending payout board for upcoming events', a
   assert.ok(payload.payoutBoard.rules.every((rule) => rule.note === 'TBD until live timing data is available.'));
 });
 
+test('buildDashboardPayload shows the pre-drawn random target for upcoming events', async () => {
+  const { db, getActiveSeasonId, dashboardService } = setupDb();
+  const seasonId = getActiveSeasonId();
+  const viewerId = createParticipant(db, seasonId, {
+    name: 'Random Viewer',
+    token: 'random-viewer',
+    color: '#334455',
+  });
+
+  db.prepare(`
+    UPDATE events
+    SET random_bonus_position = 9
+    WHERE season_id = ? AND round_number = 1 AND type = 'grand_prix'
+  `).run(seasonId);
+
+  const payload = await dashboardService.buildDashboardPayload({
+    seasonId,
+    viewer: {
+      id: viewerId,
+      name: 'Random Viewer',
+      color: '#334455',
+      is_admin: 0,
+    },
+    nowImpl: () => Date.parse('2026-03-07T12:00:00Z'),
+    provider: { name: 'mock' },
+  });
+
+  const randomRule = payload.payoutBoard.rules.find((rule) => rule.category === 'random_finish_bonus');
+  assert.equal(randomRule.status, 'pending');
+  assert.equal(randomRule.metric?.display, 'P9');
+  assert.equal(randomRule.note, 'Target position: P9.');
+});
+
 test('buildDashboardPayload marks payout board unavailable when live session load fails', async () => {
   const { db, getActiveSeasonId, dashboardService } = setupDb();
   const seasonId = getActiveSeasonId();
@@ -592,13 +693,21 @@ test('dashboard briefing service caches and refreshes on force', async () => {
   let callCount = 0;
   const service = briefingService.createDashboardBriefingService({
     nowImpl: () => 1000,
+    loadSavedHistory: () => [],
     loadSavedBriefing: () => null,
     persistBriefing: () => null,
     generator: async () => {
       callCount += 1;
       return {
         available: true,
-        text: `briefing-${callCount}`,
+        phase: 'live',
+        title: `Briefing ${callCount}`,
+        summary: `briefing-${callCount}`,
+        sections: [
+          { heading: 'Your Position', bullets: [`Bullet ${callCount}`] },
+          { heading: 'Scenarios', bullets: [`If item ${callCount}`] },
+          { heading: 'What To Watch', bullets: [`Watch ${callCount}`] },
+        ],
         generatedAt: '2026-03-07T00:00:00Z',
         source: 'test',
       };
@@ -619,9 +728,10 @@ test('dashboard briefing service caches and refreshes on force', async () => {
   const second = await service.getBriefing({ dashboardPayload, force: false });
   const third = await service.getBriefing({ dashboardPayload, force: true });
 
-  assert.equal(first.text, 'briefing-1');
-  assert.equal(second.text, 'briefing-1');
+  assert.match(first.text, /briefing-1/);
+  assert.match(second.text, /briefing-1/);
   assert.equal(second.cached, true);
-  assert.equal(third.text, 'briefing-2');
+  assert.match(third.text, /briefing-2/);
+  assert.equal(third.phase, 'live');
   assert.equal(callCount, 2);
 });

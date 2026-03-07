@@ -331,8 +331,13 @@ function buildRuleStatus({ selectionState, liveSession, category, event }) {
 }
 
 function buildRuleNote({ selectionState, liveSession, status, evaluation }) {
+  const targetDisplay = evaluation?.resolution?.metric === 'finish_position'
+    && evaluation?.resolution?.target_value != null
+    ? `Target position: P${evaluation.resolution.target_value}.`
+    : null;
+
   if (status === 'pending') {
-    return 'TBD until live timing data is available.';
+    return targetDisplay || 'TBD until live timing data is available.';
   }
   if (status === 'draw_pending') {
     return 'Random finish target has not been drawn yet.';
@@ -344,9 +349,9 @@ function buildRuleNote({ selectionState, liveSession, status, evaluation }) {
     return 'No active live scoring session.';
   }
   if (!evaluation?.winnerDriverIds?.length) {
-    return 'No current holder yet.';
+    return targetDisplay || 'No current holder yet.';
   }
-  return evaluation?.resolution?.note || null;
+  return evaluation?.resolution?.note || targetDisplay || null;
 }
 
 function buildPayoutBoard({
@@ -392,6 +397,9 @@ function buildPayoutBoard({
       });
 
       if (status !== 'live') {
+        const pendingRandomPosition = rule.category === 'random_finish_bonus'
+          ? getRandomBonusPosition(event)
+          : null;
         return {
           category: rule.category,
           label: rule.label,
@@ -404,8 +412,27 @@ function buildPayoutBoard({
                 value: null,
                 display: 'Pending',
               }
-            : null,
-          note: buildRuleNote({ selectionState, liveSession, status, evaluation: null }),
+            : pendingRandomPosition != null
+              ? {
+                  key: 'finish_position',
+                  value: pendingRandomPosition,
+                  display: `P${pendingRandomPosition}`,
+                }
+              : null,
+          note: buildRuleNote({
+            selectionState,
+            liveSession,
+            status,
+            evaluation: pendingRandomPosition != null
+              ? {
+                  resolution: {
+                    metric: 'finish_position',
+                    target_value: pendingRandomPosition,
+                  },
+                  winnerDriverIds: [],
+                }
+              : null,
+          }),
         };
       }
 

@@ -15,6 +15,7 @@ A dedicated Formula 1 Calcutta app for a full season pool.
 - Season bonus payouts from remaining pool
 - Participant dashboard at `/dashboard` with personal KPIs, full standings, current-or-next race focus, and a live payout-category board driven by OpenF1 timing
 - On-demand Anthropic briefing on the dashboard for a concise personal race/standings summary, persisted per participant across refreshes and login sessions
+- Participant mobile UX now uses a compact nav shell, join-first login layout, card-based dashboard/portfolio views, and a list-to-detail event flow instead of relying on wide desktop tables
 - Results sync via provider adapter (`openf1` for real data, `mock` for local/dev/test)
 - Admin controls for auction, sync, payout rules, and settings
 - Results Sync admin view shows collapsible driver/event lists after provider refreshes

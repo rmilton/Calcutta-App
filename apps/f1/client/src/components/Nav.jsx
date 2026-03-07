@@ -3,7 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
 const BASE_LINKS = [
-  { to: '/standings', label: 'Standings' },
+  { to: '/dashboard', label: 'Dashboard' },
   { to: '/events', label: 'Events' },
   { to: '/auction', label: 'Auction' },
 ];

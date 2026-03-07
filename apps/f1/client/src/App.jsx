@@ -8,7 +8,7 @@ import Guide from './pages/Guide';
 import BuiltWithAI from './pages/BuiltWithAI';
 import Auction from './pages/Auction';
 import Events from './pages/Events';
-import Standings from './pages/Standings';
+import Dashboard from './pages/Dashboard';
 import MyDrivers from './pages/MyDrivers';
 import Admin from './pages/Admin';
 import OverviewPage from './pages/admin/OverviewPage';
@@ -30,8 +30,8 @@ function ProtectedRoute({ children, adminOnly = false, nonAdminOnly = false }) {
   }
 
   if (!participant) return <Navigate to="/join" replace />;
-  if (adminOnly && !participant.isAdmin) return <Navigate to="/auction" replace />;
-  if (nonAdminOnly && participant.isAdmin) return <Navigate to="/auction" replace />;
+  if (adminOnly && !participant.isAdmin) return <Navigate to="/dashboard" replace />;
+  if (nonAdminOnly && participant.isAdmin) return <Navigate to="/dashboard" replace />;
   return children;
 }
 
@@ -43,13 +43,14 @@ function AppRoutes() {
       {participant && <Nav />}
       <main className="page-shell">
         <Routes>
-          <Route path="/join" element={participant ? <Navigate to={participant.isAdmin ? '/admin' : '/auction'} replace /> : <Join />} />
+          <Route path="/join" element={participant ? <Navigate to={participant.isAdmin ? '/admin' : '/dashboard'} replace /> : <Join />} />
           <Route path="/guide" element={<Guide />} />
           <Route path="/built-with-ai" element={<BuiltWithAI />} />
-          <Route path="/" element={<Navigate to="/auction" replace />} />
+          <Route path="/" element={<Navigate to="/dashboard" replace />} />
+          <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/auction" element={<ProtectedRoute><Auction /></ProtectedRoute>} />
           <Route path="/events" element={<ProtectedRoute><Events /></ProtectedRoute>} />
-          <Route path="/standings" element={<ProtectedRoute><Standings /></ProtectedRoute>} />
+          <Route path="/standings" element={<Navigate to="/dashboard" replace />} />
           <Route path="/my-drivers" element={<ProtectedRoute nonAdminOnly><MyDrivers /></ProtectedRoute>} />
           <Route path="/admin" element={<ProtectedRoute adminOnly><Admin /></ProtectedRoute>}>
             <Route index element={<Navigate to="/admin/overview" replace />} />
@@ -62,7 +63,7 @@ function AppRoutes() {
             <Route path="payouts" element={<PayoutRulesPage />} />
             <Route path="*" element={<Navigate to="/admin/overview" replace />} />
           </Route>
-          <Route path="*" element={<Navigate to="/auction" replace />} />
+          <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>
       </main>
     </>

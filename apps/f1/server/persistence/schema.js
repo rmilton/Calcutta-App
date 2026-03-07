@@ -173,6 +173,18 @@ function ensureSchema(db) {
       updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
       PRIMARY KEY (season_id, scope)
     );
+
+    CREATE TABLE IF NOT EXISTS dashboard_briefings (
+      season_id INTEGER NOT NULL REFERENCES seasons(id),
+      participant_id INTEGER NOT NULL REFERENCES participants(id),
+      event_id INTEGER REFERENCES events(id),
+      snapshot_hash TEXT NOT NULL,
+      briefing_text TEXT NOT NULL,
+      source TEXT NOT NULL,
+      generated_at TEXT,
+      updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
+      PRIMARY KEY (season_id, participant_id)
+    );
   `);
 
   if (!columnExists(db, 'seasons', 'payout_model_version')) {

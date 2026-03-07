@@ -8,6 +8,8 @@ const {
   getTotalPotCents,
 } = require('../db');
 const { requireAuth } = require('./middleware');
+const { buildDashboardPayload } = require('../services/dashboardService');
+const { dashboardBriefingService } = require('../services/dashboardBriefingService');
 
 const router = express.Router();
 
@@ -21,6 +23,51 @@ router.get('/', requireAuth, (req, res) => {
 
 router.get('/ownership', requireAuth, (req, res) => {
   res.json(getOwnership(getActiveSeasonId()));
+});
+
+router.get('/dashboard', requireAuth, async (req, res) => {
+  try {
+    const seasonId = getActiveSeasonId();
+    const provider = req.app.get('resultsProvider');
+    const payload = await buildDashboardPayload({
+      seasonId,
+      viewer: req.participant,
+      provider,
+    });
+    payload.briefing = dashboardBriefingService.getSavedBriefing({
+      seasonId,
+      participantId: req.participant.id,
+    });
+    return res.json(payload);
+  } catch (error) {
+    return res.status(502).json({ error: error.message || 'Dashboard data failed to load.' });
+  }
+});
+
+router.post('/dashboard/briefing', requireAuth, async (req, res) => {
+  try {
+    const seasonId = getActiveSeasonId();
+    const provider = req.app.get('resultsProvider');
+    const dashboardPayload = await buildDashboardPayload({
+      seasonId,
+      viewer: req.participant,
+      provider,
+    });
+    const briefing = await dashboardBriefingService.getBriefing({
+      dashboardPayload,
+      force: !!req.body?.force,
+    });
+
+    return res.json({
+      briefing,
+      briefingMeta: {
+        ...dashboardPayload.briefingMeta,
+        snapshotHash: briefing.snapshotHash,
+      },
+    });
+  } catch (error) {
+    return res.status(502).json({ error: error.message || 'Dashboard briefing failed to load.' });
+  }
 });
 
 router.get('/participant/:id', requireAuth, (req, res) => {

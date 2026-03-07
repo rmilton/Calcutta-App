@@ -13,6 +13,7 @@ const EVENT_NAME_OVERRIDES = {
   'miami gardens': 'Miami Grand Prix',
   'monte carlo': 'Monaco Grand Prix',
   barcelona: 'Spanish Grand Prix',
+  catalunya: 'Barcelona-Catalunya Grand Prix',
   spielberg: 'Austrian Grand Prix',
   silverstone: 'British Grand Prix',
   spa: 'Belgian Grand Prix',
@@ -59,6 +60,12 @@ function parseIsoDate(value) {
   const iso = String(value || '');
   const ms = Date.parse(iso);
   return Number.isFinite(ms) ? new Date(ms).toISOString() : null;
+}
+
+function toTimestampMs(value) {
+  const iso = String(value || '');
+  const ms = Date.parse(iso);
+  return Number.isFinite(ms) ? ms : null;
 }
 
 function sleep(ms) {
@@ -163,6 +170,31 @@ function parseRetryDelayMs(response, attempt, minRequestIntervalMs) {
   }
 
   return Math.max(minRequestIntervalMs * (attempt + 1), 300);
+}
+
+function pickMostRecentRow(rows, fields = ['date', 'date_start', 'date_end']) {
+  return (rows || []).reduce((latest, row) => {
+    const latestMs = latest ? Math.max(...fields.map((field) => toTimestampMs(latest[field])).filter(Number.isFinite), -Infinity) : -Infinity;
+    const rowMs = Math.max(...fields.map((field) => toTimestampMs(row[field])).filter(Number.isFinite), -Infinity);
+    return rowMs >= latestMs ? row : latest;
+  }, null);
+}
+
+function normalizeTrackStatus(row) {
+  if (!row) return null;
+
+  const category = String(row.category || '').trim();
+  const message = String(row.message || row.flag || row.scope || '').trim();
+  const label = [category, message].filter(Boolean).join(' - ') || 'Track status update';
+
+  return {
+    category,
+    flag: row.flag || null,
+    scope: row.scope || null,
+    message,
+    label,
+    date: parseIsoDate(row.date),
+  };
 }
 
 class OpenF1ResultsProvider {
@@ -376,6 +408,7 @@ class OpenF1ResultsProvider {
     return {
       ...session,
       starts_at: parseIsoDate(session.date_start),
+      ends_at: parseIsoDate(session.date_end),
     };
   }
 
@@ -540,6 +573,146 @@ class OpenF1ResultsProvider {
     return rows;
   }
 
+  async fetchLiveSessionSnapshot({ event }) {
+    const sessionKey = Number(event?.external_event_id);
+    if (!Number.isFinite(sessionKey)) {
+      throw new Error(`Event ${event?.id || ''} is missing an OpenF1 session key`);
+    }
+
+    const session = await this.fetchSessionMetadata(sessionKey);
+    const optionalRequest = async (path, params) => {
+      try {
+        return await this.request(path, params);
+      } catch (error) {
+        if (isNoResultsFoundError(error)) return [];
+        throw error;
+      }
+    };
+
+    const [roster, positions, intervals, pitStops, raceControl, startingGrid, championshipDrivers] = await Promise.all([
+      this.fetchNormalizedDriverRoster(session || { session_key: sessionKey }),
+      optionalRequest('/position', { session_key: sessionKey }),
+      optionalRequest('/intervals', { session_key: sessionKey }),
+      optionalRequest('/pit', { session_key: sessionKey }),
+      optionalRequest('/race_control', { session_key: sessionKey }),
+      optionalRequest('/starting_grid', { session_key: sessionKey }),
+      optionalRequest('/championship_drivers', { session_key: sessionKey }),
+    ]);
+
+    const rosterByDriver = new Map(roster.map((driver) => [Number(driver.external_id), driver]));
+    const gridByDriver = new Map(
+      (startingGrid || []).map((row) => [Number(row.driver_number), Number(row.position) || null]),
+    );
+
+    const positionsByDriver = new Map();
+    (positions || []).forEach((row) => {
+      const driverNumber = Number(row.driver_number);
+      if (!Number.isFinite(driverNumber)) return;
+      const current = positionsByDriver.get(driverNumber);
+      const candidate = pickMostRecentRow([current, row].filter(Boolean));
+      positionsByDriver.set(driverNumber, candidate);
+    });
+
+    const intervalsByDriver = new Map();
+    (intervals || []).forEach((row) => {
+      const driverNumber = Number(row.driver_number);
+      if (!Number.isFinite(driverNumber)) return;
+      const current = intervalsByDriver.get(driverNumber);
+      const candidate = pickMostRecentRow([current, row].filter(Boolean));
+      intervalsByDriver.set(driverNumber, candidate);
+    });
+
+    const latestPitByDriver = new Map();
+    (pitStops || []).forEach((row) => {
+      const driverNumber = Number(row.driver_number);
+      if (!Number.isFinite(driverNumber)) return;
+      const current = latestPitByDriver.get(driverNumber);
+      const candidate = pickMostRecentRow([current, row].filter(Boolean), ['date', 'date_of_pit_in', 'date_of_pit_out']);
+      latestPitByDriver.set(driverNumber, candidate);
+    });
+
+    const championshipByDriver = new Map();
+    (championshipDrivers || []).forEach((row) => {
+      const driverNumber = Number(row.driver_number);
+      if (!Number.isFinite(driverNumber)) return;
+      championshipByDriver.set(driverNumber, row);
+    });
+
+    const driverStates = [...positionsByDriver.entries()]
+      .map(([driverNumber, positionRow]) => {
+        const rosterRow = rosterByDriver.get(driverNumber) || {};
+        const intervalRow = intervalsByDriver.get(driverNumber) || {};
+        const pitRow = latestPitByDriver.get(driverNumber) || {};
+        const championshipRow = championshipByDriver.get(driverNumber) || {};
+        const position = Number(positionRow?.position);
+        const gridPosition = gridByDriver.get(driverNumber) ?? null;
+
+        return {
+          external_driver_id: driverNumber,
+          driver_code: rosterRow.code || null,
+          driver_name: rosterRow.name || null,
+          team_name: rosterRow.team_name || null,
+          position: Number.isFinite(position) ? position : null,
+          gridPosition: Number.isFinite(gridPosition) ? gridPosition : null,
+          positionsGained: Number.isFinite(position) && Number.isFinite(gridPosition) ? (gridPosition - position) : null,
+          gapToLeader: intervalRow?.gap_to_leader || intervalRow?.gap || null,
+          intervalToAhead: intervalRow?.interval || intervalRow?.interval_to_position_ahead || null,
+          status: positionRow?.status || intervalRow?.status || null,
+          lastPitStopSeconds: Number(pitRow?.stop_duration) > 0 ? Number(pitRow.stop_duration) : null,
+          lastPitAt: parseIsoDate(pitRow?.date || pitRow?.date_of_pit_out || pitRow?.date_of_pit_in),
+          championshipPosition: Number(championshipRow?.position) || null,
+          championshipPoints: Number(championshipRow?.points) || null,
+          updatedAt: parseIsoDate(positionRow?.date || intervalRow?.date),
+        };
+      })
+      .filter((row) => row.position != null)
+      .sort((a, b) => a.position - b.position);
+
+    const latestRaceControl = pickMostRecentRow(raceControl || []);
+    const leaders = driverStates.slice(0, 5);
+    const championship = (championshipDrivers || [])
+      .map((row) => {
+        const driverNumber = Number(row.driver_number);
+        const rosterRow = rosterByDriver.get(driverNumber) || {};
+        return {
+          external_driver_id: driverNumber,
+          driver_code: rosterRow.code || null,
+          driver_name: rosterRow.name || row.driver_name || null,
+          team_name: rosterRow.team_name || row.team_name || null,
+          championshipPosition: Number(row.position) || null,
+          championshipPoints: Number(row.points) || null,
+        };
+      })
+      .filter((row) => row.championshipPosition != null)
+      .sort((a, b) => a.championshipPosition - b.championshipPosition)
+      .slice(0, 5);
+
+    const trackStatus = normalizeTrackStatus(latestRaceControl);
+    const headline = leaders.length
+      ? `${leaders[0].driver_name || leaders[0].driver_code || 'Leader'} leads ${session?.meeting_name || event?.name || 'the session'}.`
+      : `Live updates from ${session?.meeting_name || event?.name || 'the current session'}.`;
+
+    return {
+      available: true,
+      isLive: true,
+      fetchedAt: new Date().toISOString(),
+      headline,
+      statusText: session?.session_name ? `${session.session_name} live` : 'Live session',
+      session: session ? {
+        sessionKey,
+        sessionName: session.session_name || null,
+        meetingName: session.meeting_name || null,
+        startsAt: session.starts_at || null,
+        endsAt: session.ends_at || null,
+      } : null,
+      trackStatus,
+      leaders,
+      championshipDrivers: championship,
+      driverStates,
+      ownedDrivers: [],
+    };
+  }
+
   getStatus() {
       return {
         provider: this.name,
@@ -558,4 +731,5 @@ module.exports = {
   buildEventName,
   normalizeSessionType,
   canonicalGrandPrixName,
+  normalizeProviderDriverRows,
 };

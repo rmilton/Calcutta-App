@@ -2433,6 +2433,104 @@ tbody tr:hover {
   padding: 1rem;
 }
 
+.dashboard-page {
+  padding-bottom: var(--space-4);
+}
+
+.dashboard-hero-grid,
+.dashboard-main-grid {
+  display: grid;
+  gap: var(--space-4);
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  align-items: start;
+}
+
+.dashboard-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.dashboard-status-pill {
+  display: inline-flex;
+  align-items: center;
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--muted);
+  padding: 0.2rem 0.46rem;
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+.dashboard-status-pill.live {
+  border-color: rgba(127, 184, 157, 0.44);
+  color: #b9d8c8;
+  background: rgba(127, 184, 157, 0.1);
+}
+
+.dashboard-led-live {
+  background: #7fb89d;
+}
+
+.dashboard-event-kpis {
+  display: grid;
+  gap: var(--space-2);
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+}
+
+.dashboard-callout {
+  margin: 0;
+  padding: 0.8rem 0.9rem;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(159, 63, 67, 0.26);
+  background: rgba(11, 15, 21, 0.6);
+  font-size: 1rem;
+}
+
+.dashboard-briefing-text {
+  margin: 0;
+  padding: 0.8rem 0.9rem;
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: rgba(11, 15, 21, 0.6);
+}
+
+.dashboard-ranking-list {
+  margin-top: 0;
+}
+
+.dashboard-ranking-list li {
+  align-items: flex-start;
+}
+
+.dashboard-ranking-main {
+  display: grid;
+  gap: 0.12rem;
+}
+
+.dashboard-ranking-value {
+  text-align: right;
+}
+
+.dashboard-participant-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.dashboard-participant-avatar {
+  width: 24px;
+  height: 24px;
+}
+
+.dashboard-table-row-active {
+  background: rgba(159, 63, 67, 0.09);
+}
+
 .fade-in {
   animation: fadeIn 220ms ease-out;
 }
@@ -2663,6 +2761,17 @@ tbody tr:hover {
 
   .sold-lanes {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 720px) {
+  .dashboard-card-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .dashboard-status-pill {
+    white-space: normal;
   }
 }
 

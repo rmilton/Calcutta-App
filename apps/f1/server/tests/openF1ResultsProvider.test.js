@@ -9,6 +9,14 @@ const {
   createResultsProvider,
 } = require('../providers');
 
+function createNoAuthProvider(options = {}) {
+  return new OpenF1ResultsProvider({
+    username: '',
+    password: '',
+    ...options,
+  });
+}
+
 test('createResultsProvider blocks mock in production and selects openf1 when configured', () => {
   const previousNodeEnv = process.env.NODE_ENV;
   const previousProvider = process.env.F1_RESULTS_PROVIDER;
@@ -99,7 +107,7 @@ test('OpenF1ResultsProvider normalizes season schedule and event results', async
     ],
   };
 
-  const provider = new OpenF1ResultsProvider({
+  const provider = createNoAuthProvider({
     fetchImpl: async (url) => {
       const key = `${url.pathname}${url.search}`;
       return {
@@ -181,7 +189,7 @@ test('OpenF1ResultsProvider fetchDrivers uses the latest started non-testing ses
     ],
   };
 
-  const provider = new OpenF1ResultsProvider({
+  const provider = createNoAuthProvider({
     fetchImpl: async (url) => ({
       ok: true,
       async json() {
@@ -240,7 +248,7 @@ test('OpenF1ResultsProvider fetchDrivers falls back when latest non-testing sess
     ],
   };
 
-  const provider = new OpenF1ResultsProvider({
+  const provider = createNoAuthProvider({
     fetchImpl: async (url) => {
       const key = `${url.pathname}${url.search}`;
       if (key === '/v1/drivers?session_key=2002') {
@@ -304,7 +312,7 @@ test('OpenF1ResultsProvider fetchDrivers falls back from session_key to meeting_
     ],
   };
 
-  const provider = new OpenF1ResultsProvider({
+  const provider = createNoAuthProvider({
     fetchImpl: async (url) => {
       const key = `${url.pathname}${url.search}`;
       if (key === '/v1/drivers?session_key=4001') {
@@ -335,7 +343,7 @@ test('OpenF1ResultsProvider fetchDrivers falls back from session_key to meeting_
 });
 
 test('OpenF1ResultsProvider fetchDrivers returns a clear message when no non-testing session has a populated roster yet', async () => {
-  const provider = new OpenF1ResultsProvider({
+  const provider = createNoAuthProvider({
     fetchImpl: async (url) => {
       const key = `${url.pathname}${url.search}`;
       if (key === '/v1/sessions?year=2026') {
@@ -375,9 +383,80 @@ test('OpenF1ResultsProvider fetchDrivers returns a clear message when no non-tes
   );
 });
 
+test('OpenF1ResultsProvider fetchLiveSessionSnapshot normalizes live race data', async () => {
+  const responses = {
+    '/v1/sessions?session_key=9001': [{
+      session_key: 9001,
+      meeting_key: 101,
+      meeting_name: 'Australian Grand Prix',
+      session_name: 'Race',
+      date_start: '2026-02-22T04:00:00Z',
+      date_end: '2026-02-22T06:00:00Z',
+    }],
+    '/v1/drivers?session_key=9001': [
+      {
+        driver_number: 1,
+        name_acronym: 'VER',
+        full_name: 'Max Verstappen',
+        team_name: 'Oracle Red Bull Racing',
+      },
+      {
+        driver_number: 81,
+        name_acronym: 'PIA',
+        full_name: 'Oscar Piastri',
+        team_name: 'McLaren Formula 1 Team',
+      },
+    ],
+    '/v1/position?session_key=9001': [
+      { driver_number: 1, position: 2, date: '2026-02-22T04:20:00Z' },
+      { driver_number: 81, position: 1, date: '2026-02-22T04:20:01Z' },
+    ],
+    '/v1/intervals?session_key=9001': [
+      { driver_number: 1, interval: '+1.4', gap_to_leader: '+1.4', date: '2026-02-22T04:20:00Z' },
+      { driver_number: 81, interval: 'LEADER', gap_to_leader: 'LEADER', date: '2026-02-22T04:20:01Z' },
+    ],
+    '/v1/pit?session_key=9001': [
+      { driver_number: 1, stop_duration: 2.98, date_of_pit_out: '2026-02-22T04:10:00Z' },
+    ],
+    '/v1/race_control?session_key=9001': [
+      { category: 'Track Status', flag: 'SC', message: 'Safety Car Deployed', date: '2026-02-22T04:20:02Z' },
+    ],
+    '/v1/starting_grid?session_key=9001': [
+      { driver_number: 1, position: 4 },
+      { driver_number: 81, position: 1 },
+    ],
+    '/v1/championship_drivers?session_key=9001': [
+      { driver_number: 81, position: 1, points: 44 },
+      { driver_number: 1, position: 2, points: 36 },
+    ],
+  };
+
+  const provider = createNoAuthProvider({
+    fetchImpl: async (url) => ({
+      ok: true,
+      headers: { get() { return 'application/json'; } },
+      async json() {
+        return responses[`${url.pathname}${url.search}`] || [];
+      },
+    }),
+  });
+
+  const snapshot = await provider.fetchLiveSessionSnapshot({
+    event: { id: 1, external_event_id: '9001', name: 'Australian Grand Prix' },
+  });
+
+  assert.equal(snapshot.available, true);
+  assert.equal(snapshot.isLive, true);
+  assert.equal(snapshot.leaders[0].driver_code, 'PIA');
+  assert.equal(snapshot.leaders[1].positionsGained, 2);
+  assert.equal(snapshot.trackStatus.flag, 'SC');
+  assert.equal(snapshot.driverStates[1].lastPitStopSeconds, 2.98);
+  assert.equal(snapshot.championshipDrivers[0].championshipPosition, 1);
+});
+
 test('OpenF1ResultsProvider authenticates and retries after 401', async () => {
   const calls = [];
-  const provider = new OpenF1ResultsProvider({
+  const provider = createNoAuthProvider({
     username: 'user@example.com',
     password: 'secret',
     fetchImpl: async (url, options = {}) => {
@@ -435,7 +514,7 @@ test('OpenF1ResultsProvider authenticates and retries after 401', async () => {
 
 test('OpenF1ResultsProvider caches token across requests', async () => {
   let tokenCalls = 0;
-  const provider = new OpenF1ResultsProvider({
+  const provider = createNoAuthProvider({
     username: 'user@example.com',
     password: 'secret',
     fetchImpl: async (url, options = {}) => {
@@ -468,7 +547,7 @@ test('OpenF1ResultsProvider caches token across requests', async () => {
 
 test('OpenF1ResultsProvider retries after rate limiting', async () => {
   let attempts = 0;
-  const provider = new OpenF1ResultsProvider({
+  const provider = createNoAuthProvider({
     minRequestIntervalMs: 1,
     fetchImpl: async () => {
       attempts += 1;
@@ -507,7 +586,7 @@ test('OpenF1ResultsProvider enforces the rolling per-minute request budget', asy
   const sleeps = [];
   let requests = 0;
 
-  const provider = new OpenF1ResultsProvider({
+  const provider = createNoAuthProvider({
     minRequestIntervalMs: 0,
     minuteWindowMs: 60_000,
     maxRequestsPerMinute: 2,

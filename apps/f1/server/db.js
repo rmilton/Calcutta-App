@@ -8,6 +8,7 @@ const auctionRepo = require('./persistence/repositories/auctionRepo');
 const eventRepo = require('./persistence/repositories/eventRepo');
 const standingsRepo = require('./persistence/repositories/standingsRepo');
 const providerSyncRepo = require('./persistence/repositories/providerSyncRepo');
+const dashboardBriefingRepo = require('./persistence/repositories/dashboardBriefingRepo');
 
 function init() {
   ensureSchema(db);
@@ -139,6 +140,14 @@ function upsertProviderSyncState(seasonId, scope, payload) {
   return providerSyncRepo.upsertProviderSyncState(db, seasonId, scope, payload);
 }
 
+function getLatestDashboardBriefing(seasonId, participantId) {
+  return dashboardBriefingRepo.getLatestDashboardBriefing(db, seasonId, participantId);
+}
+
+function saveDashboardBriefing(seasonId, participantId, payload) {
+  return dashboardBriefingRepo.saveDashboardBriefing(db, seasonId, participantId, payload);
+}
+
 module.exports = {
   db,
   DB_PATH,
@@ -172,4 +181,6 @@ module.exports = {
   getEventPayouts,
   getProviderSyncStates,
   upsertProviderSyncState,
+  getLatestDashboardBriefing,
+  saveDashboardBriefing,
 };

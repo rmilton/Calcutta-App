@@ -172,6 +172,14 @@ export async function recalcSeasonBonuses() {
   return parseApiResponse(response, 'Recalculation failed');
 }
 
+export async function clearSeasonBonuses() {
+  const response = await api('/admin/results/clear-season-bonuses', {
+    method: 'POST',
+    body: '{}',
+  });
+  return parseApiResponse(response, 'Clear season bonuses failed');
+}
+
 export async function rescoreSeasonEvents() {
   const response = await api('/admin/results/rescore-season-events', {
     method: 'POST',

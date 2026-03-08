@@ -1114,6 +1114,46 @@ test('results admin rescoreSeasonEventsForSeason rewrites scored event payouts u
   assert.equal(newPayout.amount_cents, 3);
 });
 
+test('results admin clearSeasonBonusesForSeason removes only season bonus payouts', () => {
+  const {
+    db,
+    getActiveSeasonId,
+    resultsAdminService,
+  } = setupDb();
+
+  const seasonId = getActiveSeasonId();
+  const participantId = db.prepare(`
+    INSERT INTO participants (name, color, session_token)
+    VALUES ('Season Bonus Clear Tester', '#ffaa00', 'season-bonus-clear-token')
+  `).run().lastInsertRowid;
+  db.prepare('INSERT INTO season_participants (season_id, participant_id) VALUES (?, ?)').run(seasonId, participantId);
+  const driver = db.prepare('SELECT id FROM drivers WHERE season_id = ? ORDER BY id ASC LIMIT 1').get(seasonId);
+  const event = db.prepare('SELECT id FROM events WHERE season_id = ? ORDER BY round_number ASC LIMIT 1').get(seasonId);
+
+  db.prepare(`
+    INSERT INTO event_payouts
+      (season_id, event_id, participant_id, driver_id, category, amount_cents, tie_count)
+    VALUES (?, ?, ?, ?, 'race_winner', 321, 1)
+  `).run(seasonId, event.id, participantId, driver.id);
+  db.prepare(`
+    INSERT INTO season_bonus_payouts
+      (season_id, participant_id, driver_id, category, amount_cents, tie_count)
+    VALUES (?, ?, ?, 'drivers_champion', 654, 1)
+  `).run(seasonId, participantId, driver.id);
+
+  const emitted = [];
+  const result = resultsAdminService.clearSeasonBonusesForSeason({
+    seasonId,
+    io: { emit: (eventName) => emitted.push(eventName) },
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.deletedCount, 1);
+  assert.ok(emitted.includes('standings:update'));
+  assert.equal(db.prepare('SELECT COUNT(*) as c FROM season_bonus_payouts WHERE season_id = ?').get(seasonId).c, 0);
+  assert.equal(db.prepare('SELECT COUNT(*) as c FROM event_payouts WHERE season_id = ?').get(seasonId).c, 1);
+});
+
 test('payout rules admin save triggers bonus recalc path and standings update emit', () => {
   const {
     db,

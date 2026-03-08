@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  clearSeasonBonuses as clearSeasonBonusesApi,
   clearAllTestData as clearAllTestDataApi,
   drawRandomPosition as drawRandomPositionApi,
   loadHistoricalSeasonData as loadHistoricalSeasonDataApi,
@@ -157,11 +158,21 @@ export default function useAdminData() {
 
   const recalcSeasonBonuses = useCallback(async () => {
     try {
-      await recalcSeasonBonusesApi();
-      setMessage('Season bonuses recalculated.');
+      const result = await recalcSeasonBonusesApi();
+      setMessage(result.message || 'Season bonuses recalculated.');
       await loadAll({ silent: true });
     } catch (error) {
       setMessage(error.message || 'Recalculation failed.');
+    }
+  }, [loadAll]);
+
+  const clearSeasonBonuses = useCallback(async () => {
+    try {
+      const result = await clearSeasonBonusesApi();
+      setMessage(result.message || 'Season bonuses cleared.');
+      await loadAll({ silent: true });
+    } catch (error) {
+      setMessage(error.message || 'Failed to clear season bonuses.');
     }
   }, [loadAll]);
 
@@ -262,6 +273,7 @@ export default function useAdminData() {
     syncEvent,
     drawRandomPosition,
     recalcSeasonBonuses,
+    clearSeasonBonuses,
     rescoreSeasonEvents,
     updateRules,
     saveRules,
@@ -290,6 +302,7 @@ export default function useAdminData() {
     syncEvent,
     drawRandomPosition,
     recalcSeasonBonuses,
+    clearSeasonBonuses,
     rescoreSeasonEvents,
     updateRules,
     saveRules,

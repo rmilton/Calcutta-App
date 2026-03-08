@@ -826,6 +826,22 @@ function recalcSeasonBonusesForSeason({ seasonId, io }) {
   return { ok: true, ...result };
 }
 
+function clearSeasonBonusesForSeason({ seasonId, io }) {
+  const deletedCount = db.prepare(`
+    DELETE FROM season_bonus_payouts
+    WHERE season_id = ?
+  `).run(seasonId).changes;
+
+  io?.emit('standings:update');
+  return {
+    ok: true,
+    deletedCount,
+    message: deletedCount
+      ? `Cleared ${deletedCount} season bonus payout${deletedCount === 1 ? '' : 's'}.`
+      : 'No season bonus payouts were present to clear.',
+  };
+}
+
 function rescoreSeasonEventsForSeason({ seasonId, io }) {
   const result = rescoreSeasonEvents({ seasonId });
   if (!result.ok) return result;
@@ -872,6 +888,7 @@ module.exports = {
   getEventEditorData,
   saveManualResultsAndScore,
   recalcSeasonBonusesForSeason,
+  clearSeasonBonusesForSeason,
   rescoreSeasonEventsForSeason,
   getSeasonBonusPayouts,
 };

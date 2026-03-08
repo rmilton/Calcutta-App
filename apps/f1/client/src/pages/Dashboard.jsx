@@ -263,6 +263,58 @@ export default function Dashboard() {
         )}
       </section>
 
+      <section className="panel">
+        <div className="dashboard-card-head">
+          <div>
+            <h2>Overall Standings</h2>
+            <p className="muted">Full league table with spend, earnings, and current net position.</p>
+          </div>
+        </div>
+
+        {error ? <p className="error-text">{error}</p> : null}
+
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Participant</th>
+                <th>Drivers</th>
+                <th>Spent</th>
+                <th>Earned</th>
+                <th>Net</th>
+              </tr>
+            </thead>
+            <tbody>
+              {highlightedStandings.map((row) => (
+                <tr key={row.id} className={row.isViewer ? 'dashboard-table-row-active' : ''}>
+                  <td>{row.rank}</td>
+                  <td>
+                    <div className="dashboard-participant-cell">
+                      <span
+                        className="avatar dashboard-participant-avatar"
+                        style={{
+                          backgroundColor: `${row.color || '#e10600'}22`,
+                          color: row.color || '#e10600',
+                          borderColor: `${row.color || '#e10600'}66`,
+                        }}
+                      >
+                        {(row.name || '?').trim().charAt(0).toUpperCase() || '?'}
+                      </span>
+                      <span>{row.name}</span>
+                    </div>
+                  </td>
+                  <td>{row.drivers_owned}</td>
+                  <td>{fmtCents(row.total_spent_cents)}</td>
+                  <td>{fmtCents(row.total_earned_cents)}</td>
+                  <td className={row.net_cents >= 0 ? 'text-pos' : 'text-neg'}>{fmtCents(row.net_cents)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
       <div className="dashboard-hero-grid">
         <section className="panel live-panel stack dashboard-event-card">
           <div className="dashboard-card-head">
@@ -407,58 +459,6 @@ export default function Dashboard() {
           )}
         </section>
       </div>
-
-      <section className="panel">
-        <div className="dashboard-card-head">
-          <div>
-            <h2>Overall Standings</h2>
-            <p className="muted">Full league table with spend, earnings, and current net position.</p>
-          </div>
-        </div>
-
-        {error ? <p className="error-text">{error}</p> : null}
-
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Participant</th>
-                <th>Drivers</th>
-                <th>Spent</th>
-                <th>Earned</th>
-                <th>Net</th>
-              </tr>
-            </thead>
-            <tbody>
-              {highlightedStandings.map((row) => (
-                <tr key={row.id} className={row.isViewer ? 'dashboard-table-row-active' : ''}>
-                  <td>{row.rank}</td>
-                  <td>
-                    <div className="dashboard-participant-cell">
-                      <span
-                        className="avatar dashboard-participant-avatar"
-                        style={{
-                          backgroundColor: `${row.color || '#e10600'}22`,
-                          color: row.color || '#e10600',
-                          borderColor: `${row.color || '#e10600'}66`,
-                        }}
-                      >
-                        {(row.name || '?').trim().charAt(0).toUpperCase() || '?'}
-                      </span>
-                      <span>{row.name}</span>
-                    </div>
-                  </td>
-                  <td>{row.drivers_owned}</td>
-                  <td>{fmtCents(row.total_spent_cents)}</td>
-                  <td>{fmtCents(row.total_earned_cents)}</td>
-                  <td className={row.net_cents >= 0 ? 'text-pos' : 'text-neg'}>{fmtCents(row.net_cents)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </section>
     </div>
   );
 }

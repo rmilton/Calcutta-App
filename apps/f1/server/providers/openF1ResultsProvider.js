@@ -180,6 +180,31 @@ function pickMostRecentRow(rows, fields = ['date', 'date_start', 'date_end']) {
   }, null);
 }
 
+function deriveStartingGridFromPositions(positionRows) {
+  const earliestByDriver = new Map();
+
+  (positionRows || []).forEach((row) => {
+    const driverNumber = Number(row.driver_number);
+    const position = Number(row.position);
+    const rowMs = toTimestampMs(row.date);
+    if (!Number.isFinite(driverNumber) || !Number.isFinite(position) || !Number.isFinite(rowMs)) return;
+
+    const current = earliestByDriver.get(driverNumber);
+    const currentMs = current ? toTimestampMs(current.date) : null;
+    if (!current || !Number.isFinite(currentMs) || rowMs < currentMs) {
+      earliestByDriver.set(driverNumber, row);
+    }
+  });
+
+  return [...earliestByDriver.values()]
+    .map((row) => ({
+      driver_number: Number(row.driver_number),
+      position: Number(row.position),
+    }))
+    .filter((row) => Number.isFinite(row.driver_number) && Number.isFinite(row.position))
+    .sort((a, b) => a.position - b.position);
+}
+
 function normalizeTrackStatus(row) {
   if (!row) return null;
 
@@ -527,9 +552,14 @@ class OpenF1ResultsProvider {
     }
 
     const session = await this.fetchSessionMetadata(sessionKey);
+    const startingGridPromise = this.request('/starting_grid', { session_key: sessionKey }).catch(async (error) => {
+      if (!isNoResultsFoundError(error)) throw error;
+      const positionRows = await this.request('/position', { session_key: sessionKey });
+      return deriveStartingGridFromPositions(positionRows);
+    });
     const [sessionResults, startingGrid, pitStops, roster] = await Promise.all([
       this.request('/session_result', { session_key: sessionKey }),
-      this.request('/starting_grid', { session_key: sessionKey }),
+      startingGridPromise,
       this.request('/pit', { session_key: sessionKey }),
       this.fetchNormalizedDriverRoster(session || { session_key: sessionKey }),
     ]);

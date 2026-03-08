@@ -159,6 +159,85 @@ test('OpenF1ResultsProvider normalizes season schedule and event results', async
   ]);
 });
 
+test('OpenF1ResultsProvider fetchEventResults falls back to earliest position snapshot when starting_grid is unavailable', async () => {
+  const responses = {
+    '/v1/session_result?session_key=9001': [
+      { driver_number: 1, position: 2 },
+      { driver_number: 16, position: 1 },
+    ],
+    '/v1/position?session_key=9001': [
+      { driver_number: 1, position: 4, date: '2026-03-08T03:01:19.220000+00:00' },
+      { driver_number: 16, position: 2, date: '2026-03-08T03:01:19.220000+00:00' },
+      { driver_number: 1, position: 2, date: '2026-03-08T05:01:19.220000+00:00' },
+      { driver_number: 16, position: 1, date: '2026-03-08T05:01:19.220000+00:00' },
+    ],
+    '/v1/pit?session_key=9001': [],
+    '/v1/drivers?session_key=9001': [
+      {
+        driver_number: 1,
+        name_acronym: 'VER',
+        full_name: 'Max Verstappen',
+        team_name: 'Red Bull Racing',
+      },
+      {
+        driver_number: 16,
+        name_acronym: 'LEC',
+        full_name: 'Charles Leclerc',
+        team_name: 'Ferrari',
+      },
+    ],
+  };
+
+  const provider = createNoAuthProvider({
+    fetchImpl: async (url) => {
+      const key = `${url.pathname}${url.search}`;
+      if (key === '/v1/starting_grid?session_key=9001') {
+        return {
+          ok: false,
+          status: 404,
+          async json() {
+            return { detail: 'No results found.' };
+          },
+          headers: { get() { return 'application/json'; } },
+        };
+      }
+
+      return {
+        ok: true,
+        async json() {
+          return responses[key] || [];
+        },
+        headers: { get() { return 'application/json'; } },
+      };
+    },
+  });
+
+  const results = await provider.fetchEventResults({
+    event: { external_event_id: '9001' },
+  });
+
+  assert.deepEqual(results, [
+    {
+      external_driver_id: 16,
+      driver_code: 'LEC',
+      driver_name: 'Charles Leclerc',
+      team_name: 'Ferrari',
+      finish_position: 1,
+      start_position: 2,
+      slowest_pit_stop_seconds: null,
+    },
+    {
+      external_driver_id: 1,
+      driver_code: 'VER',
+      driver_name: 'Max Verstappen',
+      team_name: 'Red Bull Racing',
+      finish_position: 2,
+      start_position: 4,
+      slowest_pit_stop_seconds: null,
+    },
+  ]);
+});
+
 test('OpenF1ResultsProvider fetchDrivers uses the latest started non-testing session, including practice', async () => {
   const responses = {
     '/v1/sessions?year=2026': [

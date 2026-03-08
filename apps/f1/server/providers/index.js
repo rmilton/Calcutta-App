@@ -19,6 +19,7 @@ function createResultsProvider() {
   if (provider === 'openf1') {
     return new OpenF1ResultsProvider({
       baseUrl: process.env.OPENF1_BASE_URL,
+      liveTimingBaseUrl: process.env.F1_LIVETIMING_BASE_URL,
       tokenUrl: process.env.OPENF1_TOKEN_URL,
       username: process.env.OPENF1_USERNAME,
       password: process.env.OPENF1_PASSWORD,

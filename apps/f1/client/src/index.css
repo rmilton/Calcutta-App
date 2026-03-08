@@ -2691,7 +2691,7 @@ tbody tr:hover {
 
 .mobile-card-list {
   display: grid;
-  gap: var(--space-3);
+  gap: 0.7rem;
 }
 
 .mobile-info-card {
@@ -2701,6 +2701,11 @@ tbody tr:hover {
   padding: 0.8rem;
   display: grid;
   gap: var(--space-3);
+}
+
+.mobile-info-card-compact {
+  padding: 0.58rem 0.66rem;
+  gap: 0.45rem;
 }
 
 .mobile-info-card-active {
@@ -2713,6 +2718,17 @@ tbody tr:hover {
   align-items: flex-start;
   justify-content: space-between;
   gap: var(--space-3);
+}
+
+.mobile-compact-heading {
+  min-width: 0;
+}
+
+.mobile-compact-title-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  flex-wrap: wrap;
 }
 
 .mobile-card-note {
@@ -2744,9 +2760,47 @@ tbody tr:hover {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.mobile-stat-grid-compact {
+  gap: 0.35rem 0.55rem;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
 .mobile-stat-grid > div {
   display: grid;
   gap: 0.16rem;
+  align-content: start;
+}
+
+.mobile-stat-grid-compact .label {
+  font-size: 0.58rem;
+  letter-spacing: 0.06em;
+}
+
+.mobile-stat-grid-compact strong {
+  font-size: 0.96rem;
+  line-height: 1.05;
+}
+
+.mobile-driver-card .mobile-info-card-head {
+  align-items: center;
+}
+
+.mobile-driver-subhead {
+  margin: -0.18rem 0 0;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.mobile-driver-subhead-label {
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.56rem;
+}
+
+.mobile-driver-card .driver-identity {
+  min-width: 0;
 }
 
 .fade-in {
@@ -3105,6 +3159,10 @@ tbody tr:hover {
 
   .mobile-stat-grid {
     grid-template-columns: 1fr;
+  }
+
+  .mobile-stat-grid.mobile-stat-grid-compact {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   .events-back-btn {

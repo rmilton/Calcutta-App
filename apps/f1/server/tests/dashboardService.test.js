@@ -283,6 +283,55 @@ test('GET /api/standings/dashboard returns admin summary without portfolio', asy
   assert.equal(typeof payload.summary.totalPotCents, 'number');
 });
 
+test('GET /api/standings/dashboard ranks participants by net return first', async () => {
+  const { db, getActiveSeasonId, standingsRoutes } = setupDb();
+  const seasonId = getActiveSeasonId();
+  const alphaId = createParticipant(db, seasonId, {
+    name: 'Alpha',
+    token: 'alpha-net-session',
+    color: '#ff0000',
+  });
+  const bravoId = createParticipant(db, seasonId, {
+    name: 'Bravo',
+    token: 'bravo-net-session',
+    color: '#00ff00',
+  });
+
+  const drivers = db.prepare('SELECT id FROM drivers WHERE season_id = ? ORDER BY id ASC LIMIT 2').all(seasonId);
+  const event = db.prepare('SELECT id FROM events WHERE season_id = ? ORDER BY round_number ASC LIMIT 1').get(seasonId);
+
+  db.prepare(`
+    INSERT INTO ownership (season_id, driver_id, participant_id, purchase_price_cents)
+    VALUES (?, ?, ?, ?)
+  `).run(seasonId, drivers[0].id, alphaId, 2000);
+  db.prepare(`
+    INSERT INTO ownership (season_id, driver_id, participant_id, purchase_price_cents)
+    VALUES (?, ?, ?, ?)
+  `).run(seasonId, drivers[1].id, bravoId, 500);
+
+  db.prepare(`
+    INSERT INTO event_payouts (season_id, event_id, participant_id, driver_id, category, amount_cents)
+    VALUES (?, ?, ?, ?, 'race_winner', ?)
+  `).run(seasonId, event.id, alphaId, drivers[0].id, 1500);
+  db.prepare(`
+    INSERT INTO event_payouts (season_id, event_id, participant_id, driver_id, category, amount_cents)
+    VALUES (?, ?, ?, ?, 'second_place', ?)
+  `).run(seasonId, event.id, bravoId, drivers[1].id, 1000);
+
+  const response = await invokeRoute({
+    router: standingsRoutes,
+    method: 'get',
+    path: '/dashboard',
+    provider: { name: 'mock' },
+    cookies: { session: 'alpha-net-session' },
+  });
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.body.standings[0].name, 'Bravo');
+  assert.equal(response.body.standings[1].name, 'Alpha');
+  assert.equal(response.body.summary.rank, 2);
+});
+
 test('POST /api/standings/dashboard/briefing degrades cleanly when Anthropic is unavailable', async () => {
   const previousAnthropicKey = process.env.ANTHROPIC_API_KEY;
   delete process.env.ANTHROPIC_API_KEY;

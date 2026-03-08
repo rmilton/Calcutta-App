@@ -52,7 +52,7 @@ export default function MyDrivers() {
               {drivers.map((driver) => {
                 const total = driver.event_earnings_cents + driver.bonus_earnings_cents;
                 return (
-                  <article key={driver.driver_id} className="mobile-info-card">
+                  <article key={driver.driver_id} className="mobile-info-card mobile-info-card-compact mobile-driver-card">
                     <div className="mobile-info-card-head">
                       <DriverIdentity
                         driverName={driver.driver_name}
@@ -70,7 +70,8 @@ export default function MyDrivers() {
                       </span>
                     </div>
 
-                    <p className="muted small">
+                    <p className="muted small mobile-driver-subhead">
+                      <span className="mobile-driver-subhead-label">Team</span>
                       <span
                         className="team-accent-text"
                         style={getTeamColorStyle({ teamName: driver.team_name, driverCode: driver.driver_code })}
@@ -79,7 +80,7 @@ export default function MyDrivers() {
                       </span>
                     </p>
 
-                    <div className="mobile-stat-grid">
+                    <div className="mobile-stat-grid mobile-stat-grid-compact">
                       <div>
                         <span className="label">Purchase</span>
                         <strong>{fmtCents(driver.purchase_price_cents)}</strong>

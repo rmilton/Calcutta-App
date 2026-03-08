@@ -246,7 +246,7 @@ function StandingsCards({ rows }) {
   return (
     <div className="mobile-card-list">
       {rows.map((row) => (
-        <article key={row.id} className={`mobile-info-card ${row.isViewer ? 'mobile-info-card-active' : ''}`}>
+        <article key={row.id} className={`mobile-info-card mobile-info-card-compact ${row.isViewer ? 'mobile-info-card-active' : ''}`}>
           <div className="mobile-info-card-head">
             <div className="dashboard-participant-cell">
               <span
@@ -259,15 +259,17 @@ function StandingsCards({ rows }) {
               >
                 {(row.name || '?').trim().charAt(0).toUpperCase() || '?'}
               </span>
-              <div>
-                <strong>{row.name}</strong>
-                <div className="muted small">Rank #{row.rank}</div>
+              <div className="mobile-compact-heading">
+                <div className="mobile-compact-title-row">
+                  <strong>{row.name}</strong>
+                  <span className="muted small">#{row.rank}</span>
+                </div>
               </div>
             </div>
             {row.isViewer ? <span className="dashboard-owner-badge">You</span> : null}
           </div>
 
-          <div className="mobile-stat-grid">
+          <div className="mobile-stat-grid mobile-stat-grid-compact">
             <div>
               <span className="label">Drivers</span>
               <strong>{row.drivers_owned}</strong>

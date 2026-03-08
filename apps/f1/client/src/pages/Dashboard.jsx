@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import DriverIdentity from '../components/DriverIdentity';
 import { useSocketEvent } from '../context/SocketContext';
+import useMediaQuery from '../useMediaQuery';
 import {
   api,
   eventTypeLabel,
@@ -10,12 +11,6 @@ import {
   readJsonSafely,
   toTimestampMs,
 } from '../utils';
-
-function formatSignedNumber(value) {
-  if (value == null || !Number.isFinite(Number(value))) return '0';
-  const num = Number(value);
-  return `${num > 0 ? '+' : ''}${num}`;
-}
 
 function formatCountdown(iso) {
   const targetMs = toTimestampMs(iso);
@@ -50,9 +45,26 @@ function LiveStatusPill({ liveSession, primaryEvent }) {
   return <span className={liveClassName}>{label}</span>;
 }
 
-function DriverTrackerTable({ rows, emptyText }) {
-  if (!rows?.length) {
-    return <p className="muted">{emptyText}</p>;
+function formatBpsPercent(bps) {
+  const num = Number(bps);
+  if (!Number.isFinite(num)) return '-';
+  return `${(num / 100).toFixed(2)}%`;
+}
+
+function payoutStatusLabel(rule) {
+  if (rule?.status === 'draw_pending') return 'Draw Pending';
+  if (rule?.status === 'pending') return 'TBD';
+  if (rule?.status === 'unavailable') return 'Live Unavailable';
+  return 'Live';
+}
+
+function HolderKey(prefix, holder) {
+  return `${prefix}-${holder.driverId || holder.driverCode || holder.driverName}`;
+}
+
+function PayoutBoardTable({ rules }) {
+  if (!rules?.length) {
+    return <p className="muted">No payout categories are configured for this event.</p>;
   }
 
   return (
@@ -60,31 +72,89 @@ function DriverTrackerTable({ rows, emptyText }) {
       <table>
         <thead>
           <tr>
-            <th>Driver</th>
-            <th>Pos</th>
-            <th>Delta</th>
-            <th>Gap</th>
-            <th>Pit</th>
+            <th>Category</th>
+            <th>Pool</th>
+            <th>Current Holder</th>
+            <th>Owner</th>
+            <th>Metric</th>
           </tr>
         </thead>
         <tbody>
-          {rows.map((driver) => (
-            <tr key={`${driver.external_driver_id || driver.driver_id}`}>
+          {rules.map((rule) => (
+            <tr key={rule.category}>
               <td>
-                <DriverIdentity
-                  driverName={driver.driver_name}
-                  driverCode={driver.driver_code}
-                  teamName={driver.team_name}
-                  compact
-                  showCode={false}
-                />
+                <div className="dashboard-payout-cell">
+                  <strong>{rule.label}</strong>
+                  <span className={`dashboard-payout-status ${rule.status}`}>{payoutStatusLabel(rule)}</span>
+                  {rule.note ? <span className="muted small">{rule.note}</span> : null}
+                </div>
               </td>
-              <td>{driver.position ? `P${driver.position}` : '-'}</td>
-              <td className={(driver.positionsGained || 0) >= 0 ? 'text-pos' : 'text-neg'}>
-                {driver.positionsGained == null ? '-' : formatSignedNumber(driver.positionsGained)}
+              <td>{formatBpsPercent(rule.bps)}</td>
+              <td>
+                {rule.holders?.length ? (
+                  <div className="dashboard-payout-stack">
+                    {rule.holders.map((holder) => (
+                      <div
+                        key={HolderKey(rule.category, holder)}
+                        className="dashboard-payout-holder"
+                      >
+                        <DriverIdentity
+                          driverName={holder.driverName}
+                          driverCode={holder.driverCode}
+                          teamName={holder.teamName}
+                          compact
+                          showCode={false}
+                        />
+                        {holder.isViewerOwner ? <span className="dashboard-owner-badge">Yours</span> : null}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="muted">{payoutStatusLabel(rule)}</span>
+                )}
               </td>
-              <td>{driver.gapToLeader || driver.intervalToAhead || '-'}</td>
-              <td>{driver.lastPitStopSeconds ? `${Number(driver.lastPitStopSeconds).toFixed(2)}s` : '-'}</td>
+              <td>
+                {rule.holders?.length ? (
+                  <div className="dashboard-payout-stack">
+                    {rule.holders.map((holder) => (
+                      <div key={HolderKey(`${rule.category}-owner`, holder)} className="dashboard-owner-line">
+                        {holder.participantName ? (
+                          <>
+                            <span
+                              className="avatar dashboard-participant-avatar"
+                              style={{
+                                backgroundColor: `${holder.participantColor || '#e10600'}22`,
+                                color: holder.participantColor || '#e10600',
+                                borderColor: `${holder.participantColor || '#e10600'}66`,
+                              }}
+                            >
+                              {(holder.participantName || '?').trim().charAt(0).toUpperCase() || '?'}
+                            </span>
+                            <span>{holder.participantName}</span>
+                          </>
+                        ) : (
+                          <span className="muted">Unowned</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="muted">-</span>
+                )}
+              </td>
+              <td>
+                {rule.holders?.length ? (
+                  <div className="dashboard-payout-stack">
+                    {rule.holders.map((holder) => (
+                      <div key={HolderKey(`${rule.category}-metric`, holder)}>
+                        {holder.displayValue || rule.metric?.display || '-'}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <span className="muted">{rule.metric?.display || '-'}</span>
+                )}
+              </td>
             </tr>
           ))}
         </tbody>
@@ -93,31 +163,209 @@ function DriverTrackerTable({ rows, emptyText }) {
   );
 }
 
-function CompactRankingList({ rows, emptyText, valueLabel }) {
-  if (!rows?.length) return <p className="muted">{emptyText}</p>;
+function PayoutBoardCards({ rules }) {
+  if (!rules?.length) {
+    return <p className="muted">No payout categories are configured for this event.</p>;
+  }
 
   return (
-    <ul className="list dashboard-ranking-list">
-      {rows.map((row) => (
-        <li key={`${row.external_driver_id || row.driver_code || row.driver_name}`}>
-          <div className="dashboard-ranking-main">
-            <strong>{row.driver_name || row.driver_code || 'Driver'}</strong>
-            <span className="muted small">{row.team_name || 'Team N/A'}</span>
+    <div className="mobile-card-list">
+      {rules.map((rule) => (
+        <article key={rule.category} className="mobile-info-card">
+          <div className="mobile-info-card-head">
+            <div>
+              <strong>{rule.label}</strong>
+              <div className="muted small">Pool {formatBpsPercent(rule.bps)}</div>
+            </div>
+            <span className={`dashboard-payout-status ${rule.status}`}>{payoutStatusLabel(rule)}</span>
           </div>
-          <div className="dashboard-ranking-value">
-            <strong>{valueLabel(row)}</strong>
-          </div>
-        </li>
+
+          {rule.note ? <p className="muted small mobile-card-note">{rule.note}</p> : null}
+
+          {rule.holders?.length ? (
+            <div className="mobile-card-stack">
+              {rule.holders.map((holder) => (
+                <div key={HolderKey(rule.category, holder)} className="mobile-holder-card">
+                  <DriverIdentity
+                    driverName={holder.driverName}
+                    driverCode={holder.driverCode}
+                    teamName={holder.teamName}
+                    compact
+                    showCode={false}
+                  />
+                  <div className="mobile-holder-meta">
+                    <div className="dashboard-owner-line">
+                      {holder.participantName ? (
+                        <>
+                          <span
+                            className="avatar dashboard-participant-avatar"
+                            style={{
+                              backgroundColor: `${holder.participantColor || '#e10600'}22`,
+                              color: holder.participantColor || '#e10600',
+                              borderColor: `${holder.participantColor || '#e10600'}66`,
+                            }}
+                          >
+                            {(holder.participantName || '?').trim().charAt(0).toUpperCase() || '?'}
+                          </span>
+                          <span>{holder.participantName}</span>
+                        </>
+                      ) : (
+                        <span className="muted">Unowned</span>
+                      )}
+                      {holder.isViewerOwner ? <span className="dashboard-owner-badge">Yours</span> : null}
+                    </div>
+                    <div className="mobile-stat-grid">
+                      <div>
+                        <span className="label">Metric</span>
+                        <strong>{holder.displayValue || rule.metric?.display || '-'}</strong>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="mobile-stat-grid">
+              <div>
+                <span className="label">Current Holder</span>
+                <strong>{payoutStatusLabel(rule)}</strong>
+              </div>
+              <div>
+                <span className="label">Metric</span>
+                <strong>{rule.metric?.display || '-'}</strong>
+              </div>
+            </div>
+          )}
+        </article>
       ))}
-    </ul>
+    </div>
+  );
+}
+
+function StandingsCards({ rows }) {
+  return (
+    <div className="mobile-card-list">
+      {rows.map((row) => (
+        <article key={row.id} className={`mobile-info-card ${row.isViewer ? 'mobile-info-card-active' : ''}`}>
+          <div className="mobile-info-card-head">
+            <div className="dashboard-participant-cell">
+              <span
+                className="avatar dashboard-participant-avatar"
+                style={{
+                  backgroundColor: `${row.color || '#e10600'}22`,
+                  color: row.color || '#e10600',
+                  borderColor: `${row.color || '#e10600'}66`,
+                }}
+              >
+                {(row.name || '?').trim().charAt(0).toUpperCase() || '?'}
+              </span>
+              <div>
+                <strong>{row.name}</strong>
+                <div className="muted small">Rank #{row.rank}</div>
+              </div>
+            </div>
+            {row.isViewer ? <span className="dashboard-owner-badge">You</span> : null}
+          </div>
+
+          <div className="mobile-stat-grid">
+            <div>
+              <span className="label">Drivers</span>
+              <strong>{row.drivers_owned}</strong>
+            </div>
+            <div>
+              <span className="label">Spent</span>
+              <strong>{fmtCents(row.total_spent_cents)}</strong>
+            </div>
+            <div>
+              <span className="label">Earned</span>
+              <strong>{fmtCents(row.total_earned_cents)}</strong>
+            </div>
+            <div>
+              <span className="label">Net</span>
+              <strong className={row.net_cents >= 0 ? 'text-pos' : 'text-neg'}>{fmtCents(row.net_cents)}</strong>
+            </div>
+          </div>
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function formatBriefingHistoryLabel(briefing) {
+  const eventName = briefing?.eventName || 'Saved Briefing';
+  const phase = briefing?.phaseLabel || 'Saved';
+  return `${eventName} • ${phase}`;
+}
+
+function BriefingHistoryNav({ history, selectedId, onSelect }) {
+  if (!history?.length) return null;
+
+  return (
+    <div className="dashboard-briefing-history" role="tablist" aria-label="Briefing history">
+      {history.map((entry) => (
+        <button
+          key={entry.id || `${entry.generatedAt || 'briefing'}-${entry.snapshotHash || ''}`}
+          type="button"
+          role="tab"
+          aria-selected={selectedId === entry.id}
+          className={`dashboard-briefing-nav-btn ${selectedId === entry.id ? 'active' : ''}`}
+          onClick={() => onSelect(entry.id)}
+        >
+          <strong>{entry.eventName || 'Saved Briefing'}</strong>
+          <span>{entry.phaseLabel || 'Saved'}{entry.generatedAt ? ` • ${fmtWhen(entry.generatedAt)}` : ''}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function BriefingContent({ briefing }) {
+  if (!briefing) {
+    return <p className="muted">Generate a briefing when you want a concise race-and-standings summary.</p>;
+  }
+
+  return (
+    <div className="dashboard-briefing-body">
+      <div className="dashboard-briefing-meta">
+        <div>
+          <h3>{briefing.title || formatBriefingHistoryLabel(briefing)}</h3>
+          <p className="muted small">
+            {formatBriefingHistoryLabel(briefing)}
+            {briefing.generatedAt ? ` • ${fmtWhen(briefing.generatedAt)}` : ''}
+          </p>
+        </div>
+        <span className={`dashboard-payout-status ${briefing.phase || 'pending'}`}>{briefing.phaseLabel || 'Saved'}</span>
+      </div>
+
+      {briefing.summary ? <p className="dashboard-briefing-summary">{briefing.summary}</p> : null}
+
+      {Array.isArray(briefing.sections) && briefing.sections.length ? (
+        <div className="dashboard-briefing-sections">
+          {briefing.sections.map((section) => (
+            <section key={`${briefing.id || briefing.generatedAt}-${section.heading}`} className="dashboard-briefing-section">
+              <h4>{section.heading}</h4>
+              <ul>
+                {(section.bullets || []).map((bullet) => (
+                  <li key={`${section.heading}-${bullet}`}>{bullet}</li>
+                ))}
+              </ul>
+            </section>
+          ))}
+        </div>
+      ) : briefing.text ? (
+        <p className="dashboard-briefing-text">{briefing.text}</p>
+      ) : null}
+    </div>
   );
 }
 
 export default function Dashboard() {
+  const isMobileCards = useMediaQuery('(max-width: 760px)');
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [briefing, setBriefing] = useState(null);
+  const [briefingHistory, setBriefingHistory] = useState([]);
+  const [selectedBriefingId, setSelectedBriefingId] = useState(null);
   const [briefingLoading, setBriefingLoading] = useState(false);
   const [briefingError, setBriefingError] = useState('');
 
@@ -130,7 +378,14 @@ export default function Dashboard() {
 
     setData(payload);
     setError('');
-    setBriefing(payload?.briefing || null);
+    const nextHistory = Array.isArray(payload?.briefingHistory)
+      ? payload.briefingHistory
+      : (payload?.briefing ? [payload.briefing] : []);
+    setBriefingHistory(nextHistory);
+    setSelectedBriefingId((currentId) => {
+      if (currentId && nextHistory.some((entry) => entry.id === currentId)) return currentId;
+      return nextHistory[0]?.id || null;
+    });
   }, []);
 
   useEffect(() => {
@@ -178,7 +433,11 @@ export default function Dashboard() {
         throw new Error(payload?.error || 'Dashboard briefing failed to load.');
       }
 
-      setBriefing(payload?.briefing || null);
+      const nextHistory = Array.isArray(payload?.briefingHistory)
+        ? payload.briefingHistory
+        : (payload?.briefing ? [payload.briefing] : []);
+      setBriefingHistory(nextHistory);
+      setSelectedBriefingId(payload?.briefing?.id || nextHistory[0]?.id || null);
       if (payload?.briefing?.error) setBriefingError(payload.briefing.error);
     } catch (loadError) {
       setBriefingError(loadError.message || 'Dashboard briefing failed to load.');
@@ -191,7 +450,13 @@ export default function Dashboard() {
   const summary = data?.summary || {};
   const primaryEvent = data?.primaryEvent || null;
   const liveSession = data?.liveSession || null;
+  const payoutBoard = data?.payoutBoard || { rules: [] };
   const isAdmin = !!data?.viewer?.isAdmin;
+  const selectedBriefing = useMemo(
+    () => briefingHistory.find((entry) => entry.id === selectedBriefingId) || briefingHistory[0] || null,
+    [briefingHistory, selectedBriefingId],
+  );
+  const latestBriefing = briefingHistory[0] || null;
 
   const highlightedStandings = useMemo(() => standings.map((row, index) => ({
     ...row,
@@ -199,10 +464,6 @@ export default function Dashboard() {
     net_cents: rowNet(row),
     isViewer: Number(row.id) === Number(data?.viewer?.id),
   })), [standings, data?.viewer?.id]);
-
-  const raceLeaders = liveSession?.leaders || [];
-  const ownedDrivers = liveSession?.ownedDrivers || [];
-  const championshipDrivers = liveSession?.championshipDrivers || [];
 
   if (loading && !data) {
     return <section className="loading-panel">Loading dashboard...</section>;
@@ -273,46 +534,50 @@ export default function Dashboard() {
 
         {error ? <p className="error-text">{error}</p> : null}
 
-        <div className="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>#</th>
-                <th>Participant</th>
-                <th>Drivers</th>
-                <th>Spent</th>
-                <th>Earned</th>
-                <th>Net</th>
-              </tr>
-            </thead>
-            <tbody>
-              {highlightedStandings.map((row) => (
-                <tr key={row.id} className={row.isViewer ? 'dashboard-table-row-active' : ''}>
-                  <td>{row.rank}</td>
-                  <td>
-                    <div className="dashboard-participant-cell">
-                      <span
-                        className="avatar dashboard-participant-avatar"
-                        style={{
-                          backgroundColor: `${row.color || '#e10600'}22`,
-                          color: row.color || '#e10600',
-                          borderColor: `${row.color || '#e10600'}66`,
-                        }}
-                      >
-                        {(row.name || '?').trim().charAt(0).toUpperCase() || '?'}
-                      </span>
-                      <span>{row.name}</span>
-                    </div>
-                  </td>
-                  <td>{row.drivers_owned}</td>
-                  <td>{fmtCents(row.total_spent_cents)}</td>
-                  <td>{fmtCents(row.total_earned_cents)}</td>
-                  <td className={row.net_cents >= 0 ? 'text-pos' : 'text-neg'}>{fmtCents(row.net_cents)}</td>
+        {isMobileCards ? (
+          <StandingsCards rows={highlightedStandings} />
+        ) : (
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>Participant</th>
+                  <th>Drivers</th>
+                  <th>Spent</th>
+                  <th>Earned</th>
+                  <th>Net</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {highlightedStandings.map((row) => (
+                  <tr key={row.id} className={row.isViewer ? 'dashboard-table-row-active' : ''}>
+                    <td>{row.rank}</td>
+                    <td>
+                      <div className="dashboard-participant-cell">
+                        <span
+                          className="avatar dashboard-participant-avatar"
+                          style={{
+                            backgroundColor: `${row.color || '#e10600'}22`,
+                            color: row.color || '#e10600',
+                            borderColor: `${row.color || '#e10600'}66`,
+                          }}
+                        >
+                          {(row.name || '?').trim().charAt(0).toUpperCase() || '?'}
+                        </span>
+                        <span>{row.name}</span>
+                      </div>
+                    </td>
+                    <td>{row.drivers_owned}</td>
+                    <td>{fmtCents(row.total_spent_cents)}</td>
+                    <td>{fmtCents(row.total_earned_cents)}</td>
+                    <td className={row.net_cents >= 0 ? 'text-pos' : 'text-neg'}>{fmtCents(row.net_cents)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
 
       <div className="dashboard-hero-grid">
@@ -370,9 +635,9 @@ export default function Dashboard() {
             <button
               className="btn btn-outline"
               disabled={briefingLoading || !data?.briefingMeta?.available}
-              onClick={() => requestBriefing({ force: !!briefing?.generatedAt })}
+              onClick={() => requestBriefing({ force: !!latestBriefing?.generatedAt })}
             >
-              {briefingLoading ? 'Loading...' : (briefing?.generatedAt ? 'Refresh Briefing' : 'Generate Briefing')}
+              {briefingLoading ? 'Loading...' : (latestBriefing?.generatedAt ? 'Refresh Briefing' : 'Generate Briefing')}
             </button>
           </div>
 
@@ -380,85 +645,40 @@ export default function Dashboard() {
             <p className="muted">Anthropic is not configured for the F1 service yet.</p>
           ) : null}
 
-          {briefing?.text ? (
-            <>
-              <p className="dashboard-briefing-text">{briefing.text}</p>
-              <p className="muted small">
-                {briefing.cached ? 'Cached' : 'Fresh'} briefing{briefing.generatedAt ? ` • ${fmtWhen(briefing.generatedAt)}` : ''}.
-              </p>
-            </>
-          ) : (
-            <p className="muted">Generate a briefing when you want a concise race-and-standings summary.</p>
-          )}
+          <BriefingHistoryNav
+            history={briefingHistory}
+            selectedId={selectedBriefing?.id || null}
+            onSelect={setSelectedBriefingId}
+          />
+
+          <BriefingContent briefing={selectedBriefing} />
+
+          {selectedBriefing?.generatedAt ? (
+            <p className="muted small">
+              {selectedBriefing.cached ? 'Cached' : 'Saved'} briefing
+              {selectedBriefing.generatedAt ? ` • ${fmtWhen(selectedBriefing.generatedAt)}` : ''}.
+            </p>
+          ) : null}
 
           {briefingError ? <p className="error-text">{briefingError}</p> : null}
         </section>
       </div>
 
-      <div className="dashboard-main-grid">
-        <section className="panel stack">
-          <div className="dashboard-card-head">
-            <div>
-              <h2>{isAdmin ? 'Race Leaders' : 'My Drivers Live'}</h2>
-              <p className="muted">
-                {isAdmin
-                  ? 'Top runners in the current scoring session.'
-                  : 'Your purchased drivers with live position, gains, and pit context.'}
-              </p>
-            </div>
-            {!isAdmin ? (
-              <Link className="btn btn-outline" to="/my-drivers">Open My Drivers</Link>
-            ) : null}
+      <section className="panel stack dashboard-payout-board">
+        <div className="dashboard-card-head">
+          <div>
+            <h2>Live Payout Board</h2>
+            <p className="muted">
+              Current holders for the active payout categories on this {primaryEvent ? eventTypeLabel(payoutBoard?.eventType || primaryEvent?.type) : 'scoring event'}.
+            </p>
           </div>
-
-          <DriverTrackerTable
-            rows={isAdmin ? raceLeaders : ownedDrivers}
-            emptyText={isAdmin ? 'No live leaders available right now.' : 'No owned drivers are currently showing live race data.'}
-          />
-        </section>
-
-        <section className="panel stack">
-          <div className="dashboard-card-head">
-            <div>
-              <h2>{isAdmin ? 'Championship Snapshot' : 'Race Context'}</h2>
-              <p className="muted">
-                {isAdmin
-                  ? 'Driver standings from the live session payload.'
-                  : 'Session leaders and championship context for the current weekend.'}
-              </p>
-            </div>
-          </div>
-
           {!isAdmin ? (
-            <>
-              <CompactRankingList
-                rows={raceLeaders}
-                emptyText="Leader board will populate when live data is available."
-                valueLabel={(row) => (row.position ? `P${row.position}` : '-')}
-              />
-              <CompactRankingList
-                rows={championshipDrivers}
-                emptyText="Championship positions are unavailable right now."
-                valueLabel={(row) => (
-                  row.championshipPosition
-                    ? `P${row.championshipPosition} • ${row.championshipPoints ?? 0} pts`
-                    : '-'
-                )}
-              />
-            </>
-          ) : (
-            <CompactRankingList
-              rows={championshipDrivers}
-              emptyText="Championship data is unavailable right now."
-              valueLabel={(row) => (
-                row.championshipPosition
-                  ? `P${row.championshipPosition} • ${row.championshipPoints ?? 0} pts`
-                  : '-'
-              )}
-            />
-          )}
-        </section>
-      </div>
+            <Link className="btn btn-outline" to="/my-drivers">Open My Drivers</Link>
+          ) : null}
+        </div>
+
+        {isMobileCards ? <PayoutBoardCards rules={payoutBoard.rules} /> : <PayoutBoardTable rules={payoutBoard.rules} />}
+      </section>
     </div>
   );
 }

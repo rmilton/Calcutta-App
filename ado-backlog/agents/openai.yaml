@@ -1,0 +1,4 @@
+interface:
+  display_name: "ADO Backlog"
+  short_description: "Create/query/update ADO backlog items"
+  default_prompt: "Use $ado-backlog to create, query, and update Azure DevOps Boards backlog items and draft structured stories with Given/When/Then criteria."

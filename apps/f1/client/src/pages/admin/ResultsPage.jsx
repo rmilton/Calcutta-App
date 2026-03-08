@@ -39,6 +39,18 @@ function formatRefreshTime(value) {
   });
 }
 
+function ordinal(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return '—';
+  const mod100 = number % 100;
+  if (mod100 >= 11 && mod100 <= 13) return `${number}th`;
+  const mod10 = number % 10;
+  if (mod10 === 1) return `${number}st`;
+  if (mod10 === 2) return `${number}nd`;
+  if (mod10 === 3) return `${number}rd`;
+  return `${number}th`;
+}
+
 export default function ResultsPage() {
   const {
     events,
@@ -47,6 +59,7 @@ export default function ResultsPage() {
     refreshSchedule,
     syncNext,
     syncEvent,
+    drawRandomPosition,
     refresh,
     loading,
     hasLoaded,
@@ -209,8 +222,19 @@ export default function ResultsPage() {
                       <div className="muted small">
                         {eventTypeLabel(event.type)} • {event.status} • {formatEventTime(event.starts_at)} • payout {fmtCents(event.total_payout_cents || 0)}
                       </div>
+                      <div className="muted small">
+                        Random bonus: {event.random_bonus_position ? ordinal(event.random_bonus_position) : 'Not drawn yet'}
+                      </div>
                     </div>
                     <div className="row wrap gap-sm">
+                      <button
+                        className="btn btn-outline"
+                        onClick={() => runAndReload(() => drawRandomPosition(event.id))}
+                        disabled={Boolean(event.random_bonus_position)}
+                        title={event.random_bonus_position ? `Random bonus already drawn at ${ordinal(event.random_bonus_position)}.` : 'Draw and persist the random bonus position before the race starts'}
+                      >
+                        {event.random_bonus_position ? `Random ${ordinal(event.random_bonus_position)}` : 'Draw Random'}
+                      </button>
                       <button
                         className="btn btn-outline"
                         onClick={() => runAndReload(() => syncEvent(event.id))}

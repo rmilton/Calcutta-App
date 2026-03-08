@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import DriverIdentity from '../components/DriverIdentity';
 import { getEventLocation } from '../eventLocations';
+import useMediaQuery from '../useMediaQuery';
 import {
   api,
   auditRuleSummary,
@@ -65,6 +66,7 @@ function isInactiveRaceOnlyDriver(driver) {
 }
 
 export default function Events() {
+  const isMobileFlow = useMediaQuery('(max-width: 980px)');
   const [events, setEvents] = useState([]);
   const [selectedEventId, setSelectedEventId] = useState(null);
   const [hasUserSelection, setHasUserSelection] = useState(false);
@@ -74,6 +76,7 @@ export default function Events() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [activeTab, setActiveTab] = useState('payouts');
   const [expandedPayoutId, setExpandedPayoutId] = useState(null);
+  const [mobileDetailOpen, setMobileDetailOpen] = useState(false);
 
   const loadEvents = useCallback(async () => {
     const response = await api('/events');
@@ -206,6 +209,7 @@ export default function Events() {
     setHasUserSelection(true);
     setActiveTab('payouts');
     setExpandedPayoutId(null);
+    setMobileDetailOpen(true);
   }, []);
 
   const findAuditRuleForPayout = useCallback((payout) => {
@@ -225,9 +229,12 @@ export default function Events() {
   const visibleEvents = raceListMode === 'upcoming'
     ? eventView.upcomingEvents
     : eventView.pastEvents;
+  const showListPane = !isMobileFlow || !mobileDetailOpen;
+  const showDetailPane = !isMobileFlow || mobileDetailOpen;
 
   return (
     <div className="two-col events-layout events-redesign">
+      {showListPane ? (
       <section className="panel events-navigator">
         <div className="events-nav-header">
           <h2>Race Weekends</h2>
@@ -298,7 +305,9 @@ export default function Events() {
           )}
         </section>
       </section>
+      ) : null}
 
+      {showDetailPane ? (
       <section className="panel events-detail-shell">
         {!selectedEventSummary ? (
           <>
@@ -308,6 +317,15 @@ export default function Events() {
         ) : (
           <>
             <header className="events-detail-header">
+              {isMobileFlow ? (
+                <button
+                  type="button"
+                  className="btn btn-outline events-back-btn"
+                  onClick={() => setMobileDetailOpen(false)}
+                >
+                  Back to Races
+                </button>
+              ) : null}
               <h2>{selectedEventSummary.name}</h2>
               <p className="muted">
                 {eventTypeLabel(selectedEventSummary.type)} • {fmtWhen(selectedEventSummary.starts_at)} • {selectedEventSummary.displayLocation}
@@ -478,6 +496,7 @@ export default function Events() {
           </>
         )}
       </section>
+      ) : null}
     </div>
   );
 }

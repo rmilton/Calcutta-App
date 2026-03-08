@@ -1,9 +1,11 @@
 const DEFAULT_BASE_URL = 'https://api.openf1.org/v1';
+const DEFAULT_LIVETIMING_BASE_URL = 'https://livetiming.formula1.com/static';
 const DEFAULT_TOKEN_PATH = '/token';
 const DEFAULT_MIN_REQUEST_INTERVAL_MS = 200;
 const DEFAULT_MINUTE_WINDOW_MS = 60_000;
 const DEFAULT_MAX_REQUESTS_PER_MINUTE = 60;
 const DEFAULT_MAX_RATE_LIMIT_RETRIES = 3;
+const DEFAULT_LIVETIMING_INDEX_CACHE_MS = 5 * 60_000;
 const EVENT_NAME_OVERRIDES = {
   melbourne: 'Australian Grand Prix',
   shanghai: 'Chinese Grand Prix',
@@ -38,6 +40,10 @@ const EVENT_NAME_OVERRIDES = {
 
 function normalizeBaseUrl(baseUrl) {
   return String(baseUrl || DEFAULT_BASE_URL).replace(/\/+$/, '');
+}
+
+function normalizeLiveTimingBaseUrl(baseUrl) {
+  return String(baseUrl || DEFAULT_LIVETIMING_BASE_URL).replace(/\/+$/, '');
 }
 
 function deriveTokenUrl(baseUrl, explicitTokenUrl) {
@@ -180,6 +186,31 @@ function pickMostRecentRow(rows, fields = ['date', 'date_start', 'date_end']) {
   }, null);
 }
 
+function deriveStartingGridFromPositions(positionRows) {
+  const earliestByDriver = new Map();
+
+  (positionRows || []).forEach((row) => {
+    const driverNumber = Number(row.driver_number);
+    const position = Number(row.position);
+    const rowMs = toTimestampMs(row.date);
+    if (!Number.isFinite(driverNumber) || !Number.isFinite(position) || !Number.isFinite(rowMs)) return;
+
+    const current = earliestByDriver.get(driverNumber);
+    const currentMs = current ? toTimestampMs(current.date) : null;
+    if (!current || !Number.isFinite(currentMs) || rowMs < currentMs) {
+      earliestByDriver.set(driverNumber, row);
+    }
+  });
+
+  return [...earliestByDriver.values()]
+    .map((row) => ({
+      driver_number: Number(row.driver_number),
+      position: Number(row.position),
+    }))
+    .filter((row) => Number.isFinite(row.driver_number) && Number.isFinite(row.position))
+    .sort((a, b) => a.position - b.position);
+}
+
 function normalizeTrackStatus(row) {
   if (!row) return null;
 
@@ -197,9 +228,35 @@ function normalizeTrackStatus(row) {
   };
 }
 
+function parseLiveTimingPitStopSeries(payload) {
+  const slowestPitByDriver = new Map();
+  const pitTimes = payload?.PitTimes;
+  if (!pitTimes || typeof pitTimes !== 'object') {
+    return slowestPitByDriver;
+  }
+
+  Object.values(pitTimes).forEach((entryGroup) => {
+    const entries = Array.isArray(entryGroup) ? entryGroup : [entryGroup].filter(Boolean);
+    entries.forEach((entry) => {
+      const pitStop = entry?.PitStop || entry || {};
+      const driverNumber = Number(pitStop.RacingNumber ?? pitStop.driver_number);
+      const pitStopTime = Number(pitStop.PitStopTime ?? pitStop.pit_stop_time);
+      if (!Number.isFinite(driverNumber) || !Number.isFinite(pitStopTime) || pitStopTime <= 0) return;
+
+      const current = slowestPitByDriver.get(driverNumber);
+      if (current == null || pitStopTime > current) {
+        slowestPitByDriver.set(driverNumber, pitStopTime);
+      }
+    });
+  });
+
+  return slowestPitByDriver;
+}
+
 class OpenF1ResultsProvider {
   constructor({
     baseUrl = DEFAULT_BASE_URL,
+    liveTimingBaseUrl = process.env.F1_LIVETIMING_BASE_URL,
     tokenUrl,
     username = process.env.OPENF1_USERNAME,
     password = process.env.OPENF1_PASSWORD,
@@ -210,9 +267,11 @@ class OpenF1ResultsProvider {
     minuteWindowMs = DEFAULT_MINUTE_WINDOW_MS,
     maxRequestsPerMinute = DEFAULT_MAX_REQUESTS_PER_MINUTE,
     maxRateLimitRetries = DEFAULT_MAX_RATE_LIMIT_RETRIES,
+    liveTimingIndexCacheMs = DEFAULT_LIVETIMING_INDEX_CACHE_MS,
   } = {}) {
     this.name = 'openf1';
     this.baseUrl = normalizeBaseUrl(baseUrl);
+    this.liveTimingBaseUrl = normalizeLiveTimingBaseUrl(liveTimingBaseUrl);
     this.tokenUrl = deriveTokenUrl(baseUrl, tokenUrl || process.env.OPENF1_TOKEN_URL);
     this.username = username;
     this.password = password;
@@ -223,12 +282,14 @@ class OpenF1ResultsProvider {
     this.minuteWindowMs = minuteWindowMs;
     this.maxRequestsPerMinute = maxRequestsPerMinute;
     this.maxRateLimitRetries = maxRateLimitRetries;
+    this.liveTimingIndexCacheMs = liveTimingIndexCacheMs;
     this.accessToken = null;
     this.accessTokenExpiresAt = 0;
     this.tokenPromise = null;
     this.nextRequestAt = 0;
     this.requestTimestamps = [];
     this.requestQueue = Promise.resolve();
+    this.liveTimingIndexCache = new Map();
   }
 
   get authConfigured() {
@@ -401,6 +462,88 @@ class OpenF1ResultsProvider {
     return this.enqueueRequest(() => this.performRequest(path, params, options));
   }
 
+  async requestJsonUrl(url) {
+    if (typeof this.fetchImpl !== 'function') {
+      throw new Error('Fetch is unavailable in this runtime');
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+    try {
+      const response = await this.fetchImpl(url, {
+        headers: { Accept: 'application/json' },
+        signal: controller.signal,
+      });
+
+      if (!response.ok) {
+        const detail = await parseErrorDetail(response);
+        throw new Error(detail
+          ? `Formula 1 LiveTiming request failed (${response.status}): ${detail}`
+          : `Formula 1 LiveTiming request failed (${response.status})`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      if (error?.name === 'AbortError') {
+        throw new Error('Formula 1 LiveTiming request timed out');
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  async fetchLiveTimingIndex({ year }) {
+    const key = Number(year);
+    const now = this.nowImpl();
+    const cached = this.liveTimingIndexCache.get(key);
+    if (cached && (now - cached.fetchedAt) < this.liveTimingIndexCacheMs) {
+      return cached.data;
+    }
+
+    const url = `${this.liveTimingBaseUrl}/${key}/Index.json`;
+    const data = await this.requestJsonUrl(url);
+    this.liveTimingIndexCache.set(key, { fetchedAt: now, data });
+    return data;
+  }
+
+  async findLiveTimingSessionPath({ year, sessionKey }) {
+    const index = await this.fetchLiveTimingIndex({ year });
+    const meetings = Array.isArray(index?.Meetings) ? index.Meetings : [];
+
+    for (const meeting of meetings) {
+      const sessions = Array.isArray(meeting?.Sessions) ? meeting.Sessions : [];
+      for (const session of sessions) {
+        if (Number(session?.Key) === Number(sessionKey)) {
+          return String(session?.Path || '').trim() || null;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  async fetchLiveTimingPitStopDurations({ event, session }) {
+    const year = Number(String(session?.starts_at || event?.starts_at || '').slice(0, 4));
+    const sessionKey = Number(session?.session_key || event?.external_event_id);
+    if (!Number.isFinite(year) || !Number.isFinite(sessionKey)) {
+      return new Map();
+    }
+
+    try {
+      const sessionPath = await this.findLiveTimingSessionPath({ year, sessionKey });
+      if (!sessionPath) return new Map();
+
+      const normalizedPath = String(sessionPath).replace(/^\/+/, '').replace(/\/?$/, '/');
+      const url = `${this.liveTimingBaseUrl}/${normalizedPath}PitStopSeries.json`;
+      const payload = await this.requestJsonUrl(url);
+      return parseLiveTimingPitStopSeries(payload);
+    } catch {
+      return new Map();
+    }
+  }
+
   async fetchSessionMetadata(sessionKey) {
     const sessions = await this.request('/sessions', { session_key: sessionKey });
     const session = Array.isArray(sessions) ? sessions[0] : null;
@@ -527,11 +670,17 @@ class OpenF1ResultsProvider {
     }
 
     const session = await this.fetchSessionMetadata(sessionKey);
-    const [sessionResults, startingGrid, pitStops, roster] = await Promise.all([
+    const startingGridPromise = this.request('/starting_grid', { session_key: sessionKey }).catch(async (error) => {
+      if (!isNoResultsFoundError(error)) throw error;
+      const positionRows = await this.request('/position', { session_key: sessionKey });
+      return deriveStartingGridFromPositions(positionRows);
+    });
+    const [sessionResults, startingGrid, pitStops, roster, liveTimingPitStops] = await Promise.all([
       this.request('/session_result', { session_key: sessionKey }),
-      this.request('/starting_grid', { session_key: sessionKey }),
+      startingGridPromise,
       this.request('/pit', { session_key: sessionKey }),
       this.fetchNormalizedDriverRoster(session || { session_key: sessionKey }),
+      this.fetchLiveTimingPitStopDurations({ event, session }),
     ]);
 
     const gridByDriver = new Map(
@@ -551,6 +700,11 @@ class OpenF1ResultsProvider {
       if (current == null || stopDuration > current) {
         slowestPitByDriver.set(driverNumber, stopDuration);
       }
+    });
+
+    liveTimingPitStops.forEach((pitStopTime, driverNumber) => {
+      if (!Number.isFinite(Number(driverNumber)) || !Number.isFinite(Number(pitStopTime)) || Number(pitStopTime) <= 0) return;
+      slowestPitByDriver.set(Number(driverNumber), Number(pitStopTime));
     });
 
     const rows = sessionResults
@@ -623,12 +777,20 @@ class OpenF1ResultsProvider {
     });
 
     const latestPitByDriver = new Map();
+    const slowestPitByDriver = new Map();
     (pitStops || []).forEach((row) => {
       const driverNumber = Number(row.driver_number);
       if (!Number.isFinite(driverNumber)) return;
       const current = latestPitByDriver.get(driverNumber);
       const candidate = pickMostRecentRow([current, row].filter(Boolean), ['date', 'date_of_pit_in', 'date_of_pit_out']);
       latestPitByDriver.set(driverNumber, candidate);
+
+      const stopDuration = Number(row.stop_duration);
+      if (!Number.isFinite(stopDuration) || stopDuration <= 0) return;
+      const currentSlowest = slowestPitByDriver.get(driverNumber);
+      if (currentSlowest == null || stopDuration > currentSlowest) {
+        slowestPitByDriver.set(driverNumber, stopDuration);
+      }
     });
 
     const championshipByDriver = new Map();
@@ -659,6 +821,7 @@ class OpenF1ResultsProvider {
           intervalToAhead: intervalRow?.interval || intervalRow?.interval_to_position_ahead || null,
           status: positionRow?.status || intervalRow?.status || null,
           lastPitStopSeconds: Number(pitRow?.stop_duration) > 0 ? Number(pitRow.stop_duration) : null,
+          slowestPitStopSeconds: slowestPitByDriver.get(driverNumber) ?? null,
           lastPitAt: parseIsoDate(pitRow?.date || pitRow?.date_of_pit_out || pitRow?.date_of_pit_in),
           championshipPosition: Number(championshipRow?.position) || null,
           championshipPoints: Number(championshipRow?.points) || null,
@@ -717,6 +880,7 @@ class OpenF1ResultsProvider {
       return {
         provider: this.name,
         baseUrl: this.baseUrl,
+        liveTimingBaseUrl: this.liveTimingBaseUrl,
         authConfigured: this.authConfigured,
         tokenCached: Boolean(this.accessToken),
         tokenExpiresAt: this.accessTokenExpiresAt || null,

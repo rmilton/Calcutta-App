@@ -77,6 +77,13 @@ export function buildInviteLink(inviteCode, origin = window.location.origin) {
   return `${base}/join?invite=${encodeURIComponent(cleanCode)}`;
 }
 
+export function buildParticipantAccessLink(accessPath, origin = window.location.origin) {
+  const cleanPath = String(accessPath || '').trim();
+  if (!cleanPath) return '';
+  const base = String(origin || '').replace(/\/+$/, '');
+  return `${base}${cleanPath.startsWith('/') ? cleanPath : `/${cleanPath}`}`;
+}
+
 export function payoutAuditExportHref(eventId) {
   return `/api/admin/payout-audit/${eventId}/export.csv`;
 }
@@ -99,6 +106,14 @@ export async function refreshSchedule() {
     body: '{}',
   });
   return parseApiResponse(response, 'Schedule refresh failed');
+}
+
+export async function resetParticipantAccess(participantId) {
+  const response = await api(`/admin/participants/${participantId}/reset-access`, {
+    method: 'POST',
+    body: '{}',
+  });
+  return parseApiResponse(response, 'Failed to reset participant access');
 }
 
 export async function clearAllTestData() {
@@ -141,12 +156,28 @@ export async function syncEvent(eventId, { force = false } = {}) {
   return parseApiResponse(response, 'Event sync failed');
 }
 
+export async function drawRandomPosition(eventId) {
+  const response = await api(`/admin/results/draw-random-position/${eventId}`, {
+    method: 'POST',
+    body: '{}',
+  });
+  return parseApiResponse(response, 'Random position draw failed');
+}
+
 export async function recalcSeasonBonuses() {
   const response = await api('/admin/results/recalc-season-bonuses', {
     method: 'POST',
     body: '{}',
   });
   return parseApiResponse(response, 'Recalculation failed');
+}
+
+export async function clearSeasonBonuses() {
+  const response = await api('/admin/results/clear-season-bonuses', {
+    method: 'POST',
+    body: '{}',
+  });
+  return parseApiResponse(response, 'Clear season bonuses failed');
 }
 
 export async function rescoreSeasonEvents() {

@@ -324,7 +324,7 @@ export default function Auction() {
   };
 
   return (
-    <div className="stack-lg">
+    <div className="stack-lg auction-page">
       <section className="panel telemetry-strip stagger-in">
         <div className="strip-item">
           <span className="label">Status</span>
@@ -359,7 +359,7 @@ export default function Auction() {
       )}
 
       {active ? (
-        <section className="panel">
+        <section className="panel auction-bid-panel">
           <h3>Place Bid</h3>
           {canPlaceBid ? (
             <form className="bid-form" onSubmit={submitBid}>

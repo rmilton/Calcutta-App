@@ -159,6 +159,187 @@ test('OpenF1ResultsProvider normalizes season schedule and event results', async
   ]);
 });
 
+test('OpenF1ResultsProvider fetchEventResults falls back to earliest position snapshot when starting_grid is unavailable', async () => {
+  const responses = {
+    '/v1/session_result?session_key=9001': [
+      { driver_number: 1, position: 2 },
+      { driver_number: 16, position: 1 },
+    ],
+    '/v1/position?session_key=9001': [
+      { driver_number: 1, position: 4, date: '2026-03-08T03:01:19.220000+00:00' },
+      { driver_number: 16, position: 2, date: '2026-03-08T03:01:19.220000+00:00' },
+      { driver_number: 1, position: 2, date: '2026-03-08T05:01:19.220000+00:00' },
+      { driver_number: 16, position: 1, date: '2026-03-08T05:01:19.220000+00:00' },
+    ],
+    '/v1/pit?session_key=9001': [],
+    '/v1/drivers?session_key=9001': [
+      {
+        driver_number: 1,
+        name_acronym: 'VER',
+        full_name: 'Max Verstappen',
+        team_name: 'Red Bull Racing',
+      },
+      {
+        driver_number: 16,
+        name_acronym: 'LEC',
+        full_name: 'Charles Leclerc',
+        team_name: 'Ferrari',
+      },
+    ],
+  };
+
+  const provider = createNoAuthProvider({
+    fetchImpl: async (url) => {
+      const key = `${url.pathname}${url.search}`;
+      if (key === '/v1/starting_grid?session_key=9001') {
+        return {
+          ok: false,
+          status: 404,
+          async json() {
+            return { detail: 'No results found.' };
+          },
+          headers: { get() { return 'application/json'; } },
+        };
+      }
+
+      return {
+        ok: true,
+        async json() {
+          return responses[key] || [];
+        },
+        headers: { get() { return 'application/json'; } },
+      };
+    },
+  });
+
+  const results = await provider.fetchEventResults({
+    event: { external_event_id: '9001' },
+  });
+
+  assert.deepEqual(results, [
+    {
+      external_driver_id: 16,
+      driver_code: 'LEC',
+      driver_name: 'Charles Leclerc',
+      team_name: 'Ferrari',
+      finish_position: 1,
+      start_position: 2,
+      slowest_pit_stop_seconds: null,
+    },
+    {
+      external_driver_id: 1,
+      driver_code: 'VER',
+      driver_name: 'Max Verstappen',
+      team_name: 'Red Bull Racing',
+      finish_position: 2,
+      start_position: 4,
+      slowest_pit_stop_seconds: null,
+    },
+  ]);
+});
+
+test('OpenF1ResultsProvider fetchEventResults enriches stopped pit duration from Formula 1 LiveTiming', async () => {
+  const responses = {
+    '/v1/sessions?session_key=11234': [{
+      session_key: 11234,
+      meeting_key: 1254,
+      meeting_name: 'Australian Grand Prix',
+      session_name: 'Race',
+      date_start: '2026-03-08T04:00:00Z',
+      date_end: '2026-03-08T06:00:00Z',
+    }],
+    '/v1/session_result?session_key=11234': [
+      { driver_number: 55, position: 7 },
+      { driver_number: 18, position: 15 },
+    ],
+    '/v1/starting_grid?session_key=11234': [
+      { driver_number: 55, position: 11 },
+      { driver_number: 18, position: 14 },
+    ],
+    '/v1/pit?session_key=11234': [
+      { driver_number: 55, stop_duration: null },
+      { driver_number: 18, stop_duration: null },
+    ],
+    '/v1/drivers?session_key=11234': [
+      {
+        driver_number: 55,
+        name_acronym: 'SAI',
+        full_name: 'Carlos Sainz',
+        team_name: 'Williams',
+      },
+      {
+        driver_number: 18,
+        name_acronym: 'STR',
+        full_name: 'Lance Stroll',
+        team_name: 'Aston Martin',
+      },
+    ],
+    'https://livetiming.formula1.com/static/2026/Index.json': {
+      Meetings: [
+        {
+          Sessions: [
+            {
+              Key: 11234,
+              Path: '2026/2026-03-08_Australian_Grand_Prix/2026-03-08_Race/',
+            },
+          ],
+        },
+      ],
+    },
+    'https://livetiming.formula1.com/static/2026/2026-03-08_Australian_Grand_Prix/2026-03-08_Race/PitStopSeries.json': {
+      PitTimes: {
+        '55': [
+          { PitStop: { RacingNumber: '55', PitStopTime: '19.8', PitLaneTime: '34.615', Lap: '11' } },
+          { PitStop: { RacingNumber: '55', PitStopTime: '8.2', PitLaneTime: '25.900', Lap: '33' } },
+        ],
+        '18': [
+          { PitStop: { RacingNumber: '18', PitStopTime: '16.9', PitLaneTime: '36.686', Lap: '13' } },
+        ],
+      },
+    },
+  };
+
+  const provider = createNoAuthProvider({
+    fetchImpl: async (url) => {
+      const key = typeof url === 'string' ? url : url.toString();
+      const openF1Key = typeof url === 'string' ? url : `${url.pathname}${url.search}`;
+      const payload = responses[key] ?? responses[openF1Key] ?? [];
+      return {
+        ok: true,
+        async json() {
+          return payload;
+        },
+        headers: { get() { return 'application/json'; } },
+      };
+    },
+  });
+
+  const results = await provider.fetchEventResults({
+    event: { id: 1, external_event_id: '11234', starts_at: '2026-03-08T04:00:00Z' },
+  });
+
+  assert.deepEqual(results, [
+    {
+      external_driver_id: 55,
+      driver_code: 'SAI',
+      driver_name: 'Carlos Sainz',
+      team_name: 'Williams',
+      finish_position: 7,
+      start_position: 11,
+      slowest_pit_stop_seconds: 19.8,
+    },
+    {
+      external_driver_id: 18,
+      driver_code: 'STR',
+      driver_name: 'Lance Stroll',
+      team_name: 'Aston Martin',
+      finish_position: 15,
+      start_position: 14,
+      slowest_pit_stop_seconds: 16.9,
+    },
+  ]);
+});
+
 test('OpenF1ResultsProvider fetchDrivers uses the latest started non-testing session, including practice', async () => {
   const responses = {
     '/v1/sessions?year=2026': [
@@ -416,6 +597,7 @@ test('OpenF1ResultsProvider fetchLiveSessionSnapshot normalizes live race data',
       { driver_number: 81, interval: 'LEADER', gap_to_leader: 'LEADER', date: '2026-02-22T04:20:01Z' },
     ],
     '/v1/pit?session_key=9001': [
+      { driver_number: 1, stop_duration: 5.41, date_of_pit_out: '2026-02-22T04:08:00Z' },
       { driver_number: 1, stop_duration: 2.98, date_of_pit_out: '2026-02-22T04:10:00Z' },
     ],
     '/v1/race_control?session_key=9001': [
@@ -451,6 +633,7 @@ test('OpenF1ResultsProvider fetchLiveSessionSnapshot normalizes live race data',
   assert.equal(snapshot.leaders[1].positionsGained, 2);
   assert.equal(snapshot.trackStatus.flag, 'SC');
   assert.equal(snapshot.driverStates[1].lastPitStopSeconds, 2.98);
+  assert.equal(snapshot.driverStates[1].slowestPitStopSeconds, 5.41);
   assert.equal(snapshot.championshipDrivers[0].championshipPosition, 1);
 });
 

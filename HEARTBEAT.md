@@ -1,6 +1,6 @@
 # HEARTBEAT.md
 
-Last updated: 2026-03-07
+Last updated: 2026-03-08
 Owner: On-call engineer / active implementer
 
 ## Status At A Glance
@@ -28,11 +28,14 @@ Owner: On-call engineer / active implementer
 - F1 driver refresh now pulls the latest started non-testing session roster and falls back from `session_key` to `meeting_key` roster lookups when a live session weekend has started but the session-level roster is not populated yet.
 - F1 event sync now preserves unknown substitute/new race drivers as inactive, non-auction season drivers so event scoring can mark their payouts as unowned instead of dropping their result rows.
 - F1 OpenF1 access now rate-limits outbound provider calls against both short-burst and rolling minute windows to reduce `429` failures during admin refresh/sync operations.
+- F1 event sync now enriches slowest pit-stop scoring from Formula 1 LiveTiming `PitStopSeries.json`, using the season `Index.json` to resolve race/sprint session paths and falling back to OpenF1 `stop_duration` only when the static feed is unavailable.
 - F1 Results Sync now exposes a DB backup/export path and a visible driver-roster freeze guard once auction or scoring activity exists.
 - F1 now has an explicit season roster lock setting in admin so post-auction driver refresh policy is visible and deliberate.
 - F1 participant navigation now centers on `/dashboard`, which combines personal standings, full league standings, and current-or-next scoring-session race context.
 - F1 dashboard now supports brief live OpenF1 session snapshots with short-lived caching and an optional on-demand Anthropic participant briefing.
 - The latest F1 dashboard briefing is now persisted per participant so it survives polling refreshes, logout/login, and process restarts.
+- F1 dashboard briefing history now stores structured per-event entries so participants can revisit prior pre-race/live/post-race AI summaries instead of only the latest generated text.
+- F1 post-auction participant login is now locked to the existing season roster; unmatched invite-code joins fail closed and admin can issue/reset direct participant access links from the Auction page.
 - F1 startup seeding now preserves provider-refreshed schedule rows across restart/deploy cycles instead of silently reverting them to mock seed dates.
 
 ## Active Priorities

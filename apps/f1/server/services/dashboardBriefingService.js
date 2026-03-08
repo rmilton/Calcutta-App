@@ -1,6 +1,7 @@
 const crypto = require('crypto');
 const { generateDashboardBriefing } = require('../ai');
 const {
+  getDashboardBriefingHistory,
   getLatestDashboardBriefing,
   saveDashboardBriefing,
 } = require('../db');
@@ -11,10 +12,42 @@ function hashPayload(payload) {
   return crypto.createHash('sha256').update(JSON.stringify(payload || {})).digest('hex');
 }
 
+function phaseLabel(phase) {
+  if (phase === 'pre_race') return 'Pre-race';
+  if (phase === 'live') return 'Live';
+  if (phase === 'post_race') return 'Post-race';
+  return 'Saved';
+}
+
+function normalizeSections(sections) {
+  if (!Array.isArray(sections)) return [];
+  return sections
+    .map((section) => ({
+      heading: String(section?.heading || '').trim(),
+      bullets: Array.isArray(section?.bullets)
+        ? section.bullets.map((bullet) => String(bullet || '').trim()).filter(Boolean).slice(0, 4)
+        : [],
+    }))
+    .filter((section) => section.heading || section.bullets.length);
+}
+
+function composeBriefingText(content) {
+  const summary = String(content?.summary || '').trim();
+  const sectionLines = normalizeSections(content?.sections)
+    .flatMap((section) => [
+      section.heading ? `${section.heading}:` : null,
+      ...section.bullets.map((bullet) => `- ${bullet}`),
+    ])
+    .filter(Boolean);
+
+  return [summary, ...sectionLines].filter(Boolean).join('\n').trim();
+}
+
 function createDashboardBriefingService({
   generator = generateDashboardBriefing,
   ttlMs = DEFAULT_TTL_MS,
   nowImpl = Date.now,
+  loadSavedHistory = getDashboardBriefingHistory,
   loadSavedBriefing = getLatestDashboardBriefing,
   persistBriefing = saveDashboardBriefing,
 } = {}) {
@@ -57,11 +90,26 @@ function createDashboardBriefingService({
               position: driver.position ?? null,
               positionsGained: driver.positionsGained ?? null,
               lastPitStopSeconds: driver.lastPitStopSeconds ?? null,
+              maxPitStopSeconds: driver.maxPitStopSeconds ?? null,
             })),
           }
         : null,
+      payoutBoard: {
+        eventType: dashboardPayload?.payoutBoard?.eventType || null,
+        rules: (dashboardPayload?.payoutBoard?.rules || []).slice(0, 8).map((rule) => ({
+          category: rule.category,
+          status: rule.status,
+          holders: (rule.holders || []).slice(0, 4).map((holder) => ({
+            driverId: holder.driverId ?? null,
+            participantId: holder.participantId ?? null,
+            isViewerOwner: !!holder.isViewerOwner,
+            displayValue: holder.displayValue || null,
+          })),
+        })),
+      },
       standings: (dashboardPayload?.standings || []).slice(0, 8).map((row) => ({
         id: row.id,
+        name: row.name,
         total_earned_cents: row.total_earned_cents,
         total_spent_cents: row.total_spent_cents,
         drivers_owned: row.drivers_owned,
@@ -79,6 +127,7 @@ function createDashboardBriefingService({
                     position: driver.live.position ?? null,
                     positionsGained: driver.live.positionsGained ?? null,
                     lastPitStopSeconds: driver.live.lastPitStopSeconds ?? null,
+                    maxPitStopSeconds: driver.live.maxPitStopSeconds ?? null,
                   }
                 : null,
             })),
@@ -88,10 +137,35 @@ function createDashboardBriefingService({
   }
 
   function normalizeSavedBriefing(row) {
-    if (!row?.briefing_text) return null;
+    if (!row?.briefing_json && !row?.briefing_text) return null;
+    let content = null;
+    try {
+      content = row?.briefing_json ? JSON.parse(row.briefing_json) : null;
+    } catch {
+      content = null;
+    }
+
+    if (!content) {
+      const legacyText = String(row?.briefing_text || '').trim();
+      content = {
+        summary: legacyText,
+        sections: legacyText ? [{ heading: 'Saved Briefing', bullets: [legacyText] }] : [],
+      };
+    }
+
+    const sections = normalizeSections(content.sections);
+    const summary = String(content.summary || row?.briefing_summary || '').trim();
+    const title = String(row?.briefing_title || '').trim() || (row?.event_name ? `${row.event_name} Briefing` : 'Dashboard Briefing');
+
     return {
+      id: row.id || null,
       available: true,
-      text: row.briefing_text,
+      text: composeBriefingText({ summary, sections }),
+      title,
+      summary,
+      sections,
+      phase: row.briefing_phase || 'unknown',
+      phaseLabel: phaseLabel(row.briefing_phase),
       generatedAt: row.generated_at || null,
       source: row.source || 'persisted',
       error: null,
@@ -99,6 +173,9 @@ function createDashboardBriefingService({
       snapshotHash: row.snapshot_hash || '',
       persisted: true,
       eventId: row.event_id || null,
+      eventName: row.event_name || null,
+      eventType: row.event_type || null,
+      eventStartsAt: row.event_starts_at || null,
     };
   }
 
@@ -108,6 +185,12 @@ function createDashboardBriefingService({
 
   function getSavedBriefing({ seasonId, participantId }) {
     return normalizeSavedBriefing(loadSavedBriefing(seasonId, participantId));
+  }
+
+  function getBriefingHistory({ seasonId, participantId, limit = 12 }) {
+    return (loadSavedHistory(seasonId, participantId, { limit }) || [])
+      .map(normalizeSavedBriefing)
+      .filter(Boolean);
   }
 
   async function getBriefing({ dashboardPayload, force = false }) {
@@ -156,14 +239,28 @@ function createDashboardBriefingService({
       liveSession: dashboardPayload?.liveSession || null,
       standings: dashboardPayload?.standings || [],
       portfolio: dashboardPayload?.portfolio || null,
+      payoutBoard: dashboardPayload?.payoutBoard || null,
     });
 
     const value = {
       available: !!briefing?.available,
-      text: briefing?.text || '',
+      id: briefing?.id || null,
+      title: briefing?.title || '',
+      summary: briefing?.summary || '',
+      sections: normalizeSections(briefing?.sections),
+      phase: briefing?.phase || 'unknown',
+      phaseLabel: phaseLabel(briefing?.phase),
+      text: briefing?.text || composeBriefingText({
+        summary: briefing?.summary || '',
+        sections: briefing?.sections || [],
+      }),
       generatedAt: briefing?.generatedAt || null,
       source: briefing?.source || 'unknown',
       error: briefing?.error || null,
+      eventId: dashboardPayload?.primaryEvent?.id || null,
+      eventName: dashboardPayload?.primaryEvent?.name || null,
+      eventType: dashboardPayload?.primaryEvent?.type || null,
+      eventStartsAt: dashboardPayload?.primaryEvent?.starts_at || null,
     };
 
     cache.set(cacheKey, {
@@ -175,7 +272,13 @@ function createDashboardBriefingService({
       persistBriefing(dashboardPayload?.seasonId, dashboardPayload?.viewer?.id, {
         eventId: dashboardPayload?.primaryEvent?.id || null,
         snapshotHash,
-        text: value.text,
+        phase: value.phase,
+        title: value.title,
+        summary: value.summary,
+        content: {
+          summary: value.summary,
+          sections: value.sections,
+        },
         source: value.source,
         generatedAt: value.generatedAt,
         updatedAt: now,
@@ -204,6 +307,7 @@ function createDashboardBriefingService({
   return {
     buildSnapshot,
     getSavedBriefing,
+    getBriefingHistory,
     getBriefing,
     getMeta,
   };

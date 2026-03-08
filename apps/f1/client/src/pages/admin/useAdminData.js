@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  clearSeasonBonuses as clearSeasonBonusesApi,
   clearAllTestData as clearAllTestDataApi,
+  drawRandomPosition as drawRandomPositionApi,
   loadHistoricalSeasonData as loadHistoricalSeasonDataApi,
   normalizeRulesPayload,
   normalizeSettingsPayload,
@@ -13,6 +15,7 @@ import {
   rescoreSeasonEvents as rescoreSeasonEventsApi,
   refreshDrivers as refreshDriversApi,
   refreshSchedule as refreshScheduleApi,
+  resetParticipantAccess as resetParticipantAccessApi,
   runAuctionAction as runAuctionActionApi,
   savePayoutRules,
   syncEvent as syncEventApi,
@@ -112,6 +115,16 @@ export default function useAdminData() {
     }
   }, [loadAll]);
 
+  const drawRandomPosition = useCallback(async (eventId) => {
+    try {
+      const result = await drawRandomPositionApi(eventId);
+      setMessage(result.message || `Random bonus position set to P${result.randomBonusPosition}.`);
+      await loadAll({ silent: true });
+    } catch (error) {
+      setMessage(error.message || 'Random position draw failed.');
+    }
+  }, [loadAll]);
+
   const refreshDrivers = useCallback(async () => {
     try {
       const result = await refreshDriversApi();
@@ -132,13 +145,34 @@ export default function useAdminData() {
     }
   }, [loadAll]);
 
+  const resetParticipantAccess = useCallback(async (participantId) => {
+    try {
+      const result = await resetParticipantAccessApi(participantId);
+      await loadAll({ silent: true });
+      return result;
+    } catch (error) {
+      setMessage(error.message || 'Failed to reset participant access.');
+      throw error;
+    }
+  }, [loadAll]);
+
   const recalcSeasonBonuses = useCallback(async () => {
     try {
-      await recalcSeasonBonusesApi();
-      setMessage('Season bonuses recalculated.');
+      const result = await recalcSeasonBonusesApi();
+      setMessage(result.message || 'Season bonuses recalculated.');
       await loadAll({ silent: true });
     } catch (error) {
       setMessage(error.message || 'Recalculation failed.');
+    }
+  }, [loadAll]);
+
+  const clearSeasonBonuses = useCallback(async () => {
+    try {
+      const result = await clearSeasonBonusesApi();
+      setMessage(result.message || 'Season bonuses cleared.');
+      await loadAll({ silent: true });
+    } catch (error) {
+      setMessage(error.message || 'Failed to clear season bonuses.');
     }
   }, [loadAll]);
 
@@ -230,13 +264,16 @@ export default function useAdminData() {
     runAuctionAction,
     refreshDrivers,
     refreshSchedule,
+    resetParticipantAccess,
     clearAllTestData,
     resetAuctionOnly,
     loadHistoricalSeasonData,
     restoreSeeded2026Data,
     syncNext,
     syncEvent,
+    drawRandomPosition,
     recalcSeasonBonuses,
+    clearSeasonBonuses,
     rescoreSeasonEvents,
     updateRules,
     saveRules,
@@ -256,13 +293,16 @@ export default function useAdminData() {
     runAuctionAction,
     refreshDrivers,
     refreshSchedule,
+    resetParticipantAccess,
     clearAllTestData,
     resetAuctionOnly,
     loadHistoricalSeasonData,
     restoreSeeded2026Data,
     syncNext,
     syncEvent,
+    drawRandomPosition,
     recalcSeasonBonuses,
+    clearSeasonBonuses,
     rescoreSeasonEvents,
     updateRules,
     saveRules,

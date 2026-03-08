@@ -2,7 +2,7 @@ import React, { useCallback, useMemo, useState } from 'react';
 import ParticipantAvatar from '../../components/ParticipantAvatar';
 import { useSocketEvent } from '../../context/SocketContext';
 import AdminLoadingState from './AdminLoadingState';
-import { auctionResultsExportHref, buildInviteLink } from './adminApi';
+import { auctionResultsExportHref, buildInviteLink, buildParticipantAccessLink } from './adminApi';
 import useAdminOutletContext from './useAdminOutletContext';
 
 export default function AuctionPage() {
@@ -13,6 +13,7 @@ export default function AuctionPage() {
     saveSettings,
     saveSettingsPatch,
     runAuctionAction,
+    resetParticipantAccess,
     refresh,
     setMessage,
     loading,
@@ -25,7 +26,10 @@ export default function AuctionPage() {
   const isRosterLocked = String(settings?.auction_roster_locked) === '1'
     || settings?.auction_roster_locked === 1
     || settings?.auction_roster_locked === true;
+  const isLoginLocked = String(settings?.auction_status || '').toLowerCase() === 'complete';
   const joinedParticipants = (participants || []).filter((participant) => !participant.is_admin);
+  const duplicateParticipants = joinedParticipants.filter((participant) => Number(participant.duplicate_name_count || 0) > 1);
+  const noAccessParticipants = joinedParticipants.filter((participant) => !participant.has_session_token);
   const inviteLink = useMemo(
     () => buildInviteLink(settings?.invite_code),
     [settings?.invite_code],
@@ -72,6 +76,21 @@ export default function AuctionPage() {
     }
   }, [inviteLink, setMessage]);
 
+  const handleResetAccess = useCallback(async (participant) => {
+    try {
+      const result = await resetParticipantAccess(participant.id);
+      const accessLink = buildParticipantAccessLink(result?.accessPath);
+      if (accessLink && navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(accessLink);
+        setMessage(`Access link copied for ${participant.name}.`);
+      } else {
+        setMessage(result?.message || `Access reset for ${participant.name}.`);
+      }
+    } catch (error) {
+      setMessage(error.message || `Failed to reset access for ${participant.name}.`);
+    }
+  }, [resetParticipantAccess, setMessage]);
+
   useSocketEvent('participants:update', handleParticipantsUpdate);
 
   if (loading && !hasLoaded) {
@@ -84,7 +103,11 @@ export default function AuctionPage() {
         <div className="row wrap gap-sm participants-panel-header">
           <div>
             <h2>Invite Participants</h2>
-            <p className="muted">Share the pool link or send the invite code directly.</p>
+            <p className="muted">
+              {isLoginLocked
+                ? 'Invite code still works for known participants, but new participant creation is now disabled.'
+                : 'Share the pool link or send the invite code directly.'}
+            </p>
           </div>
         </div>
         <div className="invite-share-panel stack">
@@ -196,6 +219,21 @@ export default function AuctionPage() {
           </div>
           <span className="meta-pill">{joinedParticipants.length} joined</span>
         </div>
+        <div className={`note-panel ${isLoginLocked ? 'note-panel-warning' : ''}`}>
+          <strong>Login Locked To Existing Participants</strong>
+          <div className="muted small">
+            {isLoginLocked
+              ? 'The auction is complete. Join now requires an exact roster name match and will not create a new participant.'
+              : 'Before the auction is complete, the join screen can still create a new participant from a valid invite code and name.'}
+          </div>
+          <div className="muted small">
+            {noAccessParticipants.length} participant{noAccessParticipants.length === 1 ? '' : 's'} without access issued yet.
+            {' '}
+            {duplicateParticipants.length
+              ? `${duplicateParticipants.length} duplicate-name warning${duplicateParticipants.length === 1 ? '' : 's'} need cleanup.`
+              : 'No duplicate names detected.'}
+          </div>
+        </div>
         {joinedParticipants.length ? (
           <div className="admin-participant-list">
             {joinedParticipants.map((participant) => (
@@ -204,14 +242,28 @@ export default function AuctionPage() {
                   <ParticipantAvatar name={participant.name} color={participant.color} size={28} />
                   <div className="stack-xs">
                     <strong>{participant.name}</strong>
-                    <span className="muted">Ready for auction</span>
+                    <span className="muted">
+                      {participant.has_session_token ? 'Access issued' : 'No access issued yet'}
+                    </span>
+                    {Number(participant.duplicate_name_count || 0) > 1 ? (
+                      <span className="error-text small">Duplicate name match risk in roster</span>
+                    ) : null}
                   </div>
                 </div>
-                <span
-                  className="admin-participant-swatch"
-                  style={{ backgroundColor: participant.color }}
-                  aria-hidden="true"
-                />
+                <div className="row wrap gap-sm">
+                  <button
+                    className="btn btn-outline"
+                    type="button"
+                    onClick={() => handleResetAccess(participant)}
+                  >
+                    {participant.has_session_token ? 'Reset Access Link' : 'Create Access Link'}
+                  </button>
+                  <span
+                    className="admin-participant-swatch"
+                    style={{ backgroundColor: participant.color }}
+                    aria-hidden="true"
+                  />
+                </div>
               </div>
             ))}
           </div>

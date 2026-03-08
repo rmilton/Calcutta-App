@@ -36,6 +36,33 @@ function ensureRandomBonusPosition(event) {
   return drawn;
 }
 
+function drawEventRandomBonusPosition({ seasonId, eventId }) {
+  const event = getEventById(seasonId, eventId);
+  if (!event) return { ok: false, status: 404, error: 'Event not found' };
+
+  const existing = Number(event.random_bonus_position);
+  if (existing >= 4 && existing <= 20) {
+    return {
+      ok: false,
+      status: 409,
+      error: `Random bonus position already set to P${existing}.`,
+      randomBonusPosition: existing,
+      randomBonusDrawnAt: event.random_bonus_drawn_at || null,
+      event,
+    };
+  }
+
+  const drawnPosition = ensureRandomBonusPosition(event);
+  const updatedEvent = getEventById(seasonId, eventId);
+
+  return {
+    ok: true,
+    randomBonusPosition: drawnPosition,
+    randomBonusDrawnAt: updatedEvent?.random_bonus_drawn_at || null,
+    event: updatedEvent,
+  };
+}
+
 function scoreEvent({ seasonId, eventId, skipSeasonBonuses = false, ignoreLock = false }) {
   const event = getEventById(seasonId, eventId);
   if (!event) return { ok: false, status: 404, error: 'Event not found' };
@@ -159,6 +186,21 @@ function getSeasonRandomBonusPosition(seasonId, standingsCount) {
   return drawn;
 }
 
+function isSeasonBonusReady(seasonId) {
+  const scoringEventCounts = db.prepare(`
+    SELECT
+      COUNT(*) as scoring_event_count,
+      SUM(CASE WHEN status = 'scored' THEN 1 ELSE 0 END) as scored_event_count
+    FROM events
+    WHERE season_id = ?
+      AND type IN ('grand_prix', 'sprint')
+  `).get(seasonId);
+
+  const total = Number(scoringEventCounts?.scoring_event_count || 0);
+  const scored = Number(scoringEventCounts?.scored_event_count || 0);
+  return total > 0 && total === scored;
+}
+
 function resolveSeasonBonusWinners(category, seasonId, context) {
   const { rows, standings } = context;
 
@@ -210,6 +252,9 @@ function recalcSeasonBonuses({ seasonId }) {
 
   db.prepare('DELETE FROM season_bonus_payouts WHERE season_id = ?').run(seasonId);
   if (!rules.length) return { ok: true, distributedCents: 0 };
+  if (!isSeasonBonusReady(seasonId)) {
+    return { ok: true, distributedCents: 0, skippedUntilSeasonEnd: true };
+  }
 
   const totalPot = getTotalPotCents(seasonId);
   if (totalPot <= 0) return { ok: true, distributedCents: 0 };
@@ -436,10 +481,12 @@ async function syncNextEventFromProvider({
 }
 
 module.exports = {
+  drawEventRandomBonusPosition,
   scoreEvent,
   recalcSeasonBonuses,
   rescoreSeasonEvents,
   upsertEventResults,
   syncEventFromProvider,
   syncNextEventFromProvider,
+  isSeasonBonusReady,
 };

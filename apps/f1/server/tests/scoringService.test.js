@@ -567,6 +567,14 @@ test('season bonus winners and allocations follow payout model v2', () => {
   assert.equal(scoreEvent({ seasonId, eventId: gp2.id }).ok, true);
 
   db.prepare(`
+    UPDATE events
+    SET status = 'scored'
+    WHERE season_id = ?
+      AND type IN ('grand_prix', 'sprint')
+      AND id NOT IN (?, ?, ?)
+  `).run(seasonId, gp1.id, sprint1.id, gp2.id);
+
+  db.prepare(`
     UPDATE seasons
     SET season_random_bonus_position = ?, season_random_bonus_drawn_at = ?
     WHERE id = ?
@@ -601,6 +609,58 @@ test('season bonus winners and allocations follow payout model v2', () => {
   `).get(seasonId);
   assert.equal(season.season_random_bonus_position, 5);
   assert.equal(season.season_random_bonus_drawn_at, 1234567890);
+});
+
+test('season bonuses stay empty until every scoring event in the season is scored', () => {
+  const {
+    db,
+    getActiveSeasonId,
+    upsertEventResults,
+    scoreEvent,
+  } = setupDb();
+
+  const seasonId = getActiveSeasonId();
+  const [driver] = db.prepare(`
+    SELECT id, external_id
+    FROM drivers
+    WHERE season_id = ?
+    ORDER BY external_id ASC
+    LIMIT 1
+  `).all(seasonId);
+  const participantId = db.prepare(`
+    INSERT INTO participants (name, color, session_token)
+    VALUES ('Season Bonus Gate Tester', '#112233', 'season-bonus-gate-token')
+  `).run().lastInsertRowid;
+  db.prepare('INSERT INTO season_participants (season_id, participant_id) VALUES (?, ?)').run(seasonId, participantId);
+  db.prepare(`
+    INSERT INTO ownership (season_id, driver_id, participant_id, purchase_price_cents)
+    VALUES (?, ?, ?, ?)
+  `).run(seasonId, driver.id, participantId, 10000);
+
+  const gpEvent = db.prepare(`
+    SELECT id
+    FROM events
+    WHERE season_id = ? AND type = 'grand_prix'
+    ORDER BY round_number ASC
+    LIMIT 1
+  `).get(seasonId);
+  db.prepare('UPDATE events SET lock_at = ? WHERE id = ?').run('2000-01-01T00:00:00Z', gpEvent.id);
+
+  upsertEventResults({
+    seasonId,
+    eventId: gpEvent.id,
+    rows: [{ external_driver_id: driver.external_id, finish_position: 1, start_position: 3 }],
+  });
+
+  const score = scoreEvent({ seasonId, eventId: gpEvent.id });
+  assert.equal(score.ok, true);
+
+  const bonusCount = db.prepare(`
+    SELECT COUNT(*) as c
+    FROM season_bonus_payouts
+    WHERE season_id = ?
+  `).get(seasonId).c;
+  assert.equal(bonusCount, 0);
 });
 
 test('v2 migration normalizes rules and gp random draws for active season', () => {

@@ -1,3 +1,4 @@
+const { v4: uuidv4 } = require('uuid');
 const { generateInviteCode } = require('../../lib/core');
 const {
   db,
@@ -40,7 +41,23 @@ function regenerateInviteCode({ seasonId }) {
 }
 
 function listParticipants({ seasonId }) {
-  return getSeasonParticipants(seasonId);
+  const participants = getSeasonParticipants(seasonId);
+  const duplicateCounts = participants
+    .filter((participant) => !participant.is_admin)
+    .reduce((acc, participant) => {
+      const normalized = String(participant.name || '').trim().toLowerCase();
+      acc.set(normalized, (acc.get(normalized) || 0) + 1);
+      return acc;
+    }, new Map());
+
+  return participants.map((participant) => {
+    const normalized = String(participant.name || '').trim().toLowerCase();
+    return {
+      ...participant,
+      has_session_token: !!participant.has_session_token,
+      duplicate_name_count: participant.is_admin ? 0 : (duplicateCounts.get(normalized) || 0),
+    };
+  });
 }
 
 function removeParticipant({ seasonId, participantId }) {
@@ -51,6 +68,25 @@ function removeParticipant({ seasonId, participantId }) {
       AND participant_id IN (SELECT id FROM participants WHERE is_admin = 0)
   `).run(seasonId, participantId);
   return { ok: true };
+}
+
+function resetParticipantAccess({ seasonId, participantId }) {
+  const participant = getSeasonParticipants(seasonId)
+    .find((row) => Number(row.id) === Number(participantId) && !row.is_admin);
+
+  if (!participant) {
+    return { ok: false, status: 404, error: 'Participant not found in the active season roster.' };
+  }
+
+  const token = uuidv4();
+  db.prepare('UPDATE participants SET session_token = ? WHERE id = ?').run(token, participantId);
+
+  return {
+    ok: true,
+    participantId: Number(participantId),
+    participantName: participant.name,
+    accessPath: `/api/auth/access/${token}`,
+  };
 }
 
 function listAuctionQueue({ seasonId }) {
@@ -192,6 +228,7 @@ module.exports = {
   regenerateInviteCode,
   listParticipants,
   removeParticipant,
+  resetParticipantAccess,
   listAuctionQueue,
   updateAuctionQueue,
   shufflePendingAuctionQueue,

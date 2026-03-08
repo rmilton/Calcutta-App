@@ -9,6 +9,7 @@ const {
   upsertProviderSyncState,
 } = require('../../db');
 const {
+  drawEventRandomBonusPosition,
   scoreEvent,
   recalcSeasonBonuses,
   rescoreSeasonEvents,
@@ -163,6 +164,22 @@ function syncEventResults({ seasonId, eventId, provider, io, force = false }) {
     io,
     ignoreLock: force,
   });
+}
+
+function drawRandomPositionForEvent({ seasonId, eventId }) {
+  const result = drawEventRandomBonusPosition({ seasonId, eventId });
+  if (!result.ok) return result;
+
+  const position = Number(result.randomBonusPosition);
+  const message = `Drew random bonus position P${position}.`;
+
+  return {
+    ok: true,
+    randomBonusPosition: position,
+    randomBonusDrawnAt: result.randomBonusDrawnAt,
+    event: result.event,
+    message,
+  };
 }
 
 async function refreshDriversFromProvider({ seasonId, provider }) {
@@ -809,6 +826,22 @@ function recalcSeasonBonusesForSeason({ seasonId, io }) {
   return { ok: true, ...result };
 }
 
+function clearSeasonBonusesForSeason({ seasonId, io }) {
+  const deletedCount = db.prepare(`
+    DELETE FROM season_bonus_payouts
+    WHERE season_id = ?
+  `).run(seasonId).changes;
+
+  io?.emit('standings:update');
+  return {
+    ok: true,
+    deletedCount,
+    message: deletedCount
+      ? `Cleared ${deletedCount} season bonus payout${deletedCount === 1 ? '' : 's'}.`
+      : 'No season bonus payouts were present to clear.',
+  };
+}
+
 function rescoreSeasonEventsForSeason({ seasonId, io }) {
   const result = rescoreSeasonEvents({ seasonId });
   if (!result.ok) return result;
@@ -841,6 +874,7 @@ function getSeasonBonusPayouts({ seasonId }) {
 }
 
 module.exports = {
+  drawRandomPositionForEvent,
   syncNextResults,
   syncEventResults,
   refreshDriversFromProvider,
@@ -854,6 +888,7 @@ module.exports = {
   getEventEditorData,
   saveManualResultsAndScore,
   recalcSeasonBonusesForSeason,
+  clearSeasonBonusesForSeason,
   rescoreSeasonEventsForSeason,
   getSeasonBonusPayouts,
 };

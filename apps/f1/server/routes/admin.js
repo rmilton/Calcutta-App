@@ -68,6 +68,13 @@ router.delete('/participants/:id', withAdmin, (req, res) => {
   return runAndRespond(res, auctionAdminService.removeParticipant({ seasonId, participantId }));
 });
 
+router.post('/participants/:id/reset-access', withAdmin, (req, res) => {
+  const seasonId = getActiveSeasonId();
+  const participantId = parseIdFromParams(res, req.params.id);
+  if (participantId == null) return undefined;
+  return runAndRespond(res, auctionAdminService.resetParticipantAccess({ seasonId, participantId }));
+});
+
 router.get('/auction/queue', withAdmin, (req, res) => {
   const seasonId = getActiveSeasonId();
   return res.json(auctionAdminService.listAuctionQueue({ seasonId }));
@@ -147,6 +154,18 @@ router.post('/results/sync-next', withAdmin, async (req, res) => {
     provider,
     io: req.app.get('io'),
     force: parseForceFlag(req),
+  });
+  return runAndRespond(res, result, (payload) => ({ ok: true, ...payload }));
+});
+
+router.post('/results/draw-random-position/:id', withAdmin, (req, res) => {
+  const seasonId = getActiveSeasonId();
+  const eventId = parseIdFromParams(res, req.params.id);
+  if (eventId == null) return undefined;
+
+  const result = resultsAdminService.drawRandomPositionForEvent({
+    seasonId,
+    eventId,
   });
   return runAndRespond(res, result, (payload) => ({ ok: true, ...payload }));
 });
@@ -336,6 +355,15 @@ router.patch('/results/event/:id', withAdmin, (req, res) => {
 router.post('/results/recalc-season-bonuses', withAdmin, (req, res) => {
   const seasonId = getActiveSeasonId();
   const result = resultsAdminService.recalcSeasonBonusesForSeason({
+    seasonId,
+    io: req.app.get('io'),
+  });
+  return runAndRespond(res, result, (payload) => ({ ok: true, ...payload }));
+});
+
+router.post('/results/clear-season-bonuses', withAdmin, (req, res) => {
+  const seasonId = getActiveSeasonId();
+  const result = resultsAdminService.clearSeasonBonusesForSeason({
     seasonId,
     io: req.app.get('io'),
   });

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { api, readJsonSafely } from '../utils';
 
 const AUSTRALIAN_GP_START_ISO = '2026-02-22T04:00:00Z';
 
@@ -26,6 +27,7 @@ export default function Join() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [nowMs, setNowMs] = useState(Date.now());
+  const [joinPolicy, setJoinPolicy] = useState(null);
 
   useEffect(() => {
     const id = setInterval(() => setNowMs(Date.now()), 30000);
@@ -35,15 +37,43 @@ export default function Join() {
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const linkInviteCode = params.get('invite');
+    const authError = params.get('error');
+    if (authError === 'invalid-access') {
+      setError('That access link is invalid or expired. Contact the admin for a fresh access link.');
+    }
     if (!linkInviteCode) return;
     setInviteCode(linkInviteCode.trim().toUpperCase());
     setMode('join');
   }, [location.search]);
 
+  useEffect(() => {
+    let active = true;
+
+    api('/auth/join-policy')
+      .then(async (response) => {
+        const payload = await readJsonSafely(response);
+        if (!response.ok) {
+          throw new Error(payload?.error || 'Failed to load join policy.');
+        }
+        return payload;
+      })
+      .then((payload) => {
+        if (active) setJoinPolicy(payload);
+      })
+      .catch(() => {
+        if (active) setJoinPolicy(null);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const countdownText = useMemo(() => {
     const targetMs = Date.parse(AUSTRALIAN_GP_START_ISO);
     return formatCountdown(targetMs, nowMs);
   }, [nowMs]);
+  const isCreationLocked = !!joinPolicy?.creationLocked;
 
   const handleJoin = async (event) => {
     event.preventDefault();
@@ -136,9 +166,11 @@ export default function Join() {
 
           {mode === 'join' ? (
             <form onSubmit={handleJoin} className="stack">
-              <h2>Join Pool</h2>
+              <h2>{isCreationLocked ? 'Participant Login' : 'Join Pool'}</h2>
               <p className="muted small join-mode-copy">
-                Enter your invite code to start bidding for drivers.
+                {isCreationLocked
+                  ? 'Use the exact auction name plus the invite code. New participant creation is disabled after the auction.'
+                  : 'Enter your invite code to join the pool before auction lock.'}
               </p>
               <label>
                 Name
@@ -158,7 +190,12 @@ export default function Join() {
                   autoComplete="one-time-code"
                 />
               </label>
-              <button className="btn" disabled={loading}>{loading ? 'Joining...' : 'Join Pool'}</button>
+              <p className="small muted join-policy-note">
+                {isCreationLocked
+                  ? 'If your exact roster name does not work, contact the admin instead of trying alternate spellings.'
+                  : 'If your name is not already in the roster, the app can create it before the auction is complete.'}
+              </p>
+              <button className="btn" disabled={loading}>{loading ? 'Joining...' : (isCreationLocked ? 'Sign In' : 'Join Pool')}</button>
             </form>
           ) : (
             <form onSubmit={handleAdmin} className="stack">

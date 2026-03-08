@@ -133,7 +133,7 @@ function evaluateCategoryRule({ category, rows, event, rankOrder = 1 }) {
         resolution: {
           metric: 'slowest_pit_stop_seconds',
           target_value: slowestPit.targetDuration,
-          note: 'Highest OpenF1 stop_duration recorded for a driver in this event',
+          note: 'Highest stopped pit duration recorded for a driver in this event',
         },
       };
     }

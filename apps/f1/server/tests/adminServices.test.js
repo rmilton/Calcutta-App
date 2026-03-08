@@ -178,6 +178,46 @@ test('results admin refreshDrivers updates seeded drivers without changing ident
   });
 });
 
+test('results admin can pre-draw and preserve an event random bonus position', () => {
+  const {
+    db,
+    getActiveSeasonId,
+    resultsAdminService,
+  } = setupDb();
+
+  const seasonId = getActiveSeasonId();
+  const event = db.prepare(`
+    SELECT id, random_bonus_position, random_bonus_drawn_at
+    FROM events
+    WHERE season_id = ?
+    ORDER BY round_number ASC
+    LIMIT 1
+  `).get(seasonId);
+
+  assert.equal(event.random_bonus_position, null);
+  assert.equal(event.random_bonus_drawn_at, null);
+
+  const first = resultsAdminService.drawRandomPositionForEvent({ seasonId, eventId: event.id });
+  assert.equal(first.ok, true);
+  assert.ok(first.randomBonusPosition >= 4 && first.randomBonusPosition <= 20);
+  assert.ok(Number(first.randomBonusDrawnAt) > 0);
+
+  const second = resultsAdminService.drawRandomPositionForEvent({ seasonId, eventId: event.id });
+  assert.equal(second.ok, false);
+  assert.equal(second.status, 409);
+  assert.equal(second.randomBonusPosition, first.randomBonusPosition);
+  assert.equal(second.randomBonusDrawnAt, first.randomBonusDrawnAt);
+  assert.match(second.error, /already set to P/i);
+
+  const stored = db.prepare(`
+    SELECT random_bonus_position, random_bonus_drawn_at
+    FROM events
+    WHERE id = ?
+  `).get(event.id);
+  assert.equal(stored.random_bonus_position, first.randomBonusPosition);
+  assert.equal(stored.random_bonus_drawn_at, first.randomBonusDrawnAt);
+});
+
 test('results admin refreshDrivers rebuilds clean season roster when provider lineup drifts from the seed', async () => {
   const {
     db,
@@ -421,6 +461,63 @@ test('results admin refreshSchedule matches by round and type when provider name
 
   assert.equal(australianGp.external_event_id, '9901');
   assert.equal(australianGp.name, 'FORMULA 1 LOUIS VUITTON AUSTRALIAN GRAND PRIX 2026');
+});
+
+test('auction admin participant list exposes access state and duplicate-name warnings', () => {
+  const {
+    db,
+    getActiveSeasonId,
+    auctionAdminService,
+  } = setupDb();
+
+  const seasonId = getActiveSeasonId();
+  const firstId = db.prepare(`
+    INSERT INTO participants (name, color, session_token)
+    VALUES ('Jamie Pace', '#111111', NULL)
+  `).run().lastInsertRowid;
+  const secondId = db.prepare(`
+    INSERT INTO participants (name, color, session_token)
+    VALUES ('jamie pace', '#222222', 'jamie-token')
+  `).run().lastInsertRowid;
+  db.prepare('INSERT INTO season_participants (season_id, participant_id) VALUES (?, ?)').run(seasonId, firstId);
+  db.prepare('INSERT INTO season_participants (season_id, participant_id) VALUES (?, ?)').run(seasonId, secondId);
+
+  const participants = auctionAdminService.listParticipants({ seasonId })
+    .filter((participant) => Number(participant.id) === Number(firstId) || Number(participant.id) === Number(secondId));
+
+  assert.equal(participants.length, 2);
+  assert.equal(participants[0].duplicate_name_count, 2);
+  assert.equal(participants[1].duplicate_name_count, 2);
+  assert.equal(participants[0].has_session_token, false);
+  assert.equal(participants[1].has_session_token, true);
+});
+
+test('auction admin resetParticipantAccess rotates the participant token and returns an access path', () => {
+  const {
+    db,
+    getActiveSeasonId,
+    auctionAdminService,
+  } = setupDb();
+
+  const seasonId = getActiveSeasonId();
+  const participantId = db.prepare(`
+    INSERT INTO participants (name, color, session_token)
+    VALUES ('Access Reset', '#123123', 'old-access-token')
+  `).run().lastInsertRowid;
+  db.prepare('INSERT INTO season_participants (season_id, participant_id) VALUES (?, ?)').run(seasonId, participantId);
+
+  const result = auctionAdminService.resetParticipantAccess({
+    seasonId,
+    participantId,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.participantId, Number(participantId));
+  assert.match(result.accessPath, /^\/api\/auth\/access\//);
+
+  const updatedToken = db.prepare('SELECT session_token FROM participants WHERE id = ?').get(participantId).session_token;
+  assert.notEqual(updatedToken, 'old-access-token');
+  assert.match(result.accessPath, new RegExp(`${updatedToken}$`));
 });
 
 test('startup seeding preserves provider-refreshed schedule rows on init rerun', async () => {
@@ -1015,6 +1112,46 @@ test('results admin rescoreSeasonEventsForSeason rewrites scored event payouts u
   assert.equal(newPayout.participant_id, participantId);
   assert.equal(newPayout.driver_id, d2.id);
   assert.equal(newPayout.amount_cents, 3);
+});
+
+test('results admin clearSeasonBonusesForSeason removes only season bonus payouts', () => {
+  const {
+    db,
+    getActiveSeasonId,
+    resultsAdminService,
+  } = setupDb();
+
+  const seasonId = getActiveSeasonId();
+  const participantId = db.prepare(`
+    INSERT INTO participants (name, color, session_token)
+    VALUES ('Season Bonus Clear Tester', '#ffaa00', 'season-bonus-clear-token')
+  `).run().lastInsertRowid;
+  db.prepare('INSERT INTO season_participants (season_id, participant_id) VALUES (?, ?)').run(seasonId, participantId);
+  const driver = db.prepare('SELECT id FROM drivers WHERE season_id = ? ORDER BY id ASC LIMIT 1').get(seasonId);
+  const event = db.prepare('SELECT id FROM events WHERE season_id = ? ORDER BY round_number ASC LIMIT 1').get(seasonId);
+
+  db.prepare(`
+    INSERT INTO event_payouts
+      (season_id, event_id, participant_id, driver_id, category, amount_cents, tie_count)
+    VALUES (?, ?, ?, ?, 'race_winner', 321, 1)
+  `).run(seasonId, event.id, participantId, driver.id);
+  db.prepare(`
+    INSERT INTO season_bonus_payouts
+      (season_id, participant_id, driver_id, category, amount_cents, tie_count)
+    VALUES (?, ?, ?, 'drivers_champion', 654, 1)
+  `).run(seasonId, participantId, driver.id);
+
+  const emitted = [];
+  const result = resultsAdminService.clearSeasonBonusesForSeason({
+    seasonId,
+    io: { emit: (eventName) => emitted.push(eventName) },
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(result.deletedCount, 1);
+  assert.ok(emitted.includes('standings:update'));
+  assert.equal(db.prepare('SELECT COUNT(*) as c FROM season_bonus_payouts WHERE season_id = ?').get(seasonId).c, 0);
+  assert.equal(db.prepare('SELECT COUNT(*) as c FROM event_payouts WHERE season_id = ?').get(seasonId).c, 1);
 });
 
 test('payout rules admin save triggers bonus recalc path and standings update emit', () => {

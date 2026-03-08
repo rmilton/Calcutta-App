@@ -11,14 +11,17 @@ A dedicated Formula 1 Calcutta app for a full season pool.
 - Event-by-event payouts using percentage-of-pool rules
 - Grand Prix and Sprint scoring categories
 - Auto-drawn random finishing position bonus per event
-- Grand Prix novelty rule for slowest recorded pit stop via OpenF1 `stop_duration`
+- Grand Prix novelty rule for slowest recorded pit stop via Formula 1 LiveTiming `PitStopTime`, with OpenF1 `stop_duration` as backup
 - Season bonus payouts from remaining pool
-- Participant dashboard at `/dashboard` with personal KPIs, full standings, current-or-next race focus, and live OpenF1 race widgets
-- On-demand Anthropic briefing on the dashboard for a concise personal race/standings summary, persisted per participant across refreshes and login sessions
+- Season bonus payouts are withheld until all scoring events in the season are complete, then calculated from full-season data
+- Participant dashboard at `/dashboard` with personal KPIs, full standings ranked by net return, current-or-next race focus, and a live payout-category board driven by OpenF1 timing
+- On-demand Anthropic briefing on the dashboard with saved per-event history, contextual pre-race/live/post-race labels, and compact structured sections for faster reading
+- Participant mobile UX now uses a compact nav shell, join-first login layout, card-based dashboard/portfolio views, and a list-to-detail event flow instead of relying on wide desktop tables
 - Results sync via provider adapter (`openf1` for real data, `mock` for local/dev/test)
 - Admin controls for auction, sync, payout rules, and settings
 - Results Sync admin view shows collapsible driver/event lists after provider refreshes
 - Results Sync admin view exposes a live database backup download and a visible driver-roster freeze guard after auction/scoring activity begins
+- Results Sync admin view can pre-draw and reveal the random finishing bonus position for any event before scoring; once drawn it is locked and reused at score time
 - Payout Audit admin view supports rule-level CSV export, winner-detail CSV export, and copyable text summaries for payout review and dispute handling
 - Public-facing explainer pages for both pool rules (`/guide`) and the agentic build case study (`/built-with-ai`)
 
@@ -51,6 +54,7 @@ Server: `http://localhost:3002`
   - `OPENF1_USERNAME`
 - `OPENF1_PASSWORD`
 - optional token override: `OPENF1_TOKEN_URL`
+- optional Formula 1 LiveTiming static base override: `F1_LIVETIMING_BASE_URL`
 - optional AI briefing key: `ANTHROPIC_API_KEY`
 - Driver refresh now uses the latest started non-testing OpenF1 session roster and falls back from session_key to meeting_key lookups when a live session roster is not yet populated; if 2026 weekend data is still unavailable, admin will see a clear "no populated driver roster yet" message instead of a raw provider 404
 - Event result sync now preserves unknown substitute/new race drivers by inserting them as inactive season drivers with no auction item; their results still score, but any resulting payouts remain unowned/undistributed unless an owner exists
@@ -58,6 +62,7 @@ Server: `http://localhost:3002`
 - If the active season has no bids, ownership, or scored race data yet, driver refresh can now rebuild the season roster directly from OpenF1 when the provider lineup has drifted from the seeded 2026 driver list
 - Startup seeding now treats the 2026 event list as bootstrap-only data: provider-refreshed schedule rows survive restart/deploy cycles, while still-mock rows can still be repaired from the canonical seed list
 - OpenF1 requests are now serialized, spaced, bounded-retried on `429`, and limited against a rolling per-minute budget to match the provider's published rate limits more closely
+- Event result sync now enriches stopped pit duration from Formula 1 LiveTiming `Index.json` + `PitStopSeries.json`; if that static feed is unavailable, the app falls back to OpenF1 `stop_duration`, and manual override remains available if both sources are missing
 - Optional auto-poll:
   - `F1_AUTO_POLL_ENABLED=1`
   - `F1_AUTO_POLL_INTERVAL_SECONDS=<seconds>`
@@ -68,10 +73,13 @@ Server: `http://localhost:3002`
 - Admin Test Data page can rescore all scored events after payout-rule changes
 - Admin Results Sync page can download a live SQLite backup snapshot before auction night or race scoring operations
 - Admin Results Sync page disables `Refresh Drivers` once the season has bids, ownership, or scored payout activity so the auction roster is not changed casually after go-live
+- Admin Results Sync page can pre-draw the random event bonus position before race start so participants know the target position while watching live
+- Participant dashboard payout board now shows the drawn random bonus target for the current/next event when it has already been revealed
 - Admin Auction page can explicitly lock or unlock the season roster; Results Sync respects that lock in addition to activity-based safeguards
 - Admin Payout Audit page can export both rule-level and winner-detail CSVs, plus a concise text summary for payout review
 - Admin Auction page exposes a shareable invite link that deep-links to `/join` with the active invite code prefilled
 - Admin Auction page can export auction ownership results as CSV for post-auction sharing and record-keeping
+- Once the auction is complete, participant login is locked to existing rostered names only; unmatched join attempts fail closed and admin can issue/reset direct access links per participant from the Auction page
 
 ## Engineering Docs
 

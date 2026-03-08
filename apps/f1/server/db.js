@@ -144,6 +144,10 @@ function getLatestDashboardBriefing(seasonId, participantId) {
   return dashboardBriefingRepo.getLatestDashboardBriefing(db, seasonId, participantId);
 }
 
+function getDashboardBriefingHistory(seasonId, participantId, options) {
+  return dashboardBriefingRepo.getDashboardBriefingHistory(db, seasonId, participantId, options);
+}
+
 function saveDashboardBriefing(seasonId, participantId, payload) {
   return dashboardBriefingRepo.saveDashboardBriefing(db, seasonId, participantId, payload);
 }
@@ -181,6 +185,7 @@ module.exports = {
   getEventPayouts,
   getProviderSyncStates,
   upsertProviderSyncState,
+  getDashboardBriefingHistory,
   getLatestDashboardBriefing,
   saveDashboardBriefing,
 };

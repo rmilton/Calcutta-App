@@ -18,12 +18,12 @@ const TOURNAMENT_SETTING_KEYS = [
 
 // Payout round defaults (shared between init and createTournament)
 const PAYOUT_DEFAULTS = [
-  [1, 'Round of 64',  0, 'fixed'],
-  [2, 'Round of 32',  0, 'fixed'],
-  [3, 'Sweet 16',     0, 'fixed'],
-  [4, 'Elite 8',      0, 'fixed'],
-  [5, 'Final Four',   0, 'fixed'],
-  [6, 'Championship', 0, 'fixed'],
+  [1, 'Round of 64',  1.0, 'percent'],
+  [2, 'Round of 32',  1.5, 'percent'],
+  [3, 'Sweet 16',     2.0, 'percent'],
+  [4, 'Elite 8',      3.0, 'percent'],
+  [5, 'Final Four',   3.5, 'percent'],
+  [6, 'Championship', 5.0, 'percent'],
 ];
 
 function init() {
@@ -276,10 +276,7 @@ function init() {
   backfillGameScheduleMetadata2025(getActiveTournamentId());
 
   // ── Default payout config for tournament 1 ───────────────────────────────────
-  const insertPayoutDefault = db.prepare(
-    'INSERT OR IGNORE INTO payout_config (tournament_id, round_number, round_name, amount, payout_type) VALUES (?, ?, ?, ?, ?)'
-  );
-  for (const row of PAYOUT_DEFAULTS) insertPayoutDefault.run(1, ...row);
+  ensurePayoutConfigDefaults(1);
 
   // ── Seed teams if empty ───────────────────────────────────────────────────────
   const teamCount = db.prepare('SELECT COUNT(*) as c FROM teams').get().c;
@@ -324,12 +321,7 @@ function createTournament({ name, inviteCode }) {
   const newTid = result.lastInsertRowid;
 
   // Seed default payout config for the new tournament
-  const insertPayout = db.prepare(
-    'INSERT OR IGNORE INTO payout_config (tournament_id, round_number, round_name, amount, payout_type) VALUES (?, ?, ?, ?, ?)'
-  );
-  db.transaction(() => {
-    for (const row of PAYOUT_DEFAULTS) insertPayout.run(newTid, ...row);
-  })();
+  ensurePayoutConfigDefaults(newTid);
 
   return newTid;
 }
@@ -602,7 +594,40 @@ function getGames(tid) {
 
 function getPayoutConfig(tid) {
   const _tid = tid ?? getActiveTournamentId();
+  ensurePayoutConfigDefaults(_tid);
   return db.prepare('SELECT * FROM payout_config WHERE tournament_id = ? ORDER BY round_number').all(_tid);
+}
+
+function ensurePayoutConfigDefaults(tid) {
+  const _tid = tid ?? getActiveTournamentId();
+
+  const insertDefault = db.prepare(
+    'INSERT OR IGNORE INTO payout_config (tournament_id, round_number, round_name, amount, payout_type) VALUES (?, ?, ?, ?, ?)'
+  );
+  for (const row of PAYOUT_DEFAULTS) insertDefault.run(_tid, ...row);
+
+  const rows = db.prepare(
+    'SELECT round_number, amount, payout_type FROM payout_config WHERE tournament_id = ?'
+  ).all(_tid);
+
+  const rowsByRound = new Map(rows.map((r) => [r.round_number, r]));
+  const isUnconfiguredBaseline = PAYOUT_DEFAULTS.every(([roundNumber]) => {
+    const row = rowsByRound.get(roundNumber);
+    if (!row) return true;
+    return (parseFloat(row.amount) || 0) === 0 && (row.payout_type || 'fixed') === 'fixed';
+  });
+  if (!isUnconfiguredBaseline) return;
+
+  const applyDefault = db.prepare(`
+    UPDATE payout_config
+    SET round_name = ?, amount = ?, payout_type = ?
+    WHERE tournament_id = ? AND round_number = ?
+  `);
+  db.transaction(() => {
+    for (const [roundNumber, roundName, amount, payoutType] of PAYOUT_DEFAULTS) {
+      applyDefault.run(roundName, amount, payoutType, _tid, roundNumber);
+    }
+  })();
 }
 
 // ── Shared query helpers ─────────────────────────────────────────────────────

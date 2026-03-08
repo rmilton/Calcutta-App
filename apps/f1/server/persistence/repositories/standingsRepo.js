@@ -30,7 +30,10 @@ function getStandings(db, seasonId) {
       GROUP BY participant_id
     ) sb_agg ON sb_agg.participant_id = p.id
     WHERE p.is_admin = 0
-    ORDER BY total_earned_cents DESC, total_spent_cents ASC, p.name ASC
+    ORDER BY
+      ((COALESCE(e_agg.total_event_cents, 0) + COALESCE(sb_agg.total_bonus_cents, 0)) - COALESCE(o_agg.total_spent_cents, 0)) DESC,
+      total_earned_cents DESC,
+      p.name ASC
   `).all(seasonId, seasonId, seasonId, seasonId);
 }
 

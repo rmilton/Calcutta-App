@@ -11,7 +11,7 @@ A dedicated Formula 1 Calcutta app for a full season pool.
 - Event-by-event payouts using percentage-of-pool rules
 - Grand Prix and Sprint scoring categories
 - Auto-drawn random finishing position bonus per event
-- Grand Prix novelty rule for slowest recorded pit stop via OpenF1 `stop_duration`
+- Grand Prix novelty rule for slowest recorded pit stop via Formula 1 LiveTiming `PitStopTime`, with OpenF1 `stop_duration` as backup
 - Season bonus payouts from remaining pool
 - Season bonus payouts are withheld until all scoring events in the season are complete, then calculated from full-season data
 - Participant dashboard at `/dashboard` with personal KPIs, full standings ranked by net return, current-or-next race focus, and a live payout-category board driven by OpenF1 timing
@@ -54,6 +54,7 @@ Server: `http://localhost:3002`
   - `OPENF1_USERNAME`
 - `OPENF1_PASSWORD`
 - optional token override: `OPENF1_TOKEN_URL`
+- optional Formula 1 LiveTiming static base override: `F1_LIVETIMING_BASE_URL`
 - optional AI briefing key: `ANTHROPIC_API_KEY`
 - Driver refresh now uses the latest started non-testing OpenF1 session roster and falls back from session_key to meeting_key lookups when a live session roster is not yet populated; if 2026 weekend data is still unavailable, admin will see a clear "no populated driver roster yet" message instead of a raw provider 404
 - Event result sync now preserves unknown substitute/new race drivers by inserting them as inactive season drivers with no auction item; their results still score, but any resulting payouts remain unowned/undistributed unless an owner exists
@@ -61,6 +62,7 @@ Server: `http://localhost:3002`
 - If the active season has no bids, ownership, or scored race data yet, driver refresh can now rebuild the season roster directly from OpenF1 when the provider lineup has drifted from the seeded 2026 driver list
 - Startup seeding now treats the 2026 event list as bootstrap-only data: provider-refreshed schedule rows survive restart/deploy cycles, while still-mock rows can still be repaired from the canonical seed list
 - OpenF1 requests are now serialized, spaced, bounded-retried on `429`, and limited against a rolling per-minute budget to match the provider's published rate limits more closely
+- Event result sync now enriches stopped pit duration from Formula 1 LiveTiming `Index.json` + `PitStopSeries.json`; if that static feed is unavailable, the app falls back to OpenF1 `stop_duration`, and manual override remains available if both sources are missing
 - Optional auto-poll:
   - `F1_AUTO_POLL_ENABLED=1`
   - `F1_AUTO_POLL_INTERVAL_SECONDS=<seconds>`

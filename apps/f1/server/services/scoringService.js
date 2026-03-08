@@ -186,6 +186,21 @@ function getSeasonRandomBonusPosition(seasonId, standingsCount) {
   return drawn;
 }
 
+function isSeasonBonusReady(seasonId) {
+  const scoringEventCounts = db.prepare(`
+    SELECT
+      COUNT(*) as scoring_event_count,
+      SUM(CASE WHEN status = 'scored' THEN 1 ELSE 0 END) as scored_event_count
+    FROM events
+    WHERE season_id = ?
+      AND type IN ('grand_prix', 'sprint')
+  `).get(seasonId);
+
+  const total = Number(scoringEventCounts?.scoring_event_count || 0);
+  const scored = Number(scoringEventCounts?.scored_event_count || 0);
+  return total > 0 && total === scored;
+}
+
 function resolveSeasonBonusWinners(category, seasonId, context) {
   const { rows, standings } = context;
 
@@ -237,6 +252,9 @@ function recalcSeasonBonuses({ seasonId }) {
 
   db.prepare('DELETE FROM season_bonus_payouts WHERE season_id = ?').run(seasonId);
   if (!rules.length) return { ok: true, distributedCents: 0 };
+  if (!isSeasonBonusReady(seasonId)) {
+    return { ok: true, distributedCents: 0, skippedUntilSeasonEnd: true };
+  }
 
   const totalPot = getTotalPotCents(seasonId);
   if (totalPot <= 0) return { ok: true, distributedCents: 0 };
@@ -470,4 +488,5 @@ module.exports = {
   upsertEventResults,
   syncEventFromProvider,
   syncNextEventFromProvider,
+  isSeasonBonusReady,
 };

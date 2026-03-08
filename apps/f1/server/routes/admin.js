@@ -361,6 +361,15 @@ router.post('/results/recalc-season-bonuses', withAdmin, (req, res) => {
   return runAndRespond(res, result, (payload) => ({ ok: true, ...payload }));
 });
 
+router.post('/results/clear-season-bonuses', withAdmin, (req, res) => {
+  const seasonId = getActiveSeasonId();
+  const result = resultsAdminService.clearSeasonBonusesForSeason({
+    seasonId,
+    io: req.app.get('io'),
+  });
+  return runAndRespond(res, result, (payload) => ({ ok: true, ...payload }));
+});
+
 router.post('/results/rescore-season-events', withAdmin, (req, res) => {
   const seasonId = getActiveSeasonId();
   const result = resultsAdminService.rescoreSeasonEventsForSeason({

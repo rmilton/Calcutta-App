@@ -41,6 +41,7 @@ export default function TestDataPage() {
   const {
     events,
     recalcSeasonBonuses,
+    clearSeasonBonuses,
     rescoreSeasonEvents,
     clearAllTestData,
     resetAuctionOnly,
@@ -445,16 +446,29 @@ export default function TestDataPage() {
       <section className="panel stack">
         <div className="row between wrap gap-sm">
           <h2>Season Bonus Payouts</h2>
-          <button
-            className="btn btn-outline"
-            onClick={async () => {
-              await recalcSeasonBonuses();
-              await refresh();
-              await loadSeasonBonusBreakdown();
-            }}
-          >
-            Recalculate Season Bonuses
-          </button>
+          <div className="row wrap gap-sm">
+            <button
+              className="btn btn-outline"
+              onClick={async () => {
+                if (!window.confirm('Clear all saved season bonus payouts for the active season?')) return;
+                await clearSeasonBonuses();
+                await refresh();
+                await loadSeasonBonusBreakdown();
+              }}
+            >
+              Clear Season Bonuses
+            </button>
+            <button
+              className="btn btn-outline"
+              onClick={async () => {
+                await recalcSeasonBonuses();
+                await refresh();
+                await loadSeasonBonusBreakdown();
+              }}
+            >
+              Recalculate Season Bonuses
+            </button>
+          </div>
         </div>
         {bonusLoading ? <p className="muted">Loading season bonus payouts...</p> : null}
         {!bonusLoading && bonusTotals.length ? (

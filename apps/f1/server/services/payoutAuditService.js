@@ -1,8 +1,8 @@
 const {
-  amountFromBps,
   splitCentsEvenly,
 } = require('../lib/core');
 const {
+  db,
   getEventById,
   getEventResults,
   getEventPayoutRules,
@@ -12,6 +12,7 @@ const {
   getTotalPotCents,
 } = require('../db');
 const { evaluateCategoryRule } = require('./payoutRuleResolvers');
+const { buildEventPayoutComputation } = require('./payoutRedistributionService');
 
 function pctOfPot(cents, totalPotCents) {
   const total = Number(totalPotCents || 0);
@@ -61,6 +62,18 @@ function buildEventPayoutAudit({ seasonId, eventId }) {
   const rules = getEventPayoutRules(seasonId, event.type);
   const payouts = getEventPayouts(seasonId, eventId);
   const totalPotCents = getTotalPotCents(seasonId);
+  const snapshotRows = db.prepare(`
+    SELECT category, label, rank_order, base_bps, event_base_pool_cents,
+           event_effective_pool_cents, category_pot_cents, redistributed_cents
+    FROM event_payout_snapshots
+    WHERE season_id = ? AND event_id = ?
+  `).all(seasonId, eventId);
+  const snapshotByKey = new Map(
+    snapshotRows.map((row) => [`${row.category}:${Number(row.rank_order || 1)}`, row]),
+  );
+  const computation = snapshotRows.length
+    ? null
+    : buildEventPayoutComputation({ seasonId, event });
 
   const ownershipRows = getOwnershipBySeason(seasonId);
   const participants = getSeasonParticipants(seasonId);
@@ -80,7 +93,14 @@ function buildEventPayoutAudit({ seasonId, eventId }) {
   let undistributedTotalCents = 0;
 
   const auditedRules = (rules || []).map((rule) => {
-    const categoryPotCents = amountFromBps(totalPotCents, rule.bps);
+    const snapshot = snapshotByKey.get(`${rule.category}:${Number(rule.rank_order || 1)}`) || null;
+    const computedRule = computation?.rules?.find((entry) => (
+      entry.category === rule.category
+      && Number(entry.rank_order || 1) === Number(rule.rank_order || 1)
+    )) || null;
+    const categoryPotCents = snapshot
+      ? Number(snapshot.category_pot_cents || 0)
+      : Number(computedRule?.category_pot_cents || 0);
     const evaluation = evaluateCategoryRule({
       category: rule.category,
       rows: results,
@@ -137,12 +157,21 @@ function buildEventPayoutAudit({ seasonId, eventId }) {
       rule_id: rule.id,
       category: rule.category,
       label: rule.label,
-      bps: Number(rule.bps) || 0,
+      bps: snapshot ? Number(snapshot.base_bps || 0) : (Number(rule.bps) || 0),
       rank_order: Number(rule.rank_order) || 1,
       criteria_text: evaluation.criteriaText,
       category_pot_cents: categoryPotCents,
       category_pct_of_pot: pctOfPot(categoryPotCents, totalPotCents),
       resolution: evaluation.resolution,
+      event_base_pool_cents: snapshot
+        ? Number(snapshot.event_base_pool_cents || 0)
+        : Number(computation?.baseTotalCents || 0),
+      event_effective_pool_cents: snapshot
+        ? Number(snapshot.event_effective_pool_cents || 0)
+        : Number(computation?.effectiveTotalCents || 0),
+      redistributed_cents: snapshot
+        ? Number(snapshot.redistributed_cents || 0)
+        : Number(computedRule?.redistributed_cents || 0),
       winner_count: winners.length,
       winners,
       distributed_cents: distributedCents,

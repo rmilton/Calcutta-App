@@ -205,6 +205,7 @@ function ensureSchema(db) {
       starts_at TEXT,
       lock_at TEXT,
       status TEXT NOT NULL DEFAULT 'pending',
+      cancelled_at INTEGER,
       random_bonus_position INTEGER,
       random_bonus_drawn_at INTEGER,
       synced_at INTEGER,
@@ -246,6 +247,33 @@ function ensureSchema(db) {
       amount_cents INTEGER NOT NULL,
       tie_count INTEGER NOT NULL DEFAULT 1,
       created_at INTEGER NOT NULL DEFAULT (unixepoch())
+    );
+
+    CREATE TABLE IF NOT EXISTS event_redistributions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      season_id INTEGER NOT NULL REFERENCES seasons(id),
+      source_event_id INTEGER NOT NULL REFERENCES events(id),
+      target_kind TEXT NOT NULL CHECK(target_kind IN ('event', 'season_bonus')),
+      target_event_id INTEGER REFERENCES events(id),
+      amount_cents INTEGER NOT NULL,
+      created_at INTEGER NOT NULL DEFAULT (unixepoch())
+    );
+
+    CREATE TABLE IF NOT EXISTS event_payout_snapshots (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      season_id INTEGER NOT NULL REFERENCES seasons(id),
+      event_id INTEGER NOT NULL REFERENCES events(id),
+      event_type TEXT NOT NULL CHECK(event_type IN ('grand_prix', 'sprint')),
+      category TEXT NOT NULL,
+      label TEXT NOT NULL,
+      rank_order INTEGER NOT NULL DEFAULT 1,
+      base_bps INTEGER NOT NULL,
+      event_base_pool_cents INTEGER NOT NULL,
+      event_effective_pool_cents INTEGER NOT NULL,
+      category_pot_cents INTEGER NOT NULL,
+      redistributed_cents INTEGER NOT NULL DEFAULT 0,
+      created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+      UNIQUE(event_id, category, rank_order)
     );
 
     CREATE TABLE IF NOT EXISTS season_bonus_rules (
@@ -326,6 +354,42 @@ function ensureSchema(db) {
   }
   if (!columnExists(db, 'event_results', 'slowest_pit_stop_seconds')) {
     db.exec('ALTER TABLE event_results ADD COLUMN slowest_pit_stop_seconds REAL');
+  }
+  if (!columnExists(db, 'events', 'cancelled_at')) {
+    db.exec('ALTER TABLE events ADD COLUMN cancelled_at INTEGER');
+  }
+  if (!tableExists(db, 'event_redistributions')) {
+    db.exec(`
+      CREATE TABLE event_redistributions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        season_id INTEGER NOT NULL REFERENCES seasons(id),
+        source_event_id INTEGER NOT NULL REFERENCES events(id),
+        target_kind TEXT NOT NULL CHECK(target_kind IN ('event', 'season_bonus')),
+        target_event_id INTEGER REFERENCES events(id),
+        amount_cents INTEGER NOT NULL,
+        created_at INTEGER NOT NULL DEFAULT (unixepoch())
+      )
+    `);
+  }
+  if (!tableExists(db, 'event_payout_snapshots')) {
+    db.exec(`
+      CREATE TABLE event_payout_snapshots (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        season_id INTEGER NOT NULL REFERENCES seasons(id),
+        event_id INTEGER NOT NULL REFERENCES events(id),
+        event_type TEXT NOT NULL CHECK(event_type IN ('grand_prix', 'sprint')),
+        category TEXT NOT NULL,
+        label TEXT NOT NULL,
+        rank_order INTEGER NOT NULL DEFAULT 1,
+        base_bps INTEGER NOT NULL,
+        event_base_pool_cents INTEGER NOT NULL,
+        event_effective_pool_cents INTEGER NOT NULL,
+        category_pot_cents INTEGER NOT NULL,
+        redistributed_cents INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        UNIQUE(event_id, category, rank_order)
+      )
+    `);
   }
 
   migrateLegacyDashboardBriefings(db);

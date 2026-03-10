@@ -121,7 +121,19 @@ After deploy:
 4. The drawn event row will then show the persisted random finishing position.
 5. Later scoring will reuse that same position; it is not redrawn at score time.
 
-### H) F1 Payout Audit Export
+### H) F1 Cancelled Event Handling
+
+1. Open `Admin -> Results Sync`.
+2. Find the affected race or sprint and use `Cancel`.
+3. Confirm the event row now shows:
+   - `Cancelled`
+   - the redistributed payout value
+   - whether that value moved to future same-type events or to season bonuses
+4. If the sanctioning body reverses the cancellation before downstream scoring, use `Restore`.
+5. Do not cancel an already scored event; the app rejects that path by design.
+6. Take a DB backup before cancelling a real in-season event.
+
+### I) F1 Payout Audit Export
 
 1. Open `Admin -> Payout Audit`.
 2. Select the event in question.
@@ -131,7 +143,7 @@ After deploy:
    - `Copy Summary` for a concise plain-text explanation
 4. Use these outputs when reviewing disputed race payouts with participants.
 
-### I) F1 Auction Results Export
+### J) F1 Auction Results Export
 
 1. Open `Admin -> Auction`.
 2. Use `Download Auction Results CSV`.

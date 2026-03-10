@@ -317,6 +317,32 @@ router.post('/results/sync-event/:id', withAdmin, async (req, res) => {
   return runAndRespond(res, result, (payload) => ({ ok: true, ...payload }));
 });
 
+router.post('/results/event/:id/cancel', withAdmin, (req, res) => {
+  const seasonId = getActiveSeasonId();
+  const eventId = parseIdFromParams(res, req.params.id);
+  if (eventId == null) return undefined;
+
+  const result = resultsAdminService.cancelEventForSeason({
+    seasonId,
+    eventId,
+    io: req.app.get('io'),
+  });
+  return runAndRespond(res, result, (payload) => ({ ok: true, ...payload }));
+});
+
+router.post('/results/event/:id/restore', withAdmin, (req, res) => {
+  const seasonId = getActiveSeasonId();
+  const eventId = parseIdFromParams(res, req.params.id);
+  if (eventId == null) return undefined;
+
+  const result = resultsAdminService.restoreCancelledEventForSeason({
+    seasonId,
+    eventId,
+    io: req.app.get('io'),
+  });
+  return runAndRespond(res, result, (payload) => ({ ok: true, ...payload }));
+});
+
 router.get('/results/event/:id', withAdmin, (req, res) => {
   const seasonId = getActiveSeasonId();
   const eventId = parseIdFromParams(res, req.params.id);

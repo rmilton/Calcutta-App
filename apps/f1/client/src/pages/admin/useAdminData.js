@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
+  cancelEvent as cancelEventApi,
   clearSeasonBonuses as clearSeasonBonusesApi,
   clearAllTestData as clearAllTestDataApi,
   drawRandomPosition as drawRandomPositionApi,
@@ -16,6 +17,7 @@ import {
   refreshDrivers as refreshDriversApi,
   refreshSchedule as refreshScheduleApi,
   resetParticipantAccess as resetParticipantAccessApi,
+  restoreEvent as restoreEventApi,
   runAuctionAction as runAuctionActionApi,
   savePayoutRules,
   syncEvent as syncEventApi,
@@ -122,6 +124,26 @@ export default function useAdminData() {
       await loadAll({ silent: true });
     } catch (error) {
       setMessage(error.message || 'Random position draw failed.');
+    }
+  }, [loadAll]);
+
+  const cancelEvent = useCallback(async (eventId) => {
+    try {
+      const result = await cancelEventApi(eventId);
+      setMessage(result.message || 'Event cancelled.');
+      await loadAll({ silent: true });
+    } catch (error) {
+      setMessage(error.message || 'Event cancellation failed.');
+    }
+  }, [loadAll]);
+
+  const restoreEvent = useCallback(async (eventId) => {
+    try {
+      const result = await restoreEventApi(eventId);
+      setMessage(result.message || 'Event restored.');
+      await loadAll({ silent: true });
+    } catch (error) {
+      setMessage(error.message || 'Event restore failed.');
     }
   }, [loadAll]);
 
@@ -272,6 +294,8 @@ export default function useAdminData() {
     syncNext,
     syncEvent,
     drawRandomPosition,
+    cancelEvent,
+    restoreEvent,
     recalcSeasonBonuses,
     clearSeasonBonuses,
     rescoreSeasonEvents,
@@ -301,6 +325,8 @@ export default function useAdminData() {
     syncNext,
     syncEvent,
     drawRandomPosition,
+    cancelEvent,
+    restoreEvent,
     recalcSeasonBonuses,
     clearSeasonBonuses,
     rescoreSeasonEvents,

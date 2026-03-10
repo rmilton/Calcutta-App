@@ -25,6 +25,8 @@ import { useOutletContext } from 'react-router-dom';
  * @property {(options?: {force?: boolean}) => Promise<void>} syncNext
  * @property {(eventId: number, options?: {force?: boolean}) => Promise<void>} syncEvent
  * @property {(eventId: number) => Promise<void>} drawRandomPosition
+ * @property {(eventId: number) => Promise<void>} cancelEvent
+ * @property {(eventId: number) => Promise<void>} restoreEvent
  * @property {() => Promise<void>} recalcSeasonBonuses
  * @property {() => Promise<void>} rescoreSeasonEvents
  * @property {(group: string, id: number, field: string, value: unknown) => void} updateRules

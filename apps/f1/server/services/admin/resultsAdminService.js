@@ -18,8 +18,14 @@ const {
   syncNextEventFromProvider,
 } = require('../scoringService');
 const { shuffleArray } = require('../../lib/shuffle');
+const { splitCentsEvenly } = require('../../lib/core');
 const { DRIVERS_2026 } = require('../../data/drivers2026');
 const { EVENTS_2026 } = require('../../data/events2026');
+const {
+  buildEventPayoutComputation,
+  isScoringEvent,
+  listFutureRedistributionTargets,
+} = require('../payoutRedistributionService');
 
 function normalizeText(value) {
   return String(value || '').replace(/\s+/g, ' ').trim().toLowerCase();
@@ -31,6 +37,13 @@ function normalizeEventBaseName(value) {
 
 function providerEventMatchKey(event) {
   return `${Number(event.round_number) || 0}::${event.type}`;
+}
+
+function deleteEventRedistributionsForSource(seasonId, eventId) {
+  db.prepare(`
+    DELETE FROM event_redistributions
+    WHERE season_id = ? AND source_event_id = ?
+  `).run(seasonId, eventId);
 }
 
 function parseStateRow(row) {
@@ -332,8 +345,6 @@ async function refreshScheduleFromProvider({ seasonId, provider }) {
         (season_id, external_event_id, round_number, name, type, starts_at, lock_at)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
-    const deleteEvent = db.prepare('DELETE FROM events WHERE id = ?');
-
     const updates = [];
     const inserts = [];
     const unmatchedProvider = [];
@@ -355,16 +366,7 @@ async function refreshScheduleFromProvider({ seasonId, provider }) {
       updates.push({ existing, provider: providerEvent });
     });
 
-    const removableExisting = existingEvents.filter((event) => (
-      !matchedExistingIds.has(event.id)
-      && event.status !== 'scored'
-      && Number(event.result_count || 0) === 0
-      && Number(event.total_payout_cents || 0) === 0
-    ));
-    const retainedExisting = existingEvents.filter((event) => (
-      !matchedExistingIds.has(event.id)
-      && !removableExisting.some((candidate) => candidate.id === event.id)
-    ));
+    const retainedExisting = existingEvents.filter((event) => !matchedExistingIds.has(event.id));
 
     db.transaction(() => {
       updates.forEach(({ existing, provider: providerEvent }) => {
@@ -387,9 +389,6 @@ async function refreshScheduleFromProvider({ seasonId, provider }) {
           providerEvent.lock_at,
         );
       });
-      removableExisting.forEach((event) => {
-        deleteEvent.run(event.id);
-      });
     })();
 
     const warningParts = [];
@@ -397,17 +396,17 @@ async function refreshScheduleFromProvider({ seasonId, provider }) {
       warningParts.push(`${unmatchedProvider.length} provider events were not matched`);
     }
     if (retainedExisting.length) {
-      warningParts.push(`${retainedExisting.length} existing events were retained because they already contain results or payouts`);
+      warningParts.push(`${retainedExisting.length} existing events were retained for manual review because the provider no longer returned them`);
     }
     const status = warningParts.length ? 'warning' : 'success';
     const message = warningParts.length
-      ? `Refreshed ${updates.length + inserts.length} schedule events from ${providerName}; removed ${removableExisting.length} stale events. ${warningParts.join('. ')}.`
+      ? `Refreshed ${updates.length + inserts.length} schedule events from ${providerName}. ${warningParts.join('. ')}.`
       : `Refreshed ${updates.length + inserts.length} schedule events from ${providerName}.`;
 
     saveProviderState(seasonId, 'schedule', providerName, status, message, {
       count: updates.length + inserts.length,
       insertedCount: inserts.length,
-      removedCount: removableExisting.length,
+      removedCount: 0,
       retainedExisting: retainedExisting.map((event) => event.name),
       unmatchedProvider,
     });
@@ -416,7 +415,7 @@ async function refreshScheduleFromProvider({ seasonId, provider }) {
       ok: true,
       count: updates.length + inserts.length,
       insertedCount: inserts.length,
-      removedCount: removableExisting.length,
+      removedCount: 0,
       unmatchedCount: unmatchedProvider.length,
       message,
     };
@@ -444,6 +443,103 @@ function getProviderStatus({ seasonId, provider, autoPollService }) {
       ...(states.auto_poll || {}),
       ...(autoPollInfo || {}),
     },
+  };
+}
+
+function cancelEventForSeason({ seasonId, eventId, io }) {
+  const event = getEventById(seasonId, eventId);
+  if (!event) return { ok: false, status: 404, error: 'Event not found' };
+  if (!isScoringEvent(event)) return { ok: false, status: 400, error: 'Only scoring events can be cancelled.' };
+  if (event.status === 'scored') return { ok: false, status: 400, error: 'Scored events cannot be cancelled.' };
+  if (event.status === 'cancelled') return { ok: false, status: 409, error: 'Event is already cancelled.' };
+
+  const payoutComputation = buildEventPayoutComputation({ seasonId, event });
+  const recipients = listFutureRedistributionTargets({ seasonId, sourceEvent: event });
+  const createdAt = Date.now();
+  const insertRedistribution = db.prepare(`
+    INSERT INTO event_redistributions
+      (season_id, source_event_id, target_kind, target_event_id, amount_cents, created_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `);
+
+  db.transaction(() => {
+    deleteEventRedistributionsForSource(seasonId, eventId);
+    db.prepare('DELETE FROM event_results WHERE event_id = ?').run(eventId);
+    db.prepare('DELETE FROM event_payouts WHERE season_id = ? AND event_id = ?').run(seasonId, eventId);
+    db.prepare('DELETE FROM event_payout_snapshots WHERE season_id = ? AND event_id = ?').run(seasonId, eventId);
+
+    if (recipients.length) {
+      const shares = splitCentsEvenly(payoutComputation.effectiveTotalCents, recipients.length);
+      recipients.forEach((recipient, idx) => {
+        insertRedistribution.run(
+          seasonId,
+          eventId,
+          'event',
+          recipient.id,
+          shares[idx],
+          createdAt,
+        );
+      });
+    } else {
+      insertRedistribution.run(
+        seasonId,
+        eventId,
+        'season_bonus',
+        null,
+        payoutComputation.effectiveTotalCents,
+        createdAt,
+      );
+    }
+
+    db.prepare(`
+      UPDATE events
+      SET status = 'cancelled',
+          cancelled_at = ?,
+          random_bonus_position = NULL,
+          random_bonus_drawn_at = NULL,
+          synced_at = NULL
+      WHERE id = ? AND season_id = ?
+    `).run(createdAt, eventId, seasonId);
+  })();
+
+  recalcSeasonBonuses({ seasonId });
+  io?.emit('standings:update');
+
+  return {
+    ok: true,
+    eventId,
+    redistributedCents: payoutComputation.effectiveTotalCents,
+    recipientCount: recipients.length,
+    rolledToSeasonBonus: recipients.length === 0,
+    message: recipients.length
+      ? `Cancelled ${event.name}; redistributed ${payoutComputation.effectiveTotalCents} cents across ${recipients.length} future ${event.type === 'grand_prix' ? 'grand prix' : 'sprint'} event${recipients.length === 1 ? '' : 's'}.`
+      : `Cancelled ${event.name}; rolled ${payoutComputation.effectiveTotalCents} cents into season bonuses because no future ${event.type === 'grand_prix' ? 'grand prix' : 'sprint'} events remain.`,
+  };
+}
+
+function restoreCancelledEventForSeason({ seasonId, eventId, io }) {
+  const event = getEventById(seasonId, eventId);
+  if (!event) return { ok: false, status: 404, error: 'Event not found' };
+  if (event.status !== 'cancelled') return { ok: false, status: 409, error: 'Event is not cancelled.' };
+
+  db.transaction(() => {
+    deleteEventRedistributionsForSource(seasonId, eventId);
+    db.prepare(`
+      UPDATE events
+      SET status = 'pending',
+          cancelled_at = NULL,
+          synced_at = NULL
+      WHERE id = ? AND season_id = ?
+    `).run(eventId, seasonId);
+  })();
+
+  recalcSeasonBonuses({ seasonId });
+  io?.emit('standings:update');
+
+  return {
+    ok: true,
+    eventId,
+    message: `Restored ${event.name} to pending status.`,
   };
 }
 
@@ -491,6 +587,7 @@ function clearTestDataForSeason({ seasonId, io, auctionService }) {
     db.prepare(`
       UPDATE events
       SET status = 'pending',
+          cancelled_at = NULL,
           random_bonus_position = NULL,
           random_bonus_drawn_at = NULL,
           synced_at = NULL
@@ -503,6 +600,8 @@ function clearTestDataForSeason({ seasonId, io, auctionService }) {
     }
 
     db.prepare('DELETE FROM event_payouts WHERE season_id = ?').run(seasonId);
+    db.prepare('DELETE FROM event_payout_snapshots WHERE season_id = ?').run(seasonId);
+    db.prepare('DELETE FROM event_redistributions WHERE season_id = ?').run(seasonId);
     db.prepare('DELETE FROM season_bonus_payouts WHERE season_id = ?').run(seasonId);
     db.prepare('DELETE FROM ownership WHERE season_id = ?').run(seasonId);
     db.prepare('DELETE FROM bids WHERE season_id = ?').run(seasonId);
@@ -879,6 +978,8 @@ module.exports = {
   syncEventResults,
   refreshDriversFromProvider,
   refreshScheduleFromProvider,
+  cancelEventForSeason,
+  restoreCancelledEventForSeason,
   getProviderStatus,
   getDriverRosterGuard,
   clearTestDataForSeason,

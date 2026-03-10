@@ -8,13 +8,18 @@ const {
   getTotalPotCents,
 } = require('../db');
 const { buildEventPayoutAudit } = require('../services/payoutAuditService');
+const { decorateEventsWithAdminPreview } = require('../services/payoutRedistributionService');
 const { requireAuth } = require('./middleware');
 
 const router = express.Router();
 
 router.get('/', requireAuth, (req, res) => {
   const seasonId = getActiveSeasonId();
-  res.json(getEvents(seasonId));
+  const events = getEvents(seasonId);
+  if (req.participant?.is_admin) {
+    return res.json(decorateEventsWithAdminPreview({ seasonId, events }));
+  }
+  return res.json(events);
 });
 
 router.get('/:id/payouts', requireAuth, (req, res) => {
@@ -27,7 +32,7 @@ router.get('/:id/payouts', requireAuth, (req, res) => {
   const payouts = getEventPayouts(seasonId, eventId);
   const totalPotCents = getTotalPotCents(seasonId);
   const eventPayoutCents = payouts.reduce((sum, payout) => sum + Number(payout.amount_cents || 0), 0);
-  const payoutAudit = buildEventPayoutAudit({ seasonId, eventId });
+  const payoutAudit = event.status === 'cancelled' ? null : buildEventPayoutAudit({ seasonId, eventId });
 
   return res.json({
     event: {

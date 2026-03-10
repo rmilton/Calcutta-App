@@ -51,6 +51,20 @@ function ordinal(value) {
   return `${number}th`;
 }
 
+function fmtBps(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return '0';
+  return Number.isInteger(numeric) ? String(numeric) : numeric.toFixed(2);
+}
+
+function confirmEventCancellation(eventName) {
+  const confirmed = window.confirm(`Mark ${eventName} as cancelled and redistribute its payout value?`);
+  if (!confirmed) return false;
+
+  const confirmationText = window.prompt('Type CANCEL to confirm this event should be marked cancelled.', '');
+  return confirmationText === 'CANCEL';
+}
+
 export default function ResultsPage() {
   const {
     events,
@@ -60,6 +74,8 @@ export default function ResultsPage() {
     syncNext,
     syncEvent,
     drawRandomPosition,
+    cancelEvent,
+    restoreEvent,
     refresh,
     loading,
     hasLoaded,
@@ -76,6 +92,21 @@ export default function ResultsPage() {
   );
   const driverRosterGuard = providerStatus?.driver_roster_guard || null;
   const isDriverRosterFrozen = Boolean(driverRosterGuard?.frozen);
+  const cancellationSummary = useMemo(() => {
+    const cancelledEvents = (events || []).filter((event) => event.status === 'cancelled');
+    const gpCount = cancelledEvents.filter((event) => event.type === 'grand_prix').length;
+    const sprintCount = cancelledEvents.filter((event) => event.type === 'sprint').length;
+    const bonusRolloverCents = cancelledEvents.reduce(
+      (sum, event) => sum + Number(event.rolled_to_season_bonus_cents || 0),
+      0,
+    );
+
+    return {
+      gpCount,
+      sprintCount,
+      bonusRolloverCents,
+    };
+  }, [events]);
 
   if (loading && !hasLoaded) {
     return <AdminLoadingState />;
@@ -128,6 +159,19 @@ export default function ResultsPage() {
               Activity counts: bids {driverRosterGuard?.season_activity?.bids || 0}, ownership {driverRosterGuard?.season_activity?.ownership || 0}, results {driverRosterGuard?.season_activity?.eventResults || 0}, event payouts {driverRosterGuard?.season_activity?.eventPayouts || 0}.
             </div>
           ) : null}
+        </div>
+        <div className={`note-panel ${(cancellationSummary.gpCount || cancellationSummary.sprintCount) ? 'note-panel-warning' : ''}`}>
+          <strong>Cancellation Summary</strong>
+          <div className="muted small">
+            Cancelled grand prix events: {cancellationSummary.gpCount}. Cancelled sprint events: {cancellationSummary.sprintCount}.
+          </div>
+          <div className="muted small">
+            Future unscored events already include same-type redistribution in their effective payout preview.
+            {' '}
+            {cancellationSummary.bonusRolloverCents
+              ? `${fmtCents(cancellationSummary.bonusRolloverCents)} currently rolls into season bonuses because no same-type events remain.`
+              : 'No cancelled-event value is currently rolling into season bonuses.'}
+          </div>
         </div>
         <div className="grid-3 results-provider-grid">
           <div className="strip-item">
@@ -222,31 +266,88 @@ export default function ResultsPage() {
                       <div className="muted small">
                         {eventTypeLabel(event.type)} • {event.status} • {formatEventTime(event.starts_at)} • payout {fmtCents(event.total_payout_cents || 0)}
                       </div>
+                      {event.status !== 'scored' && event.status !== 'cancelled' ? (
+                        <div className="muted small">
+                          Base {fmtBps(event.base_total_bps)} bps • Effective {fmtBps(event.effective_total_bps)} bps • Redistributed in {fmtCents(event.redistributed_pool_cents || 0)}
+                        </div>
+                      ) : null}
+                      {event.status === 'cancelled' ? (
+                        <div className="muted small">
+                          Cancelled payout value: {fmtCents(event.redistributed_outbound_cents || 0)}
+                          {event.rolled_to_season_bonus_cents
+                            ? ` • Season bonus rollover ${fmtCents(event.rolled_to_season_bonus_cents)}`
+                            : ' • Reassigned to future same-type events'}
+                        </div>
+                      ) : null}
                       <div className="muted small">
                         Random bonus: {event.random_bonus_position ? ordinal(event.random_bonus_position) : 'Not drawn yet'}
                       </div>
+                      {event.status !== 'scored' && event.status !== 'cancelled' && event.payout_preview_rules?.length ? (
+                        <details className="admin-collapsible">
+                          <summary className="admin-collapsible-summary">
+                            <div>
+                              <strong>Payout BPS Structure</strong>
+                              <div className="muted small">
+                                {event.payout_preview_rules.length} categories. Collapsed by default to keep the event list shorter.
+                              </div>
+                            </div>
+                          </summary>
+                          <ul className="list tight muted small">
+                            {event.payout_preview_rules.map((rule) => (
+                              <li key={`${event.id}:${rule.category}:${rule.rank_order}`}>
+                                {rule.label}: {fmtCents(rule.category_pot_cents)} ({rule.base_bps} bps
+                                {Number(rule.redistributed_cents || 0) > 0 ? ` + ${fmtCents(rule.redistributed_cents)}` : ''})
+                              </li>
+                            ))}
+                          </ul>
+                        </details>
+                      ) : null}
                     </div>
-                    <div className="row wrap gap-sm">
+                    <div className="row wrap gap-sm admin-event-actions">
                       <button
                         className="btn btn-outline"
                         onClick={() => runAndReload(() => drawRandomPosition(event.id))}
-                        disabled={Boolean(event.random_bonus_position)}
+                        disabled={Boolean(event.random_bonus_position) || event.status === 'cancelled' || event.status === 'scored'}
                         title={event.random_bonus_position ? `Random bonus already drawn at ${ordinal(event.random_bonus_position)}.` : 'Draw and persist the random bonus position before the race starts'}
                       >
                         {event.random_bonus_position ? `Random ${ordinal(event.random_bonus_position)}` : 'Draw Random'}
                       </button>
-                      <button
-                        className="btn btn-outline"
-                        onClick={() => runAndReload(() => syncEvent(event.id))}
-                      >
-                        Sync
-                      </button>
-                      <button
-                        className="btn btn-outline"
-                        onClick={() => runAndReload(() => syncEvent(event.id, { force: true }))}
-                      >
-                        Force Sync
-                      </button>
+                      {event.status === 'cancelled' ? (
+                        <button
+                          className="btn btn-outline"
+                          onClick={() => runAndReload(() => restoreEvent(event.id))}
+                        >
+                          Restore
+                        </button>
+                      ) : (
+                        <>
+                          <button
+                            className="btn btn-outline"
+                            onClick={() => runAndReload(() => syncEvent(event.id))}
+                            disabled={event.status === 'scored'}
+                          >
+                            Sync
+                          </button>
+                          <button
+                            className="btn btn-outline"
+                            onClick={() => runAndReload(() => syncEvent(event.id, { force: true }))}
+                            disabled={event.status === 'scored'}
+                          >
+                            Force Sync
+                          </button>
+                          <button
+                            className="btn btn-outline"
+                            onClick={() => {
+                              const confirmed = confirmEventCancellation(event.name);
+                              if (!confirmed) return Promise.resolve();
+                              return runAndReload(() => cancelEvent(event.id));
+                            }}
+                            disabled={event.status === 'scored'}
+                          >
+                            Mark Cancelled
+                          </button>
+                        </>
+                      )}
                     </div>
                   </li>
                 ))}

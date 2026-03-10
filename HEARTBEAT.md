@@ -1,6 +1,6 @@
 # HEARTBEAT.md
 
-Last updated: 2026-03-08
+Last updated: 2026-03-10
 Owner: On-call engineer / active implementer
 
 ## Status At A Glance
@@ -37,6 +37,8 @@ Owner: On-call engineer / active implementer
 - F1 dashboard briefing history now stores structured per-event entries so participants can revisit prior pre-race/live/post-race AI summaries instead of only the latest generated text.
 - F1 post-auction participant login is now locked to the existing season roster; unmatched invite-code joins fail closed and admin can issue/reset direct participant access links from the Auction page.
 - F1 startup seeding now preserves provider-refreshed schedule rows across restart/deploy cycles instead of silently reverting them to mock seed dates.
+- F1 now supports manual event cancellation/restore, keeps cancelled races out of primary live/upcoming selection, and redistributes cancelled event value only to future same-type events or season bonuses when no same-type events remain.
+- F1 scored event payout math now snapshots per-category event pots so payout audit/history remains stable after later event cancellations.
 
 ## Active Priorities
 
@@ -45,6 +47,7 @@ Owner: On-call engineer / active implementer
 3. Keep docs as single source of truth (no drift back into handoff files).
 4. Use DB backup export before auction night and before first live scoring operations.
 5. Lock the season roster explicitly after the real auction is complete.
+6. Use the new cancel/restore controls deliberately; they now move payout value between future events and season bonuses.
 
 ## Known Risks / Watch Items
 
@@ -53,6 +56,7 @@ Owner: On-call engineer / active implementer
 3. OpenF1 can reject unauthenticated requests during live sessions, so missing credentials now presents as provider-side `401` failures.
 4. Auto-poll should remain opt-in until one production verification pass is complete.
 5. Shared package changes can cause silent cross-app impact if not scoped carefully.
+6. Late schedule changes now have money movement implications; confirm cancelled-event handling before race weekend communications.
 
 ## Recent Completed Work
 
@@ -61,12 +65,14 @@ Owner: On-call engineer / active implementer
 3. Hardened NCAA/F1 shutdown behavior to avoid false deployment-failure exits.
 4. Added F1 OpenF1 provider integration with provider diagnostics, metadata refresh controls, optional auto-poll, and live-session auth support.
 5. Fixed F1 startup schedule seeding so provider-refreshed event dates persist after restart/deploy.
+6. Added F1 cancelled-event redistribution, season-bonus rollover for last-of-type cancellations, and scored-event payout snapshots.
 
 ## Next Suggested Actions
 
 1. Run one F1 deploy with `F1_RESULTS_PROVIDER=openf1`, `OPENF1_USERNAME`, and `OPENF1_PASSWORD`, then verify `/api/admin/results/provider-status`.
 2. Refresh F1 drivers and schedule once in admin, then confirm event mappings before syncing results.
 3. Add follow-up ADR if additional Railway-specific behavior is discovered.
+4. Before using event cancellation in production, take a DB backup and verify the admin Results page preview matches the intended redistribution.
 
 ## Update Protocol
 

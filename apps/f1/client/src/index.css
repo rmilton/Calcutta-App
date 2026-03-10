@@ -1332,9 +1332,14 @@ button {
 }
 
 .event-nav-row {
+  --event-accent: rgba(132, 149, 171, 0.26);
+  --event-accent-strong: rgba(132, 149, 171, 0.42);
+  --event-glow: rgba(132, 149, 171, 0.12);
   width: 100%;
   border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(10, 14, 20, 0.78);
+  background:
+    linear-gradient(135deg, var(--event-glow), rgba(10, 14, 20, 0.82) 38%),
+    rgba(10, 14, 20, 0.78);
   color: var(--text);
   border-radius: var(--radius-md);
   text-align: left;
@@ -1343,17 +1348,55 @@ button {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: var(--space-3);
   padding: 0.54rem 0.62rem;
-  transition: border-color 150ms ease, background-color 150ms ease;
+  box-shadow: inset 3px 0 0 var(--event-accent);
+  transition: border-color 150ms ease, background-color 150ms ease, box-shadow 150ms ease, transform 150ms ease;
+}
+
+.event-nav-row-sprint {
+  --event-accent: rgba(255, 181, 46, 0.78);
+  --event-accent-strong: rgba(255, 194, 87, 0.94);
+  --event-glow: rgba(255, 167, 38, 0.16);
+}
+
+.event-nav-row-grand_prix {
+  --event-accent: rgba(77, 214, 227, 0.7);
+  --event-accent-strong: rgba(107, 232, 243, 0.92);
+  --event-glow: rgba(48, 168, 188, 0.14);
+}
+
+.event-nav-row-pending {
+  border-color: rgba(255, 141, 117, 0.16);
+}
+
+.event-nav-row-scored {
+  border-color: rgba(93, 214, 162, 0.18);
+}
+
+.event-nav-row-cancelled {
+  --event-glow: rgba(153, 164, 180, 0.08);
+  border-color: rgba(163, 173, 186, 0.16);
+  box-shadow: inset 3px 0 0 rgba(149, 159, 172, 0.46);
 }
 
 .event-nav-row:hover {
-  border-color: rgba(159, 63, 67, 0.34);
-  background: rgba(18, 24, 33, 0.9);
+  border-color: var(--event-accent);
+  background:
+    linear-gradient(135deg, var(--event-glow), rgba(18, 24, 33, 0.92) 44%),
+    rgba(18, 24, 33, 0.9);
+  box-shadow:
+    inset 3px 0 0 var(--event-accent-strong),
+    0 10px 24px rgba(0, 0, 0, 0.18);
+  transform: translateY(-1px);
 }
 
 .event-nav-row.active {
-  border-color: rgba(159, 63, 67, 0.56);
-  background: rgba(159, 63, 67, 0.11);
+  border-color: var(--event-accent-strong);
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.02), var(--event-glow) 18%, rgba(11, 15, 21, 0.94) 58%),
+    rgba(11, 15, 21, 0.92);
+  box-shadow:
+    inset 4px 0 0 var(--event-accent-strong),
+    0 14px 28px rgba(0, 0, 0, 0.22);
 }
 
 .event-nav-main {
@@ -1381,24 +1424,34 @@ button {
 .event-status {
   display: inline-flex;
   align-items: center;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: var(--radius-sm);
-  padding: 0.12rem 0.38rem;
+  gap: 0.38rem;
+  padding: 0;
   font-size: var(--text-xs);
   letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--muted);
-  background: rgba(255, 255, 255, 0.03);
+  background: none;
+}
+
+.event-status::before {
+  content: '';
+  width: 0.48rem;
+  height: 0.48rem;
+  border-radius: 999px;
+  background: currentColor;
+  box-shadow: 0 0 0 0.16rem rgba(255, 255, 255, 0.05);
 }
 
 .event-status-scored {
-  border-color: rgba(127, 184, 157, 0.5);
-  color: #b2d2c1;
+  color: #7be0b0;
 }
 
 .event-status-pending {
-  border-color: rgba(159, 63, 67, 0.42);
-  color: #cdacaf;
+  color: #ff9f88;
+}
+
+.event-status-cancelled {
+  color: #b1bcc8;
 }
 
 .events-detail-shell {
@@ -2206,6 +2259,11 @@ tbody tr:hover {
   padding: 0.8rem;
 }
 
+.admin-event-actions {
+  align-self: flex-start;
+  align-items: flex-start;
+}
+
 .bps-summary {
   margin-top: var(--space-2);
   display: flex;
@@ -2428,21 +2486,40 @@ tbody tr:hover {
 }
 
 .event-type {
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: var(--radius-sm);
-  padding: 0.12rem 0.38rem;
+  display: inline-grid;
+  justify-items: end;
+  gap: 0.22rem;
   font-size: var(--text-xs);
   text-transform: uppercase;
+  letter-spacing: 0.09em;
+  font-weight: 700;
+}
+
+.event-type::before {
+  content: '';
+  width: 2rem;
+  height: 0.34rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.04);
 }
 
 .event-type.sprint {
-  border-color: rgba(255, 179, 0, 0.4);
-  color: #d3bb8b;
+  color: #ffc95d;
+}
+
+.event-type.sprint::before {
+  background: linear-gradient(90deg, #ffdb6e 0%, #ff9f1c 100%);
+  box-shadow: 0 0 18px rgba(255, 171, 39, 0.22);
 }
 
 .event-type.grand_prix {
-  border-color: rgba(159, 63, 67, 0.42);
-  color: #cd9fa2;
+  color: #8ae7f4;
+}
+
+.event-type.grand_prix::before {
+  background: linear-gradient(90deg, #65e8f7 0%, #2ea3d4 100%);
+  box-shadow: 0 0 18px rgba(73, 202, 228, 0.2);
 }
 
 .loading-panel {

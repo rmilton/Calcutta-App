@@ -156,6 +156,22 @@ export async function syncEvent(eventId, { force = false } = {}) {
   return parseApiResponse(response, 'Event sync failed');
 }
 
+export async function cancelEvent(eventId) {
+  const response = await api(`/admin/results/event/${eventId}/cancel`, {
+    method: 'POST',
+    body: '{}',
+  });
+  return parseApiResponse(response, 'Event cancellation failed');
+}
+
+export async function restoreEvent(eventId) {
+  const response = await api(`/admin/results/event/${eventId}/restore`, {
+    method: 'POST',
+    body: '{}',
+  });
+  return parseApiResponse(response, 'Event restore failed');
+}
+
 export async function drawRandomPosition(eventId) {
   const response = await api(`/admin/results/draw-random-position/${eventId}`, {
     method: 'POST',

@@ -24,7 +24,7 @@ function toTimestampMs(value) {
 }
 
 function isScoringEvent(event) {
-  return event?.type === 'grand_prix' || event?.type === 'sprint';
+  return (event?.type === 'grand_prix' || event?.type === 'sprint') && event?.status !== 'cancelled';
 }
 
 function compareByRound(a, b) {

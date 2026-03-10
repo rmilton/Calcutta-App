@@ -105,6 +105,237 @@ test('results admin manual save forces scoring path and persists results', () =>
   assert.equal(rowCount, 1);
 });
 
+test('results admin syncNext skips cancelled events', async () => {
+  const {
+    db,
+    getActiveSeasonId,
+    resultsAdminService,
+  } = setupDb();
+
+  const seasonId = getActiveSeasonId();
+  const events = db.prepare(`
+    SELECT id
+    FROM events
+    WHERE season_id = ? AND type = 'grand_prix'
+    ORDER BY round_number ASC
+    LIMIT 2
+  `).all(seasonId);
+  const driver = db.prepare(`
+    SELECT external_id
+    FROM drivers
+    WHERE season_id = ?
+    ORDER BY external_id ASC
+    LIMIT 1
+  `).get(seasonId);
+
+  db.prepare(`
+    UPDATE events
+    SET status = 'cancelled',
+        cancelled_at = 1234567890,
+        starts_at = '2000-01-01T00:00:00Z',
+        lock_at = '2000-01-01T00:00:00Z'
+    WHERE id = ?
+  `).run(events[0].id);
+  db.prepare(`
+    UPDATE events
+    SET starts_at = '2000-01-01T00:00:00Z',
+        lock_at = '2000-01-01T00:00:00Z'
+    WHERE id = ?
+  `).run(events[1].id);
+
+  const result = await resultsAdminService.syncNextResults({
+    seasonId,
+    provider: {
+      async fetchEventResults() {
+        return [{
+          external_driver_id: driver.external_id,
+          finish_position: 1,
+          start_position: 1,
+        }];
+      },
+    },
+    io: null,
+    force: false,
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(db.prepare('SELECT status FROM events WHERE id = ?').get(events[0].id).status, 'cancelled');
+  assert.equal(db.prepare('SELECT status FROM events WHERE id = ?').get(events[1].id).status, 'scored');
+});
+
+test('results admin cancelEvent redistributes to future same-type events and restore removes redistribution rows', () => {
+  const {
+    db,
+    getActiveSeasonId,
+    resultsAdminService,
+  } = setupDb();
+
+  const seasonId = getActiveSeasonId();
+  const participantId = db.prepare(`
+    INSERT INTO participants (name, color, session_token)
+    VALUES ('Cancellation Tester', '#112233', 'cancel-token')
+  `).run().lastInsertRowid;
+  db.prepare('INSERT INTO season_participants (season_id, participant_id) VALUES (?, ?)').run(seasonId, participantId);
+
+  const driver = db.prepare(`
+    SELECT id
+    FROM drivers
+    WHERE season_id = ?
+    ORDER BY id ASC
+    LIMIT 1
+  `).get(seasonId);
+  db.prepare(`
+    INSERT INTO ownership (season_id, driver_id, participant_id, purchase_price_cents)
+    VALUES (?, ?, ?, ?)
+  `).run(seasonId, driver.id, participantId, 10000);
+
+  const gpEvents = db.prepare(`
+    SELECT id, round_number, name
+    FROM events
+    WHERE season_id = ? AND type = 'grand_prix'
+    ORDER BY round_number ASC
+    LIMIT 3
+  `).all(seasonId);
+
+  db.prepare(`
+    UPDATE events
+    SET status = 'scored'
+    WHERE season_id = ? AND type = 'grand_prix' AND round_number > 3
+  `).run(seasonId);
+
+  const cancelResult = resultsAdminService.cancelEventForSeason({
+    seasonId,
+    eventId: gpEvents[0].id,
+    io: null,
+  });
+  assert.equal(cancelResult.ok, true);
+  assert.equal(cancelResult.recipientCount, 2);
+
+  const redistributions = db.prepare(`
+    SELECT target_kind, target_event_id, amount_cents
+    FROM event_redistributions
+    WHERE season_id = ? AND source_event_id = ?
+    ORDER BY target_event_id ASC
+  `).all(seasonId, gpEvents[0].id);
+  assert.deepEqual(redistributions, [
+    { target_kind: 'event', target_event_id: gpEvents[1].id, amount_cents: 175 },
+    { target_kind: 'event', target_event_id: gpEvents[2].id, amount_cents: 175 },
+  ]);
+
+  const restoreResult = resultsAdminService.restoreCancelledEventForSeason({
+    seasonId,
+    eventId: gpEvents[0].id,
+    io: null,
+  });
+  assert.equal(restoreResult.ok, true);
+
+  const afterRestoreCount = db.prepare(`
+    SELECT COUNT(*) as c
+    FROM event_redistributions
+    WHERE season_id = ? AND source_event_id = ?
+  `).get(seasonId, gpEvents[0].id).c;
+  assert.equal(afterRestoreCount, 0);
+  assert.equal(db.prepare('SELECT status FROM events WHERE id = ?').get(gpEvents[0].id).status, 'pending');
+});
+
+test('results admin cancellations keep scored event snapshots stable and roll last same-type value to season bonuses', () => {
+  const {
+    db,
+    getActiveSeasonId,
+    resultsAdminService,
+  } = setupDb();
+
+  const seasonId = getActiveSeasonId();
+  const participantId = db.prepare(`
+    INSERT INTO participants (name, color, session_token)
+    VALUES ('Redistribution Tester', '#334455', 'redistribute-token')
+  `).run().lastInsertRowid;
+  db.prepare('INSERT INTO season_participants (season_id, participant_id) VALUES (?, ?)').run(seasonId, participantId);
+
+  const driver = db.prepare(`
+    SELECT id
+    FROM drivers
+    WHERE season_id = ?
+    ORDER BY id ASC
+    LIMIT 1
+  `).get(seasonId);
+  db.prepare(`
+    INSERT INTO ownership (season_id, driver_id, participant_id, purchase_price_cents)
+    VALUES (?, ?, ?, ?)
+  `).run(seasonId, driver.id, participantId, 10000);
+
+  const gpEvents = db.prepare(`
+    SELECT id, round_number, name
+    FROM events
+    WHERE season_id = ? AND type = 'grand_prix'
+    ORDER BY round_number ASC
+    LIMIT 3
+  `).all(seasonId);
+
+  db.prepare(`
+    UPDATE events
+    SET status = 'scored'
+    WHERE season_id = ? AND type = 'grand_prix' AND round_number > 3
+  `).run(seasonId);
+  db.prepare(`
+    UPDATE events
+    SET status = 'scored'
+    WHERE season_id = ? AND type = 'sprint'
+  `).run(seasonId);
+
+  const firstCancel = resultsAdminService.cancelEventForSeason({
+    seasonId,
+    eventId: gpEvents[0].id,
+    io: null,
+  });
+  assert.equal(firstCancel.ok, true);
+
+  const scoreResult = resultsAdminService.saveManualResultsAndScore({
+    seasonId,
+    eventId: gpEvents[1].id,
+    rows: [{ driver_id: driver.id, finish_position: 1, start_position: 2 }],
+    force: true,
+  });
+  assert.equal(scoreResult.ok, true);
+
+  const scoredSnapshot = db.prepare(`
+    SELECT event_effective_pool_cents
+    FROM event_payout_snapshots
+    WHERE season_id = ? AND event_id = ? AND category = 'race_winner'
+  `).get(seasonId, gpEvents[1].id);
+  assert.equal(scoredSnapshot.event_effective_pool_cents, 525);
+
+  const secondCancel = resultsAdminService.cancelEventForSeason({
+    seasonId,
+    eventId: gpEvents[2].id,
+    io: null,
+  });
+  assert.equal(secondCancel.ok, true);
+  assert.equal(secondCancel.rolledToSeasonBonus, true);
+
+  const bonusRollover = db.prepare(`
+    SELECT amount_cents
+    FROM event_redistributions
+    WHERE season_id = ? AND source_event_id = ? AND target_kind = 'season_bonus'
+  `).get(seasonId, gpEvents[2].id);
+  assert.equal(bonusRollover.amount_cents, 525);
+
+  const scoredSnapshotAfterLaterCancel = db.prepare(`
+    SELECT event_effective_pool_cents
+    FROM event_payout_snapshots
+    WHERE season_id = ? AND event_id = ? AND category = 'race_winner'
+  `).get(seasonId, gpEvents[1].id);
+  assert.equal(scoredSnapshotAfterLaterCancel.event_effective_pool_cents, 525);
+
+  const scoredCancelAttempt = resultsAdminService.cancelEventForSeason({
+    seasonId,
+    eventId: gpEvents[1].id,
+    io: null,
+  });
+  assert.equal(scoredCancelAttempt.ok, false);
+  assert.equal(scoredCancelAttempt.status, 400);
+});
+
 test('results admin refreshDrivers updates seeded drivers without changing identities', async () => {
   const {
     db,
@@ -576,6 +807,33 @@ test('startup seeding preserves provider-refreshed schedule rows on init rerun',
   assert.deepEqual(afterRestart, beforeRestart);
 });
 
+test('startup seeding preserves cancelled event status on init rerun', () => {
+  const {
+    db,
+    init,
+    getActiveSeasonId,
+  } = setupDb();
+
+  const seasonId = getActiveSeasonId();
+  db.prepare(`
+    UPDATE events
+    SET status = 'cancelled',
+        cancelled_at = 1234567890
+    WHERE season_id = ? AND round_number = 1 AND type = 'grand_prix'
+  `).run(seasonId);
+
+  init();
+
+  const event = db.prepare(`
+    SELECT status, cancelled_at
+    FROM events
+    WHERE season_id = ? AND round_number = 1 AND type = 'grand_prix'
+  `).get(seasonId);
+
+  assert.equal(event.status, 'cancelled');
+  assert.equal(event.cancelled_at, 1234567890);
+});
+
 test('startup seeding still repairs drifted mock schedule rows on init rerun', () => {
   const {
     db,
@@ -756,7 +1014,7 @@ test('results admin refreshSchedule inserts missing sprint-weekend grand prix ro
   assert.equal(chineseGp.name, 'Chinese Grand Prix');
 });
 
-test('results admin refreshSchedule removes stale unmatched pending events', async () => {
+test('results admin refreshSchedule retains stale unmatched pending events for manual review', async () => {
   const {
     db,
     getActiveSeasonId,
@@ -797,7 +1055,7 @@ test('results admin refreshSchedule removes stale unmatched pending events', asy
   });
 
   assert.equal(result.ok, true);
-  assert.ok(result.removedCount >= 1);
+  assert.equal(result.removedCount, 0);
 
   const after = db.prepare(`
     SELECT COUNT(*) as c
@@ -806,7 +1064,7 @@ test('results admin refreshSchedule removes stale unmatched pending events', asy
   `).get(seasonId).c;
 
   assert.equal(before, 1);
-  assert.equal(after, 0);
+  assert.equal(after, 1);
 });
 
 test('results admin clearTestData resets season activity but preserves seeded setup', () => {

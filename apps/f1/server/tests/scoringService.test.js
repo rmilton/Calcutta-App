@@ -663,6 +663,67 @@ test('season bonuses stay empty until every scoring event in the season is score
   assert.equal(bonusCount, 0);
 });
 
+test('season bonuses treat cancelled scoring events as complete for readiness', () => {
+  const {
+    db,
+    getActiveSeasonId,
+    upsertEventResults,
+    scoreEvent,
+  } = setupDb();
+
+  const seasonId = getActiveSeasonId();
+  const driver = db.prepare(`
+    SELECT id, external_id
+    FROM drivers
+    WHERE season_id = ?
+    ORDER BY external_id ASC
+    LIMIT 1
+  `).get(seasonId);
+  const participantId = db.prepare(`
+    INSERT INTO participants (name, color, session_token)
+    VALUES ('Cancelled Ready Tester', '#221144', 'cancel-ready-token')
+  `).run().lastInsertRowid;
+  db.prepare('INSERT INTO season_participants (season_id, participant_id) VALUES (?, ?)').run(seasonId, participantId);
+  db.prepare(`
+    INSERT INTO ownership (season_id, driver_id, participant_id, purchase_price_cents)
+    VALUES (?, ?, ?, ?)
+  `).run(seasonId, driver.id, participantId, 10000);
+
+  const gpEvent = db.prepare(`
+    SELECT id
+    FROM events
+    WHERE season_id = ? AND type = 'grand_prix'
+    ORDER BY round_number ASC
+    LIMIT 1
+  `).get(seasonId);
+
+  db.prepare(`
+    UPDATE events
+    SET status = 'cancelled',
+        cancelled_at = 1234567890
+    WHERE season_id = ?
+      AND id != ?
+      AND type IN ('grand_prix', 'sprint')
+  `).run(seasonId, gpEvent.id);
+  db.prepare('UPDATE events SET lock_at = ? WHERE id = ?').run('2000-01-01T00:00:00Z', gpEvent.id);
+
+  upsertEventResults({
+    seasonId,
+    eventId: gpEvent.id,
+    rows: [{ external_driver_id: driver.external_id, finish_position: 1, start_position: 3 }],
+  });
+
+  const score = scoreEvent({ seasonId, eventId: gpEvent.id });
+  assert.equal(score.ok, true);
+
+  const bonusCount = db.prepare(`
+    SELECT COUNT(*) as c
+    FROM season_bonus_payouts
+    WHERE season_id = ?
+  `).get(seasonId).c;
+  assert.ok(bonusCount > 0);
+});
+
 test('v2 migration normalizes rules and gp random draws for active season', () => {
   const modules = setupDb();
   const {

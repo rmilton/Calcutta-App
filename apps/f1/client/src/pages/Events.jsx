@@ -35,7 +35,14 @@ function statusLabel(status, isScored) {
   if (isScored) return 'Scored';
   if (!status) return 'Pending';
   if (status === 'pending') return 'Pending';
+  if (status === 'cancelled') return 'Cancelled';
   return status.charAt(0).toUpperCase() + status.slice(1);
+}
+
+function statusTone(status, isScored) {
+  if (isScored) return 'scored';
+  if (!status || status === 'pending' || status === 'results_loaded') return 'pending';
+  return status;
 }
 
 function pctOfTotal(amountCents, totalPotCents) {
@@ -108,12 +115,16 @@ export default function Events() {
     const enriched = events.map((event) => {
       const startsAtMs = toTimestampMs(event.starts_at);
       const isScored = event.status === 'scored' || Number(event.result_count || 0) > 0;
+      const isCancelled = event.status === 'cancelled';
       const isUpcomingByClock = startsAtMs != null && startsAtMs > now;
+      const isPastByClock = startsAtMs != null && startsAtMs <= now;
       return {
         ...event,
         startsAtMs,
         isScored,
+        isCancelled,
         isUpcomingByClock,
+        isPastByClock,
         displayLocation: getEventLocation(event.name),
       };
     });
@@ -123,7 +134,7 @@ export default function Events() {
     ));
 
     const upcomingEvents = sortedBySchedule
-      .filter((event) => !event.isScored)
+      .filter((event) => !event.isScored && !(event.isCancelled && event.isPastByClock))
       .sort((a, b) => {
         const aFuture = a.startsAtMs != null && a.startsAtMs > now;
         const bFuture = b.startsAtMs != null && b.startsAtMs > now;
@@ -138,7 +149,7 @@ export default function Events() {
       });
 
     const pastEvents = sortedBySchedule
-      .filter((event) => event.isScored)
+      .filter((event) => event.isScored || (event.isCancelled && event.isPastByClock))
       .sort((a, b) => {
         if (a.startsAtMs == null && b.startsAtMs == null) {
           return (b.round_number - a.round_number) || (typeOrder(a.type) - typeOrder(b.type));
@@ -150,17 +161,18 @@ export default function Events() {
       });
 
     const nextUpcomingEvent = upcomingEvents.find((event) => event.isUpcomingByClock) || null;
-    const mostRecentScoredEvent = [...pastEvents].find((event) => event.isScored) || null;
+    const nextRecommendedUpcomingEvent = upcomingEvents.find((event) => event.isUpcomingByClock && !event.isCancelled) || null;
+    const mostRecentScoredEvent = [...pastEvents].find((event) => event.isScored && !event.isCancelled) || null;
 
     const selectUpcomingWindow = (
-      nextUpcomingEvent
-      && nextUpcomingEvent.startsAtMs != null
-      && now >= (nextUpcomingEvent.startsAtMs - UPCOMING_SWITCH_WINDOW_MS)
+      nextRecommendedUpcomingEvent
+      && nextRecommendedUpcomingEvent.startsAtMs != null
+      && now >= (nextRecommendedUpcomingEvent.startsAtMs - UPCOMING_SWITCH_WINDOW_MS)
     );
 
     const recommendedEventId = selectUpcomingWindow
-      ? nextUpcomingEvent.id
-      : (mostRecentScoredEvent?.id || nextUpcomingEvent?.id || sortedBySchedule[0]?.id || null);
+      ? nextRecommendedUpcomingEvent.id
+      : (mostRecentScoredEvent?.id || nextRecommendedUpcomingEvent?.id || sortedBySchedule.find((event) => !event.isCancelled)?.id || sortedBySchedule[0]?.id || null);
 
     const recommendedListMode = upcomingEvents.some((event) => event.id === recommendedEventId)
       ? 'upcoming'
@@ -274,30 +286,33 @@ export default function Events() {
             <span className="muted small">{visibleEvents.length}</span>
           </div>
           {visibleEvents.length ? (
-            <ul className="events-list">
-              {visibleEvents.map((event) => (
-                <li key={event.id}>
-                  <button
-                    className={`event-nav-row ${selectedEventId === event.id ? 'active' : ''}`}
-                    onClick={() => handleSelectEvent(event.id)}
-                  >
-                    <div className="event-nav-main">
-                      <strong>{event.name}</strong>
-                      <div className="event-nav-meta muted small">
-                        {fmtWhen(event.starts_at)} • {event.displayLocation}
+              <ul className="events-list">
+              {visibleEvents.map((event) => {
+                const visualStatus = statusTone(event.status, event.isScored);
+                return (
+                  <li key={event.id}>
+                    <button
+                      className={`event-nav-row event-nav-row-${event.type} event-nav-row-${visualStatus} ${selectedEventId === event.id ? 'active' : ''}`}
+                      onClick={() => handleSelectEvent(event.id)}
+                    >
+                      <div className="event-nav-main">
+                        <strong>{event.name}</strong>
+                        <div className="event-nav-meta muted small">
+                          {fmtWhen(event.starts_at)} • {event.displayLocation}
+                        </div>
                       </div>
-                    </div>
-                    <div className="event-nav-side">
-                      <span className={`event-type ${event.type}`}>{eventTypeLabel(event.type)}</span>
-                      <span className="muted small">{fmtCents(event.total_payout_cents || 0)}</span>
-                      <span className={`event-status event-status-${event.status || 'pending'}`}>
-                        {statusLabel(event.status, event.isScored)}
-                      </span>
-                    </div>
-                  </button>
-                </li>
-              ))}
-            </ul>
+                      <div className="event-nav-side">
+                        <span className={`event-type ${event.type}`}>{eventTypeLabel(event.type)}</span>
+                        <span className="muted small">{fmtCents(event.total_payout_cents || 0)}</span>
+                        <span className={`event-status event-status-${visualStatus}`}>
+                          {statusLabel(event.status, event.isScored)}
+                        </span>
+                      </div>
+                    </button>
+                  </li>
+                );
+              })}
+              </ul>
           ) : (
             <p className="muted small">
               {raceListMode === 'upcoming' ? 'No upcoming races found.' : 'No past races found.'}
@@ -372,7 +387,9 @@ export default function Events() {
                       <strong>{fmtCents(eventDetail.total_pot_cents || 0)}</strong>
                     </div>
                   </div>
-                  {eventDetail.payouts?.length ? (
+                  {eventDetail.event?.status === 'cancelled' ? (
+                    <p className="muted">This event was cancelled. No event payouts were distributed.</p>
+                  ) : eventDetail.payouts?.length ? (
                     <ul className="list tight">
                       {eventDetail.payouts.map((payout) => (
                         <li key={payout.id} className={`events-payout-row ${expandedPayoutId === payout.id ? 'expanded' : ''}`}>
@@ -467,7 +484,9 @@ export default function Events() {
 
               {!detailLoading && eventDetail && activeTab === 'results' ? (
                 <>
-                  {eventDetail.results?.length ? (
+                  {eventDetail.event?.status === 'cancelled' ? (
+                    <p className="muted">This event was cancelled. No results were recorded.</p>
+                  ) : eventDetail.results?.length ? (
                     <ul className="list tight">
                       {eventDetail.results.map((result) => (
                         <li key={result.id}>

@@ -1,15 +1,15 @@
 const {
-  amountFromBps,
   splitCentsEvenly,
 } = require('../lib/core');
 const { resolveCategoryWinners } = require('./payoutRuleResolvers');
 const {
+  buildEventPayoutComputation,
+  buildSeasonBonusComputation,
+} = require('./payoutRedistributionService');
+const {
   db,
-  getTotalPotCents,
   getEventById,
   getEventResults,
-  getEventPayoutRules,
-  getSeasonBonusRules,
   getOwnershipBySeason,
 } = require('../db');
 
@@ -66,6 +66,9 @@ function drawEventRandomBonusPosition({ seasonId, eventId }) {
 function scoreEvent({ seasonId, eventId, skipSeasonBonuses = false, ignoreLock = false }) {
   const event = getEventById(seasonId, eventId);
   if (!event) return { ok: false, status: 404, error: 'Event not found' };
+  if (event.status === 'cancelled') {
+    return { ok: false, status: 400, error: 'Cancelled events cannot be scored.' };
+  }
 
   const lockAtMs = event.lock_at ? Date.parse(event.lock_at) : null;
   if (!ignoreLock && Number.isFinite(lockAtMs) && Date.now() < lockAtMs) {
@@ -77,28 +80,60 @@ function scoreEvent({ seasonId, eventId, skipSeasonBonuses = false, ignoreLock =
 
   ensureRandomBonusPosition(event);
   const updatedEvent = getEventById(seasonId, eventId);
-
-  const rules = getEventPayoutRules(seasonId, updatedEvent.type);
   const ownershipMap = new Map(getOwnershipBySeason(seasonId).map((o) => [o.driver_id, o.participant_id]));
-  const totalPotCents = getTotalPotCents(seasonId);
+  const payoutComputation = buildEventPayoutComputation({
+    seasonId,
+    event: updatedEvent,
+  });
 
   db.transaction(() => {
     db.prepare('DELETE FROM event_payouts WHERE season_id = ? AND event_id = ?').run(seasonId, eventId);
+    db.prepare('DELETE FROM event_payout_snapshots WHERE season_id = ? AND event_id = ?').run(seasonId, eventId);
 
     const insertPayout = db.prepare(`
       INSERT INTO event_payouts
         (season_id, event_id, participant_id, driver_id, category, amount_cents, tie_count)
       VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
+    const insertSnapshot = db.prepare(`
+      INSERT INTO event_payout_snapshots
+        (
+          season_id,
+          event_id,
+          event_type,
+          category,
+          label,
+          rank_order,
+          base_bps,
+          event_base_pool_cents,
+          event_effective_pool_cents,
+          category_pot_cents,
+          redistributed_cents
+        )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
 
-    for (const rule of rules) {
-      const categoryAmountCents = amountFromBps(totalPotCents, rule.bps);
-      if (categoryAmountCents <= 0) continue;
+    for (const rule of payoutComputation.rules) {
+      insertSnapshot.run(
+        seasonId,
+        eventId,
+        updatedEvent.type,
+        rule.category,
+        rule.label,
+        rule.rank_order,
+        rule.base_bps,
+        payoutComputation.baseTotalCents,
+        payoutComputation.effectiveTotalCents,
+        rule.category_pot_cents,
+        rule.redistributed_cents,
+      );
+
+      if (rule.category_pot_cents <= 0) continue;
 
       const winnerDriverIds = resolveCategoryWinners(rule.category, rows, updatedEvent, rule.rank_order);
       if (!winnerDriverIds.length) continue;
 
-      const shares = splitCentsEvenly(categoryAmountCents, winnerDriverIds.length);
+      const shares = splitCentsEvenly(rule.category_pot_cents, winnerDriverIds.length);
       winnerDriverIds.forEach((driverId, idx) => {
         const participantId = ownershipMap.get(driverId);
         if (!participantId) return;
@@ -194,6 +229,7 @@ function isSeasonBonusReady(seasonId) {
     FROM events
     WHERE season_id = ?
       AND type IN ('grand_prix', 'sprint')
+      AND status != 'cancelled'
   `).get(seasonId);
 
   const total = Number(scoringEventCounts?.scoring_event_count || 0);
@@ -248,16 +284,12 @@ function resolveSeasonBonusWinners(category, seasonId, context) {
 }
 
 function recalcSeasonBonuses({ seasonId }) {
-  const rules = getSeasonBonusRules(seasonId);
-
   db.prepare('DELETE FROM season_bonus_payouts WHERE season_id = ?').run(seasonId);
-  if (!rules.length) return { ok: true, distributedCents: 0 };
+  const computation = buildSeasonBonusComputation({ seasonId });
+  if (!computation.rules.length) return { ok: true, distributedCents: 0 };
   if (!isSeasonBonusReady(seasonId)) {
     return { ok: true, distributedCents: 0, skippedUntilSeasonEnd: true };
   }
-
-  const totalPot = getTotalPotCents(seasonId);
-  if (totalPot <= 0) return { ok: true, distributedCents: 0 };
 
   const rows = getAllSeasonResultRows(seasonId);
   const standings = getChampionshipStandings(seasonId, rows);
@@ -270,8 +302,8 @@ function recalcSeasonBonuses({ seasonId }) {
   `);
 
   let distributed = 0;
-  rules.forEach((rule) => {
-    const payoutCents = amountFromBps(totalPot, rule.bps);
+  computation.rules.forEach((rule) => {
+    const payoutCents = Number(rule.category_pot_cents || 0);
     const winners = resolveSeasonBonusWinners(rule.category, seasonId, { rows, standings });
     if (!winners.length || payoutCents <= 0) return;
 
@@ -292,6 +324,7 @@ function rescoreSeasonEvents({ seasonId }) {
     SELECT e.id
     FROM events e
     WHERE e.season_id = ?
+      AND e.status != 'cancelled'
       AND EXISTS (
         SELECT 1 FROM event_results er WHERE er.event_id = e.id
       )
@@ -300,6 +333,7 @@ function rescoreSeasonEvents({ seasonId }) {
   `).all(seasonId).map((row) => row.id);
 
   db.prepare('DELETE FROM event_payouts WHERE season_id = ?').run(seasonId);
+  db.prepare('DELETE FROM event_payout_snapshots WHERE season_id = ?').run(seasonId);
 
   let rescoredEvents = 0;
   for (const eventId of eventIds) {
@@ -350,6 +384,9 @@ function ensureSeasonDriverForResultRow(seasonId, row) {
 function upsertEventResults({ seasonId, eventId, rows, manualOverride = false }) {
   const event = getEventById(seasonId, eventId);
   if (!event) return { ok: false, status: 404, error: 'Event not found' };
+  if (event.status === 'cancelled') {
+    return { ok: false, status: 400, error: 'Cancelled events cannot accept results.' };
+  }
 
   db.transaction(() => {
     (rows || []).forEach((row) => {
@@ -422,6 +459,9 @@ function upsertEventResults({ seasonId, eventId, rows, manualOverride = false })
 function syncEventFromProvider({ seasonId, eventId, provider, io, ignoreLock = false }) {
   const event = getEventById(seasonId, eventId);
   if (!event) return { ok: false, status: 404, error: 'Event not found' };
+  if (event.status === 'cancelled') {
+    return { ok: false, status: 400, error: 'Cancelled events cannot be synced.' };
+  }
 
   const drivers = db.prepare('SELECT external_id FROM drivers WHERE season_id = ?').all(seasonId);
 

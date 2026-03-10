@@ -445,6 +445,40 @@ test('selectPrimaryEvent prefers live, then upcoming, then most recent', async (
   assert.equal(recentSelection.state, 'recent');
 });
 
+test('selectPrimaryEvent ignores cancelled scoring events', async () => {
+  const { dashboardService } = setupDb();
+  const now = Date.parse('2026-04-05T05:15:00Z');
+  const events = [
+    {
+      id: 1,
+      external_event_id: '1001',
+      round_number: 1,
+      type: 'grand_prix',
+      name: 'Cancelled GP',
+      starts_at: '2026-04-12T04:00:00Z',
+      status: 'cancelled',
+    },
+    {
+      id: 2,
+      external_event_id: '1002',
+      round_number: 2,
+      type: 'grand_prix',
+      name: 'Upcoming GP',
+      starts_at: '2026-04-19T04:00:00Z',
+      status: 'pending',
+    },
+  ];
+
+  const selection = await dashboardService.selectPrimaryEvent({
+    events,
+    now,
+    provider: { name: 'mock' },
+  });
+
+  assert.equal(selection.event.id, 2);
+  assert.equal(selection.state, 'upcoming');
+});
+
 test('buildDashboardPayload resolves live grand prix payout board with ownership and draw pending state', async () => {
   const { db, getActiveSeasonId, dashboardService } = setupDb();
   const seasonId = getActiveSeasonId();

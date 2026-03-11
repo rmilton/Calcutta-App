@@ -85,8 +85,12 @@ function subtractMinutes(iso, minutes) {
 }
 
 function normalizeSessionType(sessionName) {
-  if (sessionName === 'Race') return 'grand_prix';
-  if (sessionName === 'Sprint') return 'sprint';
+  const normalized = String(sessionName || '').trim().toLowerCase();
+  if (/practice/.test(normalized)) return 'practice';
+  if (/sprint/.test(normalized) && /(qualifying|shootout)/.test(normalized)) return 'sprint_qualifying';
+  if (normalized === 'qualifying') return 'qualifying';
+  if (normalized === 'race') return 'grand_prix';
+  if (normalized === 'sprint') return 'sprint';
   return null;
 }
 
@@ -637,7 +641,8 @@ class OpenF1ResultsProvider {
   }
 
   async fetchSeasonSchedule({ year }) {
-    const sessions = await this.fetchSeasonSessions({ year });
+    const sessions = (await this.fetchSeasonSessions({ year }))
+      .filter((session) => session.event_type === 'grand_prix' || session.event_type === 'sprint');
     const meetingRoundMap = new Map();
     let nextRound = 1;
 

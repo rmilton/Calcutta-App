@@ -1,7 +1,7 @@
 const Database = require('better-sqlite3');
-const path = require('path');
+const { resolveDbPath } = require('../lib/localDevPaths');
 
-const DB_PATH = process.env.DB_PATH || path.join(__dirname, '..', 'f1-calcutta.db');
+const DB_PATH = resolveDbPath();
 const db = new Database(DB_PATH);
 
 db.pragma('journal_mode = WAL');

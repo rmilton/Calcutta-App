@@ -14,8 +14,11 @@ const { evaluateCategoryRule } = require('./payoutRuleResolvers');
 const LIVE_CACHE_TTL_MS = 15_000;
 const ACTIVE_SESSION_GRACE_MS = 20 * 60 * 1000;
 const FALLBACK_SESSION_WINDOW_MS = 4 * 60 * 60 * 1000;
+const WEEKEND_SESSION_CACHE_TTL_MS = 5 * 60 * 1000;
+const BETWEEN_RACES_WINDOW_MS = 48 * 60 * 60 * 1000;
 
 const liveSnapshotCache = new Map();
+const weekendSessionCache = new Map();
 
 function toTimestampMs(value) {
   if (!value) return null;
@@ -57,6 +60,264 @@ function isSessionLive(session, now) {
   }
 
   return false;
+}
+
+function normalizeWeekendName(value) {
+  return String(value || '')
+    .replace(/\s*\(sprint\)\s*/gi, '')
+    .replace(/[^a-z0-9]+/gi, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+function classifyWeekendSession(session) {
+  const sessionName = String(session?.session_name || '').trim().toLowerCase();
+  const eventType = String(session?.event_type || '').trim().toLowerCase();
+
+  if (/practice/.test(sessionName)) return 'practice';
+  if (/sprint/.test(sessionName) && /(qualifying|shootout)/.test(sessionName)) return 'sprint_qualifying';
+  if (sessionName === 'qualifying') return 'qualifying';
+  if (sessionName === 'sprint' || eventType === 'sprint') return 'sprint';
+  if (sessionName === 'race' || eventType === 'grand_prix') return 'race';
+  return 'other';
+}
+
+function isPracticeSession(session) {
+  return classifyWeekendSession(session) === 'practice';
+}
+
+function isQualifyingSession(session) {
+  const type = classifyWeekendSession(session);
+  return type === 'qualifying' || type === 'sprint_qualifying';
+}
+
+function isRaceSession(session) {
+  const type = classifyWeekendSession(session);
+  return type === 'race' || type === 'sprint';
+}
+
+function weekendSessionStartMs(session) {
+  return toTimestampMs(session?.starts_at || session?.date_start);
+}
+
+function weekendSessionEndMs(session) {
+  return toTimestampMs(session?.ends_at || session?.date_end);
+}
+
+function compareSessionStarts(a, b) {
+  return (weekendSessionStartMs(a) || 0) - (weekendSessionStartMs(b) || 0);
+}
+
+function baseWeekendTitle(event) {
+  return String(event?.name || '')
+    .replace(/\s*\(Sprint\)\s*/gi, '')
+    .trim();
+}
+
+async function getCachedWeekendSessions({ provider, year, now }) {
+  if (!provider?.fetchSeasonSessions || !Number.isFinite(year)) return [];
+
+  const cacheKey = `${provider.name || 'provider'}:${year}`;
+  const existing = weekendSessionCache.get(cacheKey);
+  if (existing?.value && existing.expiresAt > now) {
+    return existing.value;
+  }
+  if (existing?.promise) {
+    return existing.promise;
+  }
+
+  const promise = Promise.resolve()
+    .then(() => provider.fetchSeasonSessions({ year }))
+    .then((sessions) => {
+      const value = Array.isArray(sessions) ? sessions : [];
+      weekendSessionCache.set(cacheKey, {
+        value,
+        expiresAt: now + WEEKEND_SESSION_CACHE_TTL_MS,
+      });
+      return value;
+    })
+    .catch((error) => {
+      weekendSessionCache.delete(cacheKey);
+      throw error;
+    });
+
+  weekendSessionCache.set(cacheKey, {
+    promise,
+    expiresAt: now + WEEKEND_SESSION_CACHE_TTL_MS,
+  });
+  return promise;
+}
+
+function findWeekendSessionsForEvent({ sessions, event }) {
+  if (!event) return [];
+
+  const eventKey = normalizeWeekendName(event.name);
+  const eventStartsAtMs = toTimestampMs(event.starts_at);
+  const grouped = new Map();
+
+  (Array.isArray(sessions) ? sessions : []).forEach((session) => {
+    const groupKey = String(session?.meeting_key || normalizeWeekendName(session?.meeting_name || session?.location || session?.circuit_short_name || ''));
+    if (!grouped.has(groupKey)) grouped.set(groupKey, []);
+    grouped.get(groupKey).push(session);
+  });
+
+  const groups = [...grouped.values()].filter((group) => group.length);
+  if (!groups.length) return [];
+
+  const directMatch = groups.find((group) => normalizeWeekendName(group[0]?.meeting_name) === eventKey);
+  if (directMatch) {
+    return directMatch.slice().sort(compareSessionStarts);
+  }
+
+  if (!Number.isFinite(eventStartsAtMs)) return [];
+
+  return groups
+    .slice()
+    .sort((a, b) => {
+      const aDiff = Math.min(...a.map((session) => Math.abs((weekendSessionStartMs(session) || eventStartsAtMs) - eventStartsAtMs)));
+      const bDiff = Math.min(...b.map((session) => Math.abs((weekendSessionStartMs(session) || eventStartsAtMs) - eventStartsAtMs)));
+      return aDiff - bDiff;
+    })[0]
+    ?.slice()
+    .sort(compareSessionStarts) || [];
+}
+
+function phaseFromActiveSession(session, primaryEvent) {
+  switch (classifyWeekendSession(session)) {
+    case 'practice':
+      return 'during_practice';
+    case 'sprint_qualifying':
+      return 'during_sprint_qualifying';
+    case 'qualifying':
+      return 'during_qualifying';
+    case 'sprint':
+      return 'during_sprint';
+    case 'race':
+      return 'during_race';
+    default:
+      return primaryEvent?.type === 'sprint' ? 'during_sprint' : 'during_race';
+  }
+}
+
+function buildFallbackWeekendContext({ primaryEvent, liveSession, now }) {
+  const startsAtMs = toTimestampMs(primaryEvent?.starts_at);
+  let phase = 'between_races';
+
+  if (liveSession?.isLive || primaryEvent?.isLive) {
+    phase = primaryEvent?.type === 'sprint' ? 'during_sprint' : 'during_race';
+  } else if (Number.isFinite(startsAtMs)) {
+    if (startsAtMs > now + BETWEEN_RACES_WINDOW_MS) phase = 'between_races';
+    else if (startsAtMs > now) phase = 'before_practice';
+    else if ((now - startsAtMs) <= BETWEEN_RACES_WINDOW_MS) phase = 'immediate_post_race';
+  }
+
+  return {
+    phase,
+    title: baseWeekendTitle(primaryEvent) || primaryEvent?.name || 'Dashboard Briefing',
+    meetingName: baseWeekendTitle(primaryEvent) || primaryEvent?.name || null,
+    currentSessionName: liveSession?.statusText || null,
+    nextSessionName: null,
+    lastCompletedSessionName: null,
+    source: 'fallback',
+  };
+}
+
+function buildWeekendContextFromSessions({ primaryEvent, weekendSessions, now, liveSession }) {
+  const sessions = (weekendSessions || []).slice().sort(compareSessionStarts);
+  if (!sessions.length) {
+    return buildFallbackWeekendContext({ primaryEvent, liveSession, now });
+  }
+
+  const activeSession = sessions.find((session) => isSessionLive(session, now)) || null;
+  const nextSession = sessions.find((session) => {
+    const startMs = weekendSessionStartMs(session);
+    return Number.isFinite(startMs) && startMs > now;
+  }) || null;
+  const completedSessions = sessions.filter((session) => {
+    const endMs = weekendSessionEndMs(session);
+    return Number.isFinite(endMs) && endMs <= now;
+  });
+  const lastCompletedSession = completedSessions[completedSessions.length - 1] || null;
+  const mainRaceSession = sessions.find((session) => classifyWeekendSession(session) === 'race') || null;
+  const firstSession = sessions[0] || null;
+
+  let phase = 'between_races';
+  if (activeSession) {
+    phase = phaseFromActiveSession(activeSession, primaryEvent);
+  } else {
+    const firstStartMs = weekendSessionStartMs(firstSession);
+    const raceEndMs = weekendSessionEndMs(mainRaceSession);
+    const hasCompletedQualifying = completedSessions.some(isQualifyingSession);
+    const hasCompletedPractice = completedSessions.some(isPracticeSession);
+
+    if (Number.isFinite(raceEndMs) && now > raceEndMs) {
+      phase = (now - raceEndMs) <= BETWEEN_RACES_WINDOW_MS ? 'immediate_post_race' : 'between_races';
+    } else if (Number.isFinite(firstStartMs) && now < firstStartMs) {
+      phase = (firstStartMs - now) > BETWEEN_RACES_WINDOW_MS ? 'between_races' : 'before_practice';
+    } else if (hasCompletedQualifying) {
+      phase = 'after_qualifying_before_race';
+    } else if (hasCompletedPractice || isQualifyingSession(nextSession)) {
+      phase = 'before_qualifying';
+    } else if (nextSession && isPracticeSession(nextSession)) {
+      phase = 'before_practice';
+    } else {
+      phase = 'before_qualifying';
+    }
+  }
+
+  return {
+    phase,
+    title: String(firstSession?.meeting_name || baseWeekendTitle(primaryEvent) || primaryEvent?.name || 'Dashboard Briefing').trim(),
+    meetingName: String(firstSession?.meeting_name || baseWeekendTitle(primaryEvent) || primaryEvent?.name || '').trim() || null,
+    currentSessionName: activeSession?.session_name || null,
+    nextSessionName: nextSession?.session_name || null,
+    lastCompletedSessionName: lastCompletedSession?.session_name || null,
+    source: 'provider',
+  };
+}
+
+async function buildWeekendContext({ events, primaryEvent, provider, now, liveSession }) {
+  if (!primaryEvent) return null;
+
+  const fallback = buildFallbackWeekendContext({ primaryEvent, liveSession, now });
+  const year = Number(String(primaryEvent?.starts_at || '').slice(0, 4));
+  if (!provider?.fetchSeasonSessions || !Number.isFinite(year)) {
+    return fallback;
+  }
+
+  try {
+    const seasonSessions = await getCachedWeekendSessions({ provider, year, now });
+    const latestCompletedRace = seasonSessions
+      .filter((session) => classifyWeekendSession(session) === 'race')
+      .filter((session) => {
+        const endMs = weekendSessionEndMs(session);
+        return Number.isFinite(endMs) && endMs <= now;
+      })
+      .sort((a, b) => (weekendSessionEndMs(b) || 0) - (weekendSessionEndMs(a) || 0))[0] || null;
+
+    const recentRaceStillRelevant = latestCompletedRace
+      && Number.isFinite(weekendSessionEndMs(latestCompletedRace))
+      && (now - weekendSessionEndMs(latestCompletedRace)) <= BETWEEN_RACES_WINDOW_MS;
+
+    const focusEvent = recentRaceStillRelevant
+      ? { ...primaryEvent, name: latestCompletedRace.meeting_name || primaryEvent.name }
+      : primaryEvent;
+    const weekendSessions = recentRaceStillRelevant
+      ? findWeekendSessionsForEvent({
+          sessions: seasonSessions,
+          event: { ...focusEvent, starts_at: latestCompletedRace.starts_at || focusEvent.starts_at },
+        })
+      : findWeekendSessionsForEvent({ sessions: seasonSessions, event: focusEvent });
+
+    return buildWeekendContextFromSessions({
+      primaryEvent: focusEvent,
+      weekendSessions,
+      now,
+      liveSession,
+    });
+  } catch {
+    return fallback;
+  }
 }
 
 async function getCachedLiveSnapshot({ cacheKey, loader, now }) {
@@ -580,6 +841,15 @@ async function buildDashboardPayload({
     };
   }
 
+  const primaryEvent = buildPrimaryEvent(selection.event, selection.state, liveSession);
+  const weekendContext = await buildWeekendContext({
+    events,
+    primaryEvent,
+    provider,
+    now,
+    liveSession,
+  });
+
   const payoutBoard = buildPayoutBoard({
     event: selection.event,
     selectionState: selection.state,
@@ -609,7 +879,8 @@ async function buildDashboardPayload({
     viewer: viewerShape,
     summary,
     standings,
-    primaryEvent: buildPrimaryEvent(selection.event, selection.state, liveSession),
+    primaryEvent,
+    weekendContext,
     liveSession,
     portfolio,
     payoutBoard,

@@ -189,6 +189,7 @@ test('GET /api/standings/dashboard returns participant summary, portfolio, and f
   assert.equal(payload.briefingMeta.mode, 'on_demand');
   assert.equal(payload.briefing.summary, 'Persistent participant briefing.');
   assert.equal(payload.briefing.phase, 'pre_race');
+  assert.equal(payload.briefing.bestReturnPath, 'You enter the weekend with the strongest net in the pool.');
   assert.equal(payload.briefingHistory.length, 1);
   assert.ok(payload.primaryEvent);
   assert.ok(Array.isArray(payload.payoutBoard.rules));
@@ -247,6 +248,7 @@ test('GET /api/standings/dashboard returns briefing history most recent first', 
   assert.equal(response.statusCode, 200);
   assert.equal(response.body.briefingHistory.length, 2);
   assert.equal(response.body.briefingHistory[0].summary, 'Newer saved briefing.');
+  assert.equal(response.body.briefingHistory[0].bestReturnPath, 'Newer item.');
   assert.equal(response.body.briefingHistory[0].phase, 'live');
   assert.equal(response.body.briefingHistory[1].summary, 'Older saved briefing.');
 });
@@ -477,6 +479,177 @@ test('selectPrimaryEvent ignores cancelled scoring events', async () => {
 
   assert.equal(selection.event.id, 2);
   assert.equal(selection.state, 'upcoming');
+});
+
+test('buildDashboardPayload derives executive briefing weekend phases across weekend states', async () => {
+  const { db, getActiveSeasonId, dashboardService } = setupDb();
+  const seasonId = getActiveSeasonId();
+  const viewerId = createParticipant(db, seasonId, {
+    name: 'Phase Viewer',
+    token: 'phase-viewer',
+    color: '#445566',
+  });
+
+  db.prepare(`
+    UPDATE events
+    SET external_event_id = CASE
+      WHEN round_number = 1 AND type = 'grand_prix' THEN '9001'
+      WHEN round_number = 2 AND type = 'sprint' THEN '9002'
+      WHEN round_number = 2 AND type = 'grand_prix' THEN '9003'
+      ELSE external_event_id
+    END
+    WHERE season_id = ?
+  `).run(seasonId);
+
+  const seasonSessions = [
+    {
+      meeting_key: 100,
+      meeting_name: 'Australian Grand Prix',
+      session_name: 'Practice 1',
+      starts_at: '2026-03-06T02:30:00Z',
+      ends_at: '2026-03-06T03:30:00Z',
+      date_start: '2026-03-06T02:30:00Z',
+      date_end: '2026-03-06T03:30:00Z',
+      event_type: 'practice',
+    },
+    {
+      meeting_key: 100,
+      meeting_name: 'Australian Grand Prix',
+      session_name: 'Practice 2',
+      starts_at: '2026-03-06T06:00:00Z',
+      ends_at: '2026-03-06T07:00:00Z',
+      date_start: '2026-03-06T06:00:00Z',
+      date_end: '2026-03-06T07:00:00Z',
+      event_type: 'practice',
+    },
+    {
+      meeting_key: 100,
+      meeting_name: 'Australian Grand Prix',
+      session_name: 'Qualifying',
+      starts_at: '2026-03-07T06:00:00Z',
+      ends_at: '2026-03-07T07:00:00Z',
+      date_start: '2026-03-07T06:00:00Z',
+      date_end: '2026-03-07T07:00:00Z',
+      event_type: 'qualifying',
+    },
+    {
+      meeting_key: 100,
+      meeting_name: 'Australian Grand Prix',
+      session_name: 'Race',
+      session_key: 9001,
+      starts_at: '2026-03-08T04:00:00Z',
+      ends_at: '2026-03-08T06:00:00Z',
+      date_start: '2026-03-08T04:00:00Z',
+      date_end: '2026-03-08T06:00:00Z',
+      event_type: 'grand_prix',
+    },
+    {
+      meeting_key: 200,
+      meeting_name: 'Chinese Grand Prix',
+      session_name: 'Practice 1',
+      starts_at: '2026-03-13T03:00:00Z',
+      ends_at: '2026-03-13T04:00:00Z',
+      date_start: '2026-03-13T03:00:00Z',
+      date_end: '2026-03-13T04:00:00Z',
+      event_type: 'practice',
+    },
+    {
+      meeting_key: 200,
+      meeting_name: 'Chinese Grand Prix',
+      session_name: 'Sprint Shootout',
+      starts_at: '2026-03-13T07:00:00Z',
+      ends_at: '2026-03-13T08:00:00Z',
+      date_start: '2026-03-13T07:00:00Z',
+      date_end: '2026-03-13T08:00:00Z',
+      event_type: 'sprint_qualifying',
+    },
+    {
+      meeting_key: 200,
+      meeting_name: 'Chinese Grand Prix',
+      session_name: 'Sprint',
+      session_key: 9002,
+      starts_at: '2026-03-14T03:00:00Z',
+      ends_at: '2026-03-14T04:00:00Z',
+      date_start: '2026-03-14T03:00:00Z',
+      date_end: '2026-03-14T04:00:00Z',
+      event_type: 'sprint',
+    },
+    {
+      meeting_key: 200,
+      meeting_name: 'Chinese Grand Prix',
+      session_name: 'Qualifying',
+      starts_at: '2026-03-14T07:00:00Z',
+      ends_at: '2026-03-14T08:00:00Z',
+      date_start: '2026-03-14T07:00:00Z',
+      date_end: '2026-03-14T08:00:00Z',
+      event_type: 'qualifying',
+    },
+    {
+      meeting_key: 200,
+      meeting_name: 'Chinese Grand Prix',
+      session_name: 'Race',
+      session_key: 9003,
+      starts_at: '2026-03-15T07:00:00Z',
+      ends_at: '2026-03-15T09:00:00Z',
+      date_start: '2026-03-15T07:00:00Z',
+      date_end: '2026-03-15T09:00:00Z',
+      event_type: 'grand_prix',
+    },
+  ];
+
+  const cases = [
+    ['before practice', '2026-03-05T12:00:00Z', 'before_practice'],
+    ['during practice', '2026-03-06T02:45:00Z', 'during_practice'],
+    ['before qualifying', '2026-03-07T04:00:00Z', 'before_qualifying'],
+    ['during qualifying', '2026-03-07T06:15:00Z', 'during_qualifying'],
+    ['after qualifying before race', '2026-03-07T08:30:00Z', 'after_qualifying_before_race'],
+    ['during race', '2026-03-08T04:30:00Z', 'during_race'],
+    ['immediate post race', '2026-03-09T00:00:00Z', 'immediate_post_race'],
+    ['between races', '2026-03-10T12:30:00Z', 'between_races'],
+    ['during sprint qualifying', '2026-03-13T07:15:00Z', 'during_sprint_qualifying'],
+    ['during sprint', '2026-03-14T03:15:00Z', 'during_sprint'],
+  ];
+
+  for (const [label, nowIso, expectedPhase] of cases) {
+    const currentMs = Date.parse(nowIso);
+    const provider = {
+      name: 'openf1',
+      async fetchSeasonSessions() {
+        return seasonSessions;
+      },
+      async fetchSessionMetadata(sessionKey) {
+        return seasonSessions.find((session) => Number(session.session_key) === Number(sessionKey)) || null;
+      },
+      async fetchLiveSessionSnapshot({ event }) {
+        return {
+          available: true,
+          isLive: true,
+          fetchedAt: new Date(currentMs).toISOString(),
+          headline: `${event?.name || 'Session'} live`,
+          statusText: 'Live session',
+          trackStatus: null,
+          driverStates: [],
+          leaders: [],
+          championshipDrivers: [],
+          ownedDrivers: [],
+        };
+      },
+    };
+
+    const payload = await dashboardService.buildDashboardPayload({
+      seasonId,
+      viewer: {
+        id: viewerId,
+        name: 'Phase Viewer',
+        color: '#445566',
+        is_admin: 0,
+      },
+      nowImpl: () => currentMs,
+      provider,
+    });
+
+    assert.equal(payload.weekendContext.phase, expectedPhase, label);
+  }
 });
 
 test('buildDashboardPayload resolves live grand prix payout board with ownership and draw pending state', async () => {
@@ -783,14 +956,12 @@ test('dashboard briefing service caches and refreshes on force', async () => {
       callCount += 1;
       return {
         available: true,
-        phase: 'live',
+        phase: 'during_race',
         title: `Briefing ${callCount}`,
+        headline: `briefing-${callCount}`,
         summary: `briefing-${callCount}`,
-        sections: [
-          { heading: 'Your Position', bullets: [`Bullet ${callCount}`] },
-          { heading: 'Scenarios', bullets: [`If item ${callCount}`] },
-          { heading: 'What To Watch', bullets: [`Watch ${callCount}`] },
-        ],
+        bestReturnPath: `return-${callCount}`,
+        capitalAtRisk: `risk-${callCount}`,
         generatedAt: '2026-03-07T00:00:00Z',
         source: 'test',
       };
@@ -812,9 +983,10 @@ test('dashboard briefing service caches and refreshes on force', async () => {
   const third = await service.getBriefing({ dashboardPayload, force: true });
 
   assert.match(first.text, /briefing-1/);
+  assert.match(first.text, /return-1/);
   assert.match(second.text, /briefing-1/);
   assert.equal(second.cached, true);
   assert.match(third.text, /briefing-2/);
-  assert.equal(third.phase, 'live');
+  assert.equal(third.phase, 'during_race');
   assert.equal(callCount, 2);
 });

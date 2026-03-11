@@ -1,5 +1,5 @@
 const crypto = require('crypto');
-const { generateDashboardBriefing } = require('../ai');
+const { generateDashboardBriefing, phaseLabel } = require('../ai');
 const {
   getDashboardBriefingHistory,
   getLatestDashboardBriefing,
@@ -10,13 +10,6 @@ const DEFAULT_TTL_MS = 30 * 60 * 1000;
 
 function hashPayload(payload) {
   return crypto.createHash('sha256').update(JSON.stringify(payload || {})).digest('hex');
-}
-
-function phaseLabel(phase) {
-  if (phase === 'pre_race') return 'Pre-race';
-  if (phase === 'live') return 'Live';
-  if (phase === 'post_race') return 'Post-race';
-  return 'Saved';
 }
 
 function normalizeSections(sections) {
@@ -31,16 +24,113 @@ function normalizeSections(sections) {
     .filter((section) => section.heading || section.bullets.length);
 }
 
-function composeBriefingText(content) {
-  const summary = String(content?.summary || '').trim();
-  const sectionLines = normalizeSections(content?.sections)
-    .flatMap((section) => [
-      section.heading ? `${section.heading}:` : null,
-      ...section.bullets.map((bullet) => `- ${bullet}`),
-    ])
-    .filter(Boolean);
+function firstSectionBullet(sections, heading) {
+  const match = normalizeSections(sections)
+    .find((section) => String(section.heading || '').trim().toLowerCase() === heading);
+  return String(match?.bullets?.[0] || '').trim();
+}
 
-  return [summary, ...sectionLines].filter(Boolean).join('\n').trim();
+function stripExecutiveLead(text, leads = []) {
+  let value = String(text || '').trim();
+  if (!value) return '';
+
+  leads.forEach((lead) => {
+    const escaped = String(lead || '').trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (!escaped) return;
+    value = value.replace(new RegExp(`^${escaped}\\s*[:\\-]\\s*`, 'i'), '').trim();
+  });
+
+  return value;
+}
+
+function normalizeExecutiveContent(content, row = null) {
+  const summary = String(content?.summary || row?.briefing_summary || '').trim();
+  const sections = normalizeSections(content?.sections);
+  const bestReturnPath = stripExecutiveLead(
+    content?.bestReturnPath || content?.best_return_path || content?.financialSnapshot || content?.financial_snapshot,
+    ['best return path', 'best swing', 'financial snapshot'],
+  )
+    || firstSectionBullet(sections, 'your position');
+  const capitalAtRisk = stripExecutiveLead(
+    content?.capitalAtRisk || content?.capital_at_risk || content?.whatMattersNow || content?.what_matters_now,
+    ['capital at risk', 'main risk', 'what matters now'],
+  )
+    || firstSectionBullet(sections, 'what to watch')
+    || firstSectionBullet(sections, 'scenarios');
+
+  return {
+    summary,
+    headline: stripExecutiveLead(content?.headline || summary, ['headline', 'summary']) || summary,
+    bestReturnPath,
+    capitalAtRisk,
+    sections,
+  };
+}
+
+function composeBriefingText(content) {
+  const executive = normalizeExecutiveContent(content);
+  const lines = [];
+
+  if (executive.headline) lines.push(executive.headline);
+  if (executive.bestReturnPath) lines.push(`Best Return Path: ${executive.bestReturnPath}`);
+  if (executive.capitalAtRisk) lines.push(`Capital At Risk: ${executive.capitalAtRisk}`);
+
+  if (!lines.length) {
+    executive.sections.forEach((section) => {
+      if (section.heading) lines.push(`${section.heading}:`);
+      section.bullets.forEach((bullet) => lines.push(`- ${bullet}`));
+    });
+  }
+
+  return lines.filter(Boolean).join('\n').trim();
+}
+
+function normalizeSavedBriefing(row) {
+  if (!row?.briefing_json && !row?.briefing_text) return null;
+
+  let content = null;
+  try {
+    content = row?.briefing_json ? JSON.parse(row.briefing_json) : null;
+  } catch {
+    content = null;
+  }
+
+  if (!content) {
+    const legacyText = String(row?.briefing_text || '').trim();
+    content = {
+      summary: legacyText,
+      sections: legacyText ? [{ heading: 'Saved Briefing', bullets: [legacyText] }] : [],
+    };
+  }
+
+  const executive = normalizeExecutiveContent(content, row);
+  const title = String(row?.briefing_title || '').trim() || (row?.event_name ? row.event_name : 'Dashboard Briefing');
+
+  return {
+    id: row.id || null,
+    available: true,
+    title,
+    headline: executive.headline,
+    summary: executive.headline || executive.summary,
+    bestReturnPath: executive.bestReturnPath,
+    capitalAtRisk: executive.capitalAtRisk,
+    financialSnapshot: executive.bestReturnPath,
+    whatMattersNow: executive.capitalAtRisk,
+    sections: executive.sections,
+    phase: row.briefing_phase || 'unknown',
+    phaseLabel: phaseLabel(row.briefing_phase),
+    text: composeBriefingText(executive),
+    generatedAt: row.generated_at || null,
+    source: row.source || 'persisted',
+    error: null,
+    cached: true,
+    snapshotHash: row.snapshot_hash || '',
+    persisted: true,
+    eventId: row.event_id || null,
+    eventName: row.event_name || null,
+    eventType: row.event_type || null,
+    eventStartsAt: row.event_starts_at || null,
+  };
 }
 
 function createDashboardBriefingService({
@@ -73,6 +163,16 @@ function createDashboardBriefingService({
             type: dashboardPayload.primaryEvent.type ?? null,
             dashboardStatus: dashboardPayload.primaryEvent.dashboardStatus ?? null,
             isLive: !!dashboardPayload.primaryEvent.isLive,
+          }
+        : null,
+      weekendContext: dashboardPayload?.weekendContext
+        ? {
+            phase: dashboardPayload.weekendContext.phase || null,
+            title: dashboardPayload.weekendContext.title || null,
+            meetingName: dashboardPayload.weekendContext.meetingName || null,
+            currentSessionName: dashboardPayload.weekendContext.currentSessionName || null,
+            nextSessionName: dashboardPayload.weekendContext.nextSessionName || null,
+            lastCompletedSessionName: dashboardPayload.weekendContext.lastCompletedSessionName || null,
           }
         : null,
       liveSession: dashboardPayload?.liveSession
@@ -121,6 +221,7 @@ function createDashboardBriefingService({
             netCents: dashboardPayload.portfolio.netCents ?? null,
             drivers: (dashboardPayload.portfolio.drivers || []).slice(0, 8).map((driver) => ({
               driver_id: driver.driver_id,
+              purchase_price_cents: driver.purchase_price_cents,
               total_earnings_cents: driver.total_earnings_cents,
               live: driver.live
                 ? {
@@ -133,49 +234,6 @@ function createDashboardBriefingService({
             })),
           }
         : null,
-    };
-  }
-
-  function normalizeSavedBriefing(row) {
-    if (!row?.briefing_json && !row?.briefing_text) return null;
-    let content = null;
-    try {
-      content = row?.briefing_json ? JSON.parse(row.briefing_json) : null;
-    } catch {
-      content = null;
-    }
-
-    if (!content) {
-      const legacyText = String(row?.briefing_text || '').trim();
-      content = {
-        summary: legacyText,
-        sections: legacyText ? [{ heading: 'Saved Briefing', bullets: [legacyText] }] : [],
-      };
-    }
-
-    const sections = normalizeSections(content.sections);
-    const summary = String(content.summary || row?.briefing_summary || '').trim();
-    const title = String(row?.briefing_title || '').trim() || (row?.event_name ? `${row.event_name} Briefing` : 'Dashboard Briefing');
-
-    return {
-      id: row.id || null,
-      available: true,
-      text: composeBriefingText({ summary, sections }),
-      title,
-      summary,
-      sections,
-      phase: row.briefing_phase || 'unknown',
-      phaseLabel: phaseLabel(row.briefing_phase),
-      generatedAt: row.generated_at || null,
-      source: row.source || 'persisted',
-      error: null,
-      cached: true,
-      snapshotHash: row.snapshot_hash || '',
-      persisted: true,
-      eventId: row.event_id || null,
-      eventName: row.event_name || null,
-      eventType: row.event_type || null,
-      eventStartsAt: row.event_starts_at || null,
     };
   }
 
@@ -220,13 +278,7 @@ function createDashboardBriefingService({
       if (saved && saved.snapshotHash === snapshotHash) {
         cache.set(cacheKey, {
           expiresAt: now + ttlMs,
-          value: {
-            available: saved.available,
-            text: saved.text,
-            generatedAt: saved.generatedAt,
-            source: saved.source,
-            error: saved.error,
-          },
+          value: { ...saved },
         });
         return saved;
       }
@@ -236,6 +288,7 @@ function createDashboardBriefingService({
       viewer: dashboardPayload?.viewer || null,
       summary: dashboardPayload?.summary || null,
       primaryEvent: dashboardPayload?.primaryEvent || null,
+      weekendContext: dashboardPayload?.weekendContext || null,
       liveSession: dashboardPayload?.liveSession || null,
       standings: dashboardPayload?.standings || [],
       portfolio: dashboardPayload?.portfolio || null,
@@ -246,12 +299,22 @@ function createDashboardBriefingService({
       available: !!briefing?.available,
       id: briefing?.id || null,
       title: briefing?.title || '',
-      summary: briefing?.summary || '',
+      headline: briefing?.headline || briefing?.summary || '',
+      summary: briefing?.summary || briefing?.headline || '',
+      bestReturnPath: briefing?.bestReturnPath || briefing?.financialSnapshot || '',
+      capitalAtRisk: briefing?.capitalAtRisk || briefing?.whatMattersNow || '',
+      financialSnapshot: briefing?.bestReturnPath || briefing?.financialSnapshot || '',
+      whatMattersNow: briefing?.capitalAtRisk || briefing?.whatMattersNow || '',
       sections: normalizeSections(briefing?.sections),
       phase: briefing?.phase || 'unknown',
       phaseLabel: phaseLabel(briefing?.phase),
       text: briefing?.text || composeBriefingText({
-        summary: briefing?.summary || '',
+        headline: briefing?.headline || briefing?.summary || '',
+        summary: briefing?.summary || briefing?.headline || '',
+        bestReturnPath: briefing?.bestReturnPath || briefing?.financialSnapshot || '',
+        capitalAtRisk: briefing?.capitalAtRisk || briefing?.whatMattersNow || '',
+        financialSnapshot: briefing?.bestReturnPath || briefing?.financialSnapshot || '',
+        whatMattersNow: briefing?.capitalAtRisk || briefing?.whatMattersNow || '',
         sections: briefing?.sections || [],
       }),
       generatedAt: briefing?.generatedAt || null,
@@ -276,7 +339,12 @@ function createDashboardBriefingService({
         title: value.title,
         summary: value.summary,
         content: {
+          headline: value.headline,
           summary: value.summary,
+          bestReturnPath: value.bestReturnPath,
+          capitalAtRisk: value.capitalAtRisk,
+          financialSnapshot: value.bestReturnPath,
+          whatMattersNow: value.capitalAtRisk,
           sections: value.sections,
         },
         source: value.source,

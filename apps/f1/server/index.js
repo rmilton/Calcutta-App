@@ -1,7 +1,11 @@
 const path = require('path');
+const dotenv = require('dotenv');
 
-require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
-require('dotenv').config({ path: path.join(__dirname, '..', '..', '..', '.env') });
+const { envSearchPaths } = require('./lib/localDevPaths');
+
+envSearchPaths().forEach((envPath) => {
+  dotenv.config({ path: envPath });
+});
 
 process.on('uncaughtException', (err) => console.error('[uncaughtException]', err));
 process.on('unhandledRejection', (reason) => console.error('[unhandledRejection]', reason));

@@ -20,6 +20,7 @@ const { init } = require('./db');
 const { setupSocket } = require('./socket');
 const { createAuctionService } = require('./services/auctionService');
 const { createResultsAutoPollService } = require('./services/resultsAutoPollService');
+const { createDiscordService } = require('./services/discordService');
 const { createResultsProvider } = require('./providers');
 const { rescoreSeasonEvents } = require('./services/scoringService');
 
@@ -72,6 +73,9 @@ app.set('resultsProvider', resultsProvider);
 const resultsAutoPollService = createResultsAutoPollService({ provider: resultsProvider, io });
 resultsAutoPollService.start();
 app.set('resultsAutoPollService', resultsAutoPollService);
+const discordService = createDiscordService();
+discordService.start().catch((err) => console.error('[discord] Failed to start:', err.message));
+app.set('discordService', discordService);
 setupSocket(io, auctionService);
 
 if (initResult?.payoutModelMigrated || initResult?.payoutRandomAdjusted) {
@@ -99,6 +103,7 @@ function shutdown(signal) {
   if (isShuttingDown) return;
   isShuttingDown = true;
   resultsAutoPollService.stop();
+  discordService.stop();
 
   console.log(`[shutdown] Received ${signal}, closing server...`);
 

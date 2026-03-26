@@ -12,6 +12,7 @@ const {
   getEventResults,
   getOwnershipBySeason,
 } = require('../db');
+const eventBus = require('../eventBus');
 
 const GP_POINTS = [25, 18, 15, 12, 10, 8, 6, 4, 2, 1];
 const SPRINT_POINTS = [8, 7, 6, 5, 4, 3, 2, 1];
@@ -476,6 +477,7 @@ function syncEventFromProvider({ seasonId, eventId, provider, io, ignoreLock = f
       io?.emit('event:scored', { eventId, roundNumber: event.round_number, name: event.name });
       io?.emit('standings:update');
       io?.emit('results:sync:done', { eventId, ok: true, rowCount: upsert.rowCount });
+      eventBus.emit('event:scored', { seasonId, eventId });
       return { ok: true, rowCount: upsert.rowCount };
     })
     .catch((error) => {

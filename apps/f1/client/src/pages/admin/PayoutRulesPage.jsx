@@ -15,8 +15,7 @@ function totalDelta(total, target) {
   return `${sign}${delta}`;
 }
 
-export default function PayoutRulesPage() {
-  const { rules, updateRules, saveRules, loading, hasLoaded } = useAdminOutletContext();
+export function PayoutRulesContent({ rules, updateRules, saveRules, loading, hasLoaded }) {
   const [isLocked, setIsLocked] = useState(true);
 
   const gpTotal = useMemo(() => (rules?.grand_prix || []).reduce((sum, rule) => sum + Number(rule.bps || 0), 0), [rules]);
@@ -28,34 +27,24 @@ export default function PayoutRulesPage() {
   }
 
   if (!rules) {
-    return <section className="loading-panel">No payout rules found.</section>;
+    return <p className="muted">No payout rules found.</p>;
   }
 
   return (
-    <section className="panel stack">
+    <div className="stack">
       <div className="row between wrap gap-sm">
-        <div>
-          <h2>Payout Rules</h2>
-          <p className="muted">1% = 100 bps. Targets: GP 350 bps, Sprint 150 bps, Season bonus 700 bps.</p>
-        </div>
-        <div className="row wrap gap-sm payout-lock-controls">
-          <span className={`bps-lock-pill ${isLocked ? 'locked' : 'unlocked'}`}>
-            {isLocked ? 'Locked' : 'Unlocked'}
-          </span>
-          <button
-            type="button"
-            className={`btn ${isLocked ? '' : 'btn-outline'}`}
-            onClick={() => setIsLocked((prev) => !prev)}
-          >
-            {isLocked ? 'Unlock BPS Editing' : 'Lock BPS Editing'}
-          </button>
-        </div>
+        <p className="muted small">1% = 100 bps. Targets: GP 350 bps, Sprint 150 bps, Season bonus 700 bps.</p>
+        <button
+          type="button"
+          className={`btn ${isLocked ? '' : 'btn-outline'}`}
+          onClick={() => setIsLocked((prev) => !prev)}
+        >
+          {isLocked ? 'Unlock Editing' : 'Lock Editing'}
+        </button>
       </div>
-      <p className="muted small">
-        {isLocked
-          ? 'Editing is locked to prevent accidental rule changes.'
-          : 'Editing is enabled. Save your changes, then lock editing again.'}
-      </p>
+      {!isLocked && (
+        <p className="muted small">Editing enabled — save your changes, then lock again.</p>
+      )}
 
       <div className="bps-summary">
         <h3>Grand Prix</h3>
@@ -70,13 +59,7 @@ export default function PayoutRulesPage() {
             {(rules.grand_prix || []).map((rule) => (
               <tr key={rule.id}>
                 <td>{categoryLabel(rule.category)}</td>
-                <td>
-                  <input
-                    value={rule.bps}
-                    disabled={isLocked}
-                    onChange={(e) => updateRules('grand_prix', rule.id, 'bps', e.target.value)}
-                  />
-                </td>
+                <td><input value={rule.bps} disabled={isLocked} onChange={(e) => updateRules('grand_prix', rule.id, 'bps', e.target.value)} /></td>
               </tr>
             ))}
           </tbody>
@@ -96,13 +79,7 @@ export default function PayoutRulesPage() {
             {(rules.sprint || []).map((rule) => (
               <tr key={rule.id}>
                 <td>{categoryLabel(rule.category)}</td>
-                <td>
-                  <input
-                    value={rule.bps}
-                    disabled={isLocked}
-                    onChange={(e) => updateRules('sprint', rule.id, 'bps', e.target.value)}
-                  />
-                </td>
+                <td><input value={rule.bps} disabled={isLocked} onChange={(e) => updateRules('sprint', rule.id, 'bps', e.target.value)} /></td>
               </tr>
             ))}
           </tbody>
@@ -122,20 +99,24 @@ export default function PayoutRulesPage() {
             {(rules.season_bonus || []).map((rule) => (
               <tr key={rule.id}>
                 <td>{categoryLabel(rule.category)}</td>
-                <td>
-                  <input
-                    value={rule.bps}
-                    disabled={isLocked}
-                    onChange={(e) => updateRules('season_bonus', rule.id, 'bps', e.target.value)}
-                  />
-                </td>
+                <td><input value={rule.bps} disabled={isLocked} onChange={(e) => updateRules('season_bonus', rule.id, 'bps', e.target.value)} /></td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
 
-      <button className="btn" onClick={saveRules} disabled={isLocked}>Save Rules</button>
+      <button className="btn btn-outline" onClick={saveRules} disabled={isLocked}>Save Rules</button>
+    </div>
+  );
+}
+
+export default function PayoutRulesPage() {
+  const { rules, updateRules, saveRules, loading, hasLoaded } = useAdminOutletContext();
+  return (
+    <section className="panel stack">
+      <h2>Payout Rules</h2>
+      <PayoutRulesContent rules={rules} updateRules={updateRules} saveRules={saveRules} loading={loading} hasLoaded={hasLoaded} />
     </section>
   );
 }

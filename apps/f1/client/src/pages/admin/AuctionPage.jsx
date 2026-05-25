@@ -57,11 +57,7 @@ export default function AuctionPage() {
     setInviteBusy(true);
     try {
       if (navigator.share) {
-        await navigator.share({
-          title: 'Join the F1 Calcutta',
-          text: 'Use this link to join the F1 Calcutta pool.',
-          url: inviteLink,
-        });
+        await navigator.share({ title: 'Join the F1 Calcutta', text: 'Use this link to join the F1 Calcutta pool.', url: inviteLink });
         setMessage('Invite link shared.');
       } else {
         await navigator.clipboard.writeText(inviteLink);
@@ -99,72 +95,115 @@ export default function AuctionPage() {
 
   return (
     <div className="stack-lg">
+
+      {/* Participants — invite + roster together */}
       <section className="panel stack">
-        <div className="row wrap gap-sm participants-panel-header">
+        <div className="row between wrap gap-sm">
           <div>
-            <h2>Invite Participants</h2>
+            <h2>Participants</h2>
             <p className="muted">
               {isLoginLocked
-                ? 'Invite code still works for known participants, but new participant creation is now disabled.'
-                : 'Share the pool link or send the invite code directly.'}
+                ? 'Auction complete — new sign-ups disabled. Invite code still works for existing participants.'
+                : 'Share the invite link or code to let participants join.'}
             </p>
           </div>
+          <span className="meta-pill">{joinedParticipants.length} joined</span>
         </div>
-        <div className="invite-share-panel stack">
-          <div className="invite-share-grid">
-            <div className="invite-share-card">
-              <span className="label">Invite Code</span>
-              <strong>{settings?.invite_code || '—'}</strong>
-            </div>
-            <div className="invite-share-card invite-share-link-card">
-              <span className="label">Shareable Link</span>
-              <strong className="invite-share-link">{inviteLink || 'Unavailable'}</strong>
-            </div>
+
+        <div className="invite-share-grid">
+          <div className="invite-share-card">
+            <span className="label">Invite Code</span>
+            <strong>{settings?.invite_code || '—'}</strong>
           </div>
-          <div className="row wrap gap-sm">
-            <button
-              className="btn"
-              type="button"
-              onClick={handleCopyInviteLink}
-              disabled={!inviteLink || inviteBusy}
-            >
-              Copy Invite Link
-            </button>
-            <button
-              className="btn btn-outline"
-              type="button"
-              onClick={handleShareInviteLink}
-              disabled={!inviteLink || inviteBusy}
-            >
-              Share Invite Link
-            </button>
+          <div className="invite-share-card invite-share-link-card">
+            <span className="label">Shareable Link</span>
+            <strong className="invite-share-link">{inviteLink || 'Unavailable'}</strong>
           </div>
         </div>
+        <div className="row wrap gap-sm">
+          <button className="btn" type="button" onClick={handleCopyInviteLink} disabled={!inviteLink || inviteBusy}>
+            Copy Invite Link
+          </button>
+          <button className="btn btn-outline" type="button" onClick={handleShareInviteLink} disabled={!inviteLink || inviteBusy}>
+            Share Invite Link
+          </button>
+        </div>
+
+        {noAccessParticipants.length > 0 || duplicateParticipants.length > 0 ? (
+          <div className="note-panel">
+            {noAccessParticipants.length > 0 && (
+              <div>{noAccessParticipants.length} participant{noAccessParticipants.length === 1 ? '' : 's'} without an access link yet.</div>
+            )}
+            {duplicateParticipants.length > 0 && (
+              <div className="error-text">{duplicateParticipants.length} duplicate name{duplicateParticipants.length === 1 ? '' : 's'} — needs cleanup.</div>
+            )}
+          </div>
+        ) : null}
+
+        {joinedParticipants.length ? (
+          <div className="admin-participant-list">
+            {joinedParticipants.map((participant) => (
+              <div key={participant.id} className="admin-participant-row">
+                <div className="row gap-sm admin-participant-identity">
+                  <ParticipantAvatar name={participant.name} color={participant.color} size={28} />
+                  <div className="stack-xs">
+                    <strong>{participant.name}</strong>
+                    <span className="muted">
+                      {participant.has_session_token ? 'Access issued' : 'No access issued yet'}
+                    </span>
+                    {Number(participant.duplicate_name_count || 0) > 1 ? (
+                      <span className="error-text small">Duplicate name match risk in roster</span>
+                    ) : null}
+                  </div>
+                </div>
+                <div className="row wrap gap-sm">
+                  <button
+                    className="btn btn-outline"
+                    type="button"
+                    onClick={() => handleResetAccess(participant)}
+                  >
+                    {participant.has_session_token ? 'Reset Access Link' : 'Create Access Link'}
+                  </button>
+                  <span
+                    className="admin-participant-swatch"
+                    style={{ backgroundColor: participant.color }}
+                    aria-hidden="true"
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="note-panel">No participants have joined yet.</div>
+        )}
       </section>
 
+      {/* Auction Controls */}
       <section className="panel stack">
         <h2>Auction Controls</h2>
-        <div className="row wrap gap-sm">
+
+        <div className="admin-btn-group">
           <button className="btn" onClick={() => runAuctionAction('/admin/auction/start')}>Open</button>
           <button className="btn btn-outline" onClick={() => runAuctionAction('/admin/auction/pause')}>Pause</button>
+          <div className="admin-btn-group-divider" aria-hidden="true" />
           <button className="btn btn-outline" onClick={() => runAuctionAction('/admin/auction/next')}>Start Next Driver</button>
-          <button className="btn btn-outline" onClick={() => runAuctionAction('/admin/auction/shuffle')}>Shuffle Pending Order</button>
+          <button className="btn btn-outline" onClick={() => runAuctionAction('/admin/auction/shuffle')}>Shuffle Order</button>
           <button className="btn btn-outline" onClick={() => runAuctionAction('/admin/auction/close')}>Close Active</button>
-          <a className="btn btn-outline" href={auctionResultsExportHref()}>Download Auction Results CSV</a>
+          <div className="admin-btn-group-divider" aria-hidden="true" />
+          <a className="btn btn-outline" href={auctionResultsExportHref()}>Export Results CSV</a>
         </div>
+
         <div className={`note-panel ${isRosterLocked ? 'note-panel-warning' : ''}`}>
           <strong>Season Roster {isRosterLocked ? 'Locked' : 'Unlocked'}</strong>
           <div className="muted small">
             {isRosterLocked
-              ? 'Refresh Drivers is now intended to stay off for the season unless you deliberately unlock the roster.'
+              ? 'Roster is locked for the season. Only unlock if you need to rebuild drivers before the season starts.'
               : 'You can still refresh or rebuild the driver roster before the real season starts.'}
           </div>
-          <div className="row wrap gap-sm">
+          <div className="row wrap gap-sm" style={{ marginTop: '0.5rem' }}>
             <button
               className="btn btn-outline"
-              onClick={() => {
-                saveSettingsPatch({ auction_roster_locked: isRosterLocked ? 0 : 1 });
-              }}
+              onClick={() => saveSettingsPatch({ auction_roster_locked: isRosterLocked ? 0 : 1 })}
             >
               {isRosterLocked ? 'Unlock Season Roster' : 'Lock Season Roster'}
             </button>
@@ -172,6 +211,7 @@ export default function AuctionPage() {
         </div>
       </section>
 
+      {/* Auction Settings */}
       <section className="panel stack">
         <h2>Auction Settings</h2>
         <div className="grid-3">
@@ -208,71 +248,11 @@ export default function AuctionPage() {
             Auto Advance
           </label>
         </div>
-        <button className="btn" onClick={saveSettings}>Save Settings</button>
+        <div>
+          <button className="btn btn-outline" onClick={saveSettings}>Save Settings</button>
+        </div>
       </section>
 
-      <section className="panel stack">
-        <div className="row wrap gap-sm participants-panel-header">
-          <div>
-            <h2>Joined Participants</h2>
-            <p className="muted">Live participant roster for the current auction pool.</p>
-          </div>
-          <span className="meta-pill">{joinedParticipants.length} joined</span>
-        </div>
-        <div className={`note-panel ${isLoginLocked ? 'note-panel-warning' : ''}`}>
-          <strong>Login Locked To Existing Participants</strong>
-          <div className="muted small">
-            {isLoginLocked
-              ? 'The auction is complete. Join now requires an exact roster name match and will not create a new participant.'
-              : 'Before the auction is complete, the join screen can still create a new participant from a valid invite code and name.'}
-          </div>
-          <div className="muted small">
-            {noAccessParticipants.length} participant{noAccessParticipants.length === 1 ? '' : 's'} without access issued yet.
-            {' '}
-            {duplicateParticipants.length
-              ? `${duplicateParticipants.length} duplicate-name warning${duplicateParticipants.length === 1 ? '' : 's'} need cleanup.`
-              : 'No duplicate names detected.'}
-          </div>
-        </div>
-        {joinedParticipants.length ? (
-          <div className="admin-participant-list">
-            {joinedParticipants.map((participant) => (
-              <div key={participant.id} className="admin-participant-row">
-                <div className="row gap-sm admin-participant-identity">
-                  <ParticipantAvatar name={participant.name} color={participant.color} size={28} />
-                  <div className="stack-xs">
-                    <strong>{participant.name}</strong>
-                    <span className="muted">
-                      {participant.has_session_token ? 'Access issued' : 'No access issued yet'}
-                    </span>
-                    {Number(participant.duplicate_name_count || 0) > 1 ? (
-                      <span className="error-text small">Duplicate name match risk in roster</span>
-                    ) : null}
-                  </div>
-                </div>
-                <div className="row wrap gap-sm">
-                  <button
-                    className="btn btn-outline"
-                    type="button"
-                    onClick={() => handleResetAccess(participant)}
-                  >
-                    {participant.has_session_token ? 'Reset Access Link' : 'Create Access Link'}
-                  </button>
-                  <span
-                    className="admin-participant-swatch"
-                    style={{ backgroundColor: participant.color }}
-                    aria-hidden="true"
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="note-panel">
-            No non-admin participants have joined yet.
-          </div>
-        )}
-      </section>
     </div>
   );
 }

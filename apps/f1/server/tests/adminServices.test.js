@@ -130,6 +130,12 @@ test('results admin syncNext skips cancelled events', async () => {
 
   db.prepare(`
     UPDATE events
+    SET starts_at = '2999-01-01T00:00:00Z',
+        lock_at = '2999-01-01T00:00:00Z'
+    WHERE season_id = ? AND id NOT IN (?, ?)
+  `).run(seasonId, events[0].id, events[1].id);
+  db.prepare(`
+    UPDATE events
     SET status = 'cancelled',
         cancelled_at = 1234567890,
         starts_at = '2000-01-01T00:00:00Z',

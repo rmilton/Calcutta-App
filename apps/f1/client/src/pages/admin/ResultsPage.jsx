@@ -16,12 +16,7 @@ function formatEventTime(value) {
   if (!value) return 'TBD';
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return 'TBD';
-  return date.toLocaleString([], {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
+  return date.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
 function formatRefreshTime(value) {
@@ -31,12 +26,7 @@ function formatRefreshTime(value) {
     ? new Date(numeric)
     : new Date(value);
   if (Number.isNaN(date.getTime())) return 'Not refreshed yet';
-  return date.toLocaleString([], {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-  });
+  return date.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
 function ordinal(value) {
@@ -60,7 +50,6 @@ function fmtBps(value) {
 function confirmEventCancellation(eventName) {
   const confirmed = window.confirm(`Mark ${eventName} as cancelled and redistribute its payout value?`);
   if (!confirmed) return false;
-
   const confirmationText = window.prompt('Type CANCEL to confirm this event should be marked cancelled.', '');
   return confirmationText === 'CANCEL';
 }
@@ -97,15 +86,9 @@ export default function ResultsPage() {
     const gpCount = cancelledEvents.filter((event) => event.type === 'grand_prix').length;
     const sprintCount = cancelledEvents.filter((event) => event.type === 'sprint').length;
     const bonusRolloverCents = cancelledEvents.reduce(
-      (sum, event) => sum + Number(event.rolled_to_season_bonus_cents || 0),
-      0,
+      (sum, event) => sum + Number(event.rolled_to_season_bonus_cents || 0), 0,
     );
-
-    return {
-      gpCount,
-      sprintCount,
-      bonusRolloverCents,
-    };
+    return { gpCount, sprintCount, bonusRolloverCents };
   }, [events]);
 
   if (loading && !hasLoaded) {
@@ -114,10 +97,12 @@ export default function ResultsPage() {
 
   return (
     <div className="stack-lg">
+
+      {/* Primary action toolbar */}
       <section className="panel stack">
-        <div className="row between wrap gap-sm">
-          <h2>Results Sync</h2>
-          <div className="row wrap gap-sm">
+        <div className="admin-action-toolbar">
+          <h2 className="admin-action-toolbar-title">Race Weekend</h2>
+          <div className="admin-action-toolbar-actions">
             <button
               className="btn btn-outline"
               onClick={() => runAndReload(() => refreshDrivers())}
@@ -126,29 +111,19 @@ export default function ResultsPage() {
             >
               Refresh Drivers
             </button>
-            <button
-              className="btn btn-outline"
-              onClick={() => runAndReload(() => refreshSchedule())}
-            >
+            <button className="btn btn-outline" onClick={() => runAndReload(() => refreshSchedule())}>
               Refresh Schedule
             </button>
-            <button
-              className="btn"
-              onClick={() => runAndReload(() => syncNext())}
-            >
+            <button className="btn" onClick={() => runAndReload(() => syncNext())}>
               Sync Next Available
             </button>
-            <button
-              className="btn btn-outline"
-              onClick={() => runAndReload(() => syncNext({ force: true }))}
-            >
-              Advance Next (Force)
+            <button className="btn btn-outline" onClick={() => runAndReload(() => syncNext({ force: true }))}>
+              Force Advance
             </button>
-            <a className="btn btn-outline" href={databaseBackupHref()}>
-              Download DB Backup
-            </a>
           </div>
         </div>
+
+        {/* Status notes */}
         <div className={`note-panel ${isDriverRosterFrozen ? 'note-panel-warning' : ''}`}>
           <strong>Driver Roster {isDriverRosterFrozen ? 'Frozen' : 'Open'}</strong>
           <div className="muted small">
@@ -156,23 +131,25 @@ export default function ResultsPage() {
           </div>
           {isDriverRosterFrozen ? (
             <div className="muted small">
-              Activity counts: bids {driverRosterGuard?.season_activity?.bids || 0}, ownership {driverRosterGuard?.season_activity?.ownership || 0}, results {driverRosterGuard?.season_activity?.eventResults || 0}, event payouts {driverRosterGuard?.season_activity?.eventPayouts || 0}.
+              Bids {driverRosterGuard?.season_activity?.bids || 0} · Ownership {driverRosterGuard?.season_activity?.ownership || 0} · Results {driverRosterGuard?.season_activity?.eventResults || 0} · Payouts {driverRosterGuard?.season_activity?.eventPayouts || 0}
             </div>
           ) : null}
         </div>
-        <div className={`note-panel ${(cancellationSummary.gpCount || cancellationSummary.sprintCount) ? 'note-panel-warning' : ''}`}>
-          <strong>Cancellation Summary</strong>
-          <div className="muted small">
-            Cancelled grand prix events: {cancellationSummary.gpCount}. Cancelled sprint events: {cancellationSummary.sprintCount}.
+
+        {(cancellationSummary.gpCount || cancellationSummary.sprintCount) ? (
+          <div className="note-panel note-panel-warning">
+            <strong>Cancellation Summary</strong>
+            <div className="muted small">
+              {cancellationSummary.gpCount} grand prix cancelled · {cancellationSummary.sprintCount} sprint cancelled.
+              {' '}
+              {cancellationSummary.bonusRolloverCents
+                ? `${fmtCents(cancellationSummary.bonusRolloverCents)} rolling into season bonuses.`
+                : 'No value rolling into season bonuses.'}
+            </div>
           </div>
-          <div className="muted small">
-            Future unscored events already include same-type redistribution in their effective payout preview.
-            {' '}
-            {cancellationSummary.bonusRolloverCents
-              ? `${fmtCents(cancellationSummary.bonusRolloverCents)} currently rolls into season bonuses because no same-type events remain.`
-              : 'No cancelled-event value is currently rolling into season bonuses.'}
-          </div>
-        </div>
+        ) : null}
+
+        {/* Provider status */}
         <div className="grid-3 results-provider-grid">
           <div className="strip-item">
             <span className="label">Active Provider</span>
@@ -201,11 +178,13 @@ export default function ResultsPage() {
             <span className="muted small">
               {providerStatus?.auto_poll?.message
                 || (providerStatus?.auto_poll?.enabled
-                  ? `Running every ${providerStatus?.auto_poll?.intervalSeconds || 0}s.`
-                  : 'Auto-poll is off.')}
+                  ? `Every ${providerStatus?.auto_poll?.intervalSeconds || 0}s`
+                  : 'Auto-poll off')}
             </span>
           </div>
         </div>
+
+        {/* Collapsible detail lists */}
         <div className="stack">
           <details className="admin-collapsible" open={refreshedDrivers.length > 0}>
             <summary className="admin-collapsible-summary">
@@ -218,9 +197,7 @@ export default function ResultsPage() {
                 </div>
               </div>
               <div className="admin-collapsible-meta">
-                <span className="admin-collapsible-time">
-                  {formatRefreshTime(providerStatus?.last_driver_refresh?.updated_at)}
-                </span>
+                <span className="admin-collapsible-time">{formatRefreshTime(providerStatus?.last_driver_refresh?.updated_at)}</span>
                 <span className="admin-collapsible-count">{refreshedDrivers.length}</span>
               </div>
             </summary>
@@ -230,15 +207,13 @@ export default function ResultsPage() {
                   <li key={`${driver.external_id}-${driver.code || driver.name}`}>
                     <div>
                       <strong>{driver.name}</strong>
-                      <div className="muted small">
-                        {driver.code} • {driver.team_name}
-                      </div>
+                      <div className="muted small">{driver.code} • {driver.team_name}</div>
                     </div>
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="muted small">Run `Refresh Drivers` to inspect the provider driver list here.</p>
+              <p className="muted small">Run Refresh Drivers to inspect the provider driver list here.</p>
             )}
           </details>
 
@@ -246,14 +221,10 @@ export default function ResultsPage() {
             <summary className="admin-collapsible-summary">
               <div>
                 <strong>Season Events</strong>
-                <div className="muted small">
-                  Current F1 event list for sync, review, and force-sync actions.
-                </div>
+                <div className="muted small">Per-event sync, force-sync, and cancellation controls.</div>
               </div>
               <div className="admin-collapsible-meta">
-                <span className="admin-collapsible-time">
-                  {formatRefreshTime(providerStatus?.last_schedule_refresh?.updated_at)}
-                </span>
+                <span className="admin-collapsible-time">{formatRefreshTime(providerStatus?.last_schedule_refresh?.updated_at)}</span>
                 <span className="admin-collapsible-count">{events?.length || 0}</span>
               </div>
             </summary>
@@ -264,19 +235,19 @@ export default function ResultsPage() {
                     <div>
                       <strong>R{event.round_number}</strong> {event.name}
                       <div className="muted small">
-                        {eventTypeLabel(event.type)} • {event.status} • {formatEventTime(event.starts_at)} • payout {fmtCents(event.total_payout_cents || 0)}
+                        {eventTypeLabel(event.type)} · {event.status} · {formatEventTime(event.starts_at)} · {fmtCents(event.total_payout_cents || 0)}
                       </div>
                       {event.status !== 'scored' && event.status !== 'cancelled' ? (
                         <div className="muted small">
-                          Base {fmtBps(event.base_total_bps)} bps • Effective {fmtBps(event.effective_total_bps)} bps • Redistributed in {fmtCents(event.redistributed_pool_cents || 0)}
+                          Base {fmtBps(event.base_total_bps)} bps · Effective {fmtBps(event.effective_total_bps)} bps · Redistributed in {fmtCents(event.redistributed_pool_cents || 0)}
                         </div>
                       ) : null}
                       {event.status === 'cancelled' ? (
                         <div className="muted small">
-                          Cancelled payout value: {fmtCents(event.redistributed_outbound_cents || 0)}
+                          Cancelled value: {fmtCents(event.redistributed_outbound_cents || 0)}
                           {event.rolled_to_season_bonus_cents
-                            ? ` • Season bonus rollover ${fmtCents(event.rolled_to_season_bonus_cents)}`
-                            : ' • Reassigned to future same-type events'}
+                            ? ` · Season bonus rollover ${fmtCents(event.rolled_to_season_bonus_cents)}`
+                            : ' · Reassigned to future same-type events'}
                         </div>
                       ) : null}
                       <div className="muted small">
@@ -287,9 +258,7 @@ export default function ResultsPage() {
                           <summary className="admin-collapsible-summary">
                             <div>
                               <strong>Payout BPS Structure</strong>
-                              <div className="muted small">
-                                {event.payout_preview_rules.length} categories. Collapsed by default to keep the event list shorter.
-                              </div>
+                              <div className="muted small">{event.payout_preview_rules.length} categories</div>
                             </div>
                           </summary>
                           <ul className="list tight muted small">
@@ -308,15 +277,12 @@ export default function ResultsPage() {
                         className="btn btn-outline"
                         onClick={() => runAndReload(() => drawRandomPosition(event.id))}
                         disabled={Boolean(event.random_bonus_position) || event.status === 'cancelled' || event.status === 'scored'}
-                        title={event.random_bonus_position ? `Random bonus already drawn at ${ordinal(event.random_bonus_position)}.` : 'Draw and persist the random bonus position before the race starts'}
+                        title={event.random_bonus_position ? `Random bonus: ${ordinal(event.random_bonus_position)}` : 'Draw random bonus position before the race'}
                       >
                         {event.random_bonus_position ? `Random ${ordinal(event.random_bonus_position)}` : 'Draw Random'}
                       </button>
                       {event.status === 'cancelled' ? (
-                        <button
-                          className="btn btn-outline"
-                          onClick={() => runAndReload(() => restoreEvent(event.id))}
-                        >
+                        <button className="btn btn-outline" onClick={() => runAndReload(() => restoreEvent(event.id))}>
                           Restore
                         </button>
                       ) : (
@@ -336,7 +302,7 @@ export default function ResultsPage() {
                             Force Sync
                           </button>
                           <button
-                            className="btn btn-outline"
+                            className="btn btn-danger"
                             onClick={() => {
                               const confirmed = confirmEventCancellation(event.name);
                               if (!confirmed) return Promise.resolve();
@@ -344,7 +310,7 @@ export default function ResultsPage() {
                             }}
                             disabled={event.status === 'scored'}
                           >
-                            Mark Cancelled
+                            Cancel
                           </button>
                         </>
                       )}
@@ -358,6 +324,18 @@ export default function ResultsPage() {
           </details>
         </div>
       </section>
+
+      {/* DB backup — utility, separated from operational controls */}
+      <section className="panel stack">
+        <div className="row between wrap gap-sm">
+          <div>
+            <h3>Database Backup</h3>
+            <p className="muted small">Download a full SQLite backup before making significant changes.</p>
+          </div>
+          <a className="btn btn-outline" href={databaseBackupHref()}>Download DB Backup</a>
+        </div>
+      </section>
+
     </div>
   );
 }

@@ -38,8 +38,7 @@ function isInactiveRaceOnlyDriver(driver) {
   return Number(driver?.driver_active) === 0;
 }
 
-export default function PayoutAuditPage() {
-  const { events, loading, hasLoaded } = useAdminOutletContext();
+export function PayoutAuditContent({ events, loading, hasLoaded }) {
   const [selectedEventId, setSelectedEventId] = useState('');
   const [eventDetail, setEventDetail] = useState(null);
   const [detailLoading, setDetailLoading] = useState(false);
@@ -124,12 +123,8 @@ export default function PayoutAuditPage() {
   }
 
   return (
-    <section className="panel stack-lg">
+    <div className="stack-lg">
       <div className="row between wrap gap-sm">
-        <div>
-          <h2>Payout Audit</h2>
-          <p className="muted small">Per-event payout rule resolution, split math, and distribution audit trail.</p>
-        </div>
         <label>
           Event
           <select
@@ -150,9 +145,7 @@ export default function PayoutAuditPage() {
             className={`btn btn-outline ${selectedEventId ? '' : 'btn-disabled-link'}`}
             href={selectedEventId ? payoutAuditExportHref(selectedEventId) : undefined}
             aria-disabled={!selectedEventId}
-            onClick={(event) => {
-              if (!selectedEventId) event.preventDefault();
-            }}
+            onClick={(event) => { if (!selectedEventId) event.preventDefault(); }}
           >
             Download CSV
           </a>
@@ -160,9 +153,7 @@ export default function PayoutAuditPage() {
             className={`btn btn-outline ${selectedEventId ? '' : 'btn-disabled-link'}`}
             href={selectedEventId ? payoutAuditWinnerExportHref(selectedEventId) : undefined}
             aria-disabled={!selectedEventId}
-            onClick={(event) => {
-              if (!selectedEventId) event.preventDefault();
-            }}
+            onClick={(event) => { if (!selectedEventId) event.preventDefault(); }}
           >
             Download Winner CSV
           </a>
@@ -256,19 +247,14 @@ export default function PayoutAuditPage() {
                                 ) : null}
                                 <div className="muted small">
                                   {winner.team_name || 'Team N/A'}
-                                  {' • '}
-                                  Finish {winner.finish_position ?? 'N/A'}
-                                  {' • '}
-                                  Start {winner.start_position ?? 'N/A'}
-                                  {' • '}
-                                  Gain {winner.positions_gained ?? 'N/A'}
+                                  {' • '}Finish {winner.finish_position ?? 'N/A'}
+                                  {' • '}Start {winner.start_position ?? 'N/A'}
+                                  {' • '}Gain {winner.positions_gained ?? 'N/A'}
                                   {Number.isFinite(Number(winner.slowest_pit_stop_seconds)) && Number(winner.slowest_pit_stop_seconds) > 0
                                     ? ` • Slowest stop ${Number(winner.slowest_pit_stop_seconds).toFixed(3)}s`
                                     : ''}
                                 </div>
-                                <div className="muted small">
-                                  Owner: {winner.owner_participant_name || 'Unowned'}
-                                </div>
+                                <div className="muted small">Owner: {winner.owner_participant_name || 'Unowned'}</div>
                                 <div className="muted small">{winnerResultSummary(winner)}</div>
                               </div>
                               <div className="audit-winner-values">
@@ -289,6 +275,16 @@ export default function PayoutAuditPage() {
           </ul>
         </>
       ) : null}
+    </div>
+  );
+}
+
+export default function PayoutAuditPage() {
+  const { events, loading, hasLoaded } = useAdminOutletContext();
+  return (
+    <section className="panel stack-lg">
+      <h2>Payout Audit</h2>
+      <PayoutAuditContent events={events} loading={loading} hasLoaded={hasLoaded} />
     </section>
   );
 }

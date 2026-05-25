@@ -42,7 +42,9 @@ export default function Nav() {
     <>
       <header className="top-nav">
         <div className="top-nav-inner">
-          <div className="brand">F1 Calcutta</div>
+          <Link className="brand" to="/dashboard" aria-label="F1 Calcutta dashboard">
+            <img className="brand-logo" src="/brand/f1c-logo-lockup.png" alt="F1 Calcutta" />
+          </Link>
 
           <nav className="top-nav-links top-nav-links-desktop">
             {links.map((link) => (

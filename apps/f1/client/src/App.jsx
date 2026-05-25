@@ -11,12 +11,10 @@ import Events from './pages/Events';
 import Dashboard from './pages/Dashboard';
 import MyDrivers from './pages/MyDrivers';
 import Admin from './pages/Admin';
-import OverviewPage from './pages/admin/OverviewPage';
 import AuctionPage from './pages/admin/AuctionPage';
 import ResultsPage from './pages/admin/ResultsPage';
 import TestDataPage from './pages/admin/TestDataPage';
-import PayoutRulesPage from './pages/admin/PayoutRulesPage';
-import PayoutAuditPage from './pages/admin/PayoutAuditPage';
+import PayoutsPage from './pages/admin/PayoutsPage';
 
 function ProtectedRoute({ children, adminOnly = false, nonAdminOnly = false }) {
   const { participant } = useAuth();
@@ -53,15 +51,19 @@ function AppRoutes() {
           <Route path="/standings" element={<Navigate to="/dashboard" replace />} />
           <Route path="/my-drivers" element={<ProtectedRoute nonAdminOnly><MyDrivers /></ProtectedRoute>} />
           <Route path="/admin" element={<ProtectedRoute adminOnly><Admin /></ProtectedRoute>}>
-            <Route index element={<Navigate to="/admin/overview" replace />} />
-            <Route path="overview" element={<OverviewPage />} />
-            <Route path="auction" element={<AuctionPage />} />
-            <Route path="results" element={<ResultsPage />} />
-            <Route path="test-data" element={<TestDataPage />} />
-            <Route path="payout-audit" element={<PayoutAuditPage />} />
-            <Route path="audit" element={<Navigate to="/admin/payout-audit" replace />} />
-            <Route path="payouts" element={<PayoutRulesPage />} />
-            <Route path="*" element={<Navigate to="/admin/overview" replace />} />
+            <Route index element={<Navigate to="/admin/setup" replace />} />
+            <Route path="setup" element={<AuctionPage />} />
+            <Route path="race-weekend" element={<ResultsPage />} />
+            <Route path="payouts" element={<PayoutsPage />} />
+            <Route path="tools" element={<TestDataPage />} />
+            {/* Redirects for old URLs */}
+            <Route path="overview" element={<Navigate to="/admin/setup" replace />} />
+            <Route path="auction" element={<Navigate to="/admin/setup" replace />} />
+            <Route path="results" element={<Navigate to="/admin/race-weekend" replace />} />
+            <Route path="test-data" element={<Navigate to="/admin/tools" replace />} />
+            <Route path="payout-audit" element={<Navigate to="/admin/payouts" replace />} />
+            <Route path="audit" element={<Navigate to="/admin/payouts" replace />} />
+            <Route path="*" element={<Navigate to="/admin/setup" replace />} />
           </Route>
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>

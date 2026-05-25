@@ -331,7 +331,7 @@ export default function ResultsPage() {
                           <button
                             className="btn btn-outline"
                             onClick={() => runAndReload(() => syncEvent(event.id, { force: true }))}
-                            disabled={event.status === 'scored'}
+                            disabled={event.status === 'cancelled'}
                           >
                             Force Sync
                           </button>

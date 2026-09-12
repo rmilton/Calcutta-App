@@ -531,4 +531,8 @@ module.exports = {
   syncEventFromProvider,
   syncNextEventFromProvider,
   isSeasonBonusReady,
+  // Exported for read-only season-bonus auditing (unallocatedPotService).
+  getAllSeasonResultRows,
+  getChampionshipStandings,
+  resolveSeasonBonusWinners,
 };

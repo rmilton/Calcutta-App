@@ -15,6 +15,10 @@ const {
   buildEventPayoutAuditWinnerCsv,
 } = require('../services/payoutAuditService');
 const {
+  buildSeasonUnallocatedSummary,
+  buildSeasonUnallocatedCsv,
+} = require('../services/unallocatedPotService');
+const {
   parseForceFlag,
   parseIntegerParam,
   runAndRespond,
@@ -198,6 +202,20 @@ router.get('/ops/database-backup', withAdmin, async (req, res) => {
     fs.unlink(backupPath, () => {});
     return res.status(500).json({ error: error.message || 'Failed to create database backup.' });
   }
+});
+
+router.get('/payouts/unallocated', withAdmin, (req, res) => {
+  const seasonId = getActiveSeasonId();
+  return res.json(buildSeasonUnallocatedSummary({ seasonId }));
+});
+
+router.get('/payouts/unallocated/export.csv', withAdmin, (req, res) => {
+  const seasonId = getActiveSeasonId();
+  const csv = buildSeasonUnallocatedCsv({ seasonId });
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="f1-unallocated-pot-${timestamp}.csv"`);
+  return res.send(csv);
 });
 
 router.get('/payout-audit/:id/export.csv', withAdmin, (req, res) => {

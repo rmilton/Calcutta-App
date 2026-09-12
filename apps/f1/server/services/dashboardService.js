@@ -10,6 +10,7 @@ const {
 } = require('../db');
 const { dashboardBriefingService } = require('./dashboardBriefingService');
 const { evaluateCategoryRule } = require('./payoutRuleResolvers');
+const { getSeasonUnallocatedHeadline } = require('./unallocatedPotService');
 
 const LIVE_CACHE_TTL_MS = 15_000;
 const ACTIVE_SESSION_GRACE_MS = 20 * 60 * 1000;
@@ -866,6 +867,12 @@ async function buildDashboardPayload({
     totalPotCents,
     participantCount: (participants || []).filter((row) => !row.is_admin).length,
   });
+
+  try {
+    summary.unallocatedPot = getSeasonUnallocatedHeadline({ seasonId });
+  } catch {
+    summary.unallocatedPot = { totalCents: 0, isFinal: false };
+  }
 
   if (viewerShape.isAdmin) {
     summary.primaryEventLabel = selection.event?.name || null;

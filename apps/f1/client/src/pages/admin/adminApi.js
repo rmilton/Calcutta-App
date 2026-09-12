@@ -88,6 +88,14 @@ export function payoutAuditExportHref(eventId) {
   return `/api/admin/payout-audit/${eventId}/export.csv`;
 }
 
+export async function readUnallocatedPot() {
+  return readApi('/admin/payouts/unallocated');
+}
+
+export function unallocatedPotExportHref() {
+  return '/api/admin/payouts/unallocated/export.csv';
+}
+
 export function payoutAuditWinnerExportHref(eventId) {
   return `/api/admin/payout-audit/${eventId}/export-winners.csv`;
 }

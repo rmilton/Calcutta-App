@@ -261,75 +261,37 @@ export default function TestDataPage() {
 
   return (
     <div className="stack-lg">
-      <section className="panel note-panel stack">
+
+      {/* Operational tools */}
+      <section className="panel stack">
         <div className="row between wrap gap-sm">
           <div className="stack-xs">
             <h2>Restore Seeded 2026 Data</h2>
             <p className="muted small">
-              Rebuilds the active season from the canonical seeded 2026 F1 driver roster and 2026 event schedule. Use this to recover from polluted local test metadata before running OpenF1 refreshes.
+              Rebuilds the active season from the canonical seeded 2026 F1 driver roster and event schedule. Use this to recover from polluted test data before running OpenF1 refreshes.
             </p>
           </div>
-          <button
-            className="btn btn-outline"
-            onClick={onRestore2026Data}
-          >
+          <button className="btn btn-outline" onClick={onRestore2026Data}>
             Restore 2026 Drivers + Events
           </button>
         </div>
       </section>
 
-      <section className="panel note-panel stack">
+      <section className="panel stack">
         <div className="row between wrap gap-sm">
           <div className="stack-xs">
             <h2>Load Historical Test Data</h2>
             <p className="muted small">
-              Replaces the active season drivers and events with a 2025 OpenF1 dataset so you can test auction and payout flows before 2026 real data is complete.
+              Replaces active season drivers and events with a 2025 OpenF1 dataset for testing auction and payout flows before 2026 real data is complete.
             </p>
           </div>
-          <button
-            className="btn btn-outline"
-            onClick={onLoad2025Data}
-          >
+          <button className="btn btn-outline" onClick={onLoad2025Data}>
             Load 2025 Drivers + Events
           </button>
         </div>
       </section>
 
-      <section className="panel note-panel stack">
-        <div className="row between wrap gap-sm">
-          <div className="stack-xs">
-            <h2>Reset Auction Only</h2>
-            <p className="muted small">
-              Clears bids, sold drivers, and ownership, then resets all drivers to a fresh randomized pending queue. Participants, results, payouts, and schedule data stay intact.
-            </p>
-          </div>
-          <button
-            className="btn btn-outline"
-            onClick={onResetAuctionOnly}
-          >
-            Reset Auction Only
-          </button>
-        </div>
-      </section>
-
-      <section className="panel note-panel stack">
-        <div className="row between wrap gap-sm">
-          <div className="stack-xs">
-            <h2>Reset Test Data</h2>
-            <p className="muted small">
-              Clears auction activity, non-admin participants, manual results, event payouts, season bonus payouts, and provider sync state for the active F1 season.
-            </p>
-          </div>
-          <button
-            className="btn btn-danger"
-            onClick={onClearAllTestData}
-          >
-            Clear All Test Data
-          </button>
-        </div>
-      </section>
-
-      <section className="panel note-panel stack">
+      <section className="panel stack">
         <div className="row between wrap gap-sm">
           <div className="stack-xs">
             <h2>Rescore Scored Events</h2>
@@ -337,11 +299,35 @@ export default function TestDataPage() {
               Rebuilds event payouts and season bonus payouts for every currently scored event using the active payout rules.
             </p>
           </div>
-          <button
-            className="btn btn-outline"
-            onClick={onRescoreSeasonEvents}
-          >
+          <button className="btn btn-outline" onClick={onRescoreSeasonEvents}>
             Rescore All Scored Events
+          </button>
+        </div>
+      </section>
+
+      {/* Danger zone */}
+      <section className="panel admin-danger-zone stack">
+        <div className="admin-danger-kicker">Danger Zone</div>
+        <div className="row between wrap gap-sm">
+          <div className="stack-xs">
+            <h2>Reset Auction Only</h2>
+            <p className="muted small">
+              Clears bids, sold drivers, and ownership, then resets all drivers to a fresh pending queue. Participants, results, payouts, and schedule data stay intact.
+            </p>
+          </div>
+          <button className="btn btn-outline" onClick={onResetAuctionOnly}>
+            Reset Auction Only
+          </button>
+        </div>
+        <div className="row between wrap gap-sm" style={{ borderTop: '1px solid var(--border)', paddingTop: '0.88rem' }}>
+          <div className="stack-xs">
+            <h2>Clear All Test Data</h2>
+            <p className="muted small">
+              Removes auction activity, non-admin participants, manual results, event payouts, season bonus payouts, and provider sync state for the active season.
+            </p>
+          </div>
+          <button className="btn btn-danger" onClick={onClearAllTestData}>
+            Clear All Test Data
           </button>
         </div>
       </section>

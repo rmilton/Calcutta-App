@@ -39,6 +39,7 @@ Owner: On-call engineer / active implementer
 - F1 startup seeding now preserves provider-refreshed schedule rows across restart/deploy cycles instead of silently reverting them to mock seed dates.
 - F1 now supports manual event cancellation/restore, keeps cancelled races out of primary live/upcoming selection, and redistributes cancelled event value only to future same-type events or season bonuses when no same-type events remain.
 - F1 scored event payout math now snapshots per-category event pots so payout audit/history remains stable after later event cancellations.
+- F1 now tracks a season "Unallocated Pot" (derived, read-only): payout value the rules earmarked but never disbursed because a category was won by an unowned substitute or matched no driver. Visible on the admin Payouts > Unallocated tab (with CSV) and as a participant dashboard panel when non-zero. Season-bonus leakage is included once the season is complete; cancelled-event value is excluded (it already moves via redistribution). Disposition is a manual season-end decision.
 
 ## Active Priorities
 

@@ -10,6 +10,7 @@ import {
   patchSettings,
   readApi,
   readProviderStatus,
+  readUnallocatedPot,
   recalcSeasonBonuses as recalcSeasonBonusesApi,
   resetAuctionOnly as resetAuctionOnlyApi,
   restoreSeeded2026Data as restoreSeeded2026DataApi,
@@ -30,6 +31,7 @@ export default function useAdminData() {
   const [events, setEvents] = useState([]);
   const [rules, setRules] = useState(null);
   const [providerStatus, setProviderStatus] = useState(null);
+  const [unallocatedPot, setUnallocatedPot] = useState(null);
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(true);
   const [hasLoaded, setHasLoaded] = useState(false);
@@ -37,18 +39,27 @@ export default function useAdminData() {
   const loadAll = useCallback(async ({ silent = false } = {}) => {
     if (!silent) setLoading(true);
     try {
-      const [settingsData, participantsData, eventsData, rulesData, providerStatusData] = await Promise.all([
+      const [
+        settingsData,
+        participantsData,
+        eventsData,
+        rulesData,
+        providerStatusData,
+        unallocatedPotData,
+      ] = await Promise.all([
         readApi('/admin/settings'),
         readApi('/admin/participants'),
         readApi('/events'),
         readApi('/admin/payout-rules'),
         readProviderStatus(),
+        readUnallocatedPot().catch(() => null),
       ]);
       setSettings(settingsData);
       setParticipants(Array.isArray(participantsData) ? participantsData : []);
       setEvents(Array.isArray(eventsData) ? eventsData : []);
       setRules(rulesData);
       setProviderStatus(providerStatusData);
+      setUnallocatedPot(unallocatedPotData);
       setHasLoaded(true);
     } catch (error) {
       setMessage(error.message || 'Failed to load admin data.');
@@ -275,6 +286,7 @@ export default function useAdminData() {
     events,
     rules,
     providerStatus,
+    unallocatedPot,
     message,
     loading,
     hasLoaded,
@@ -307,6 +319,7 @@ export default function useAdminData() {
     events,
     rules,
     providerStatus,
+    unallocatedPot,
     message,
     loading,
     hasLoaded,

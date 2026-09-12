@@ -479,6 +479,8 @@ export default function Dashboard() {
   const liveSession = data?.liveSession || null;
   const payoutBoard = data?.payoutBoard || { rules: [] };
   const isAdmin = !!data?.viewer?.isAdmin;
+  const unallocatedPot = summary?.unallocatedPot || null;
+  const unallocatedPotCents = Number(unallocatedPot?.totalCents || 0);
   const selectedBriefing = useMemo(
     () => briefingHistory.find((entry) => entry.id === selectedBriefingId) || briefingHistory[0] || null,
     [briefingHistory, selectedBriefingId],
@@ -556,6 +558,20 @@ export default function Dashboard() {
           </>
         )}
       </section>
+
+      {unallocatedPotCents > 0 ? (
+        <section className="panel note-panel unallocated-pot-card">
+          <div className="row between wrap gap-sm">
+            <strong>Unallocated Pot</strong>
+            <strong className="unallocated-pot-amount">{fmtCents(unallocatedPotCents)}</strong>
+          </div>
+          <p className="muted small">
+            Category winnings that went to drivers nobody owns — substitutes and stand-ins.
+            Held aside; the league decides what happens to it at the end of the season
+            {unallocatedPot?.isFinal ? '.' : ' (running total, still moving).'}
+          </p>
+        </section>
+      ) : null}
 
       <section className="panel">
         <div className="dashboard-card-head">

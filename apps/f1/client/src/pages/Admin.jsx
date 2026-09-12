@@ -3,25 +3,37 @@ import { NavLink, Outlet } from 'react-router-dom';
 import useAdminData from './admin/useAdminData';
 
 const ADMIN_SECTIONS = [
-  { path: 'overview', label: 'Overview', description: 'Season status and pool summary' },
-  { path: 'auction', label: 'Auction', description: 'Controls and timing settings' },
-  { path: 'results', label: 'Results Sync', description: 'Sync event outcomes and payouts' },
-  { path: 'test-data', label: 'Test Data', description: 'Manual edits and payout testing' },
-  { path: 'payout-audit', label: 'Payout Audit', description: 'Per-event payout math and winners' },
-  { path: 'payouts', label: 'Payout Rules', description: 'Adjust basis-point distribution' },
+  { path: 'setup', label: 'Setup', description: 'Participants & auction controls' },
+  { path: 'race-weekend', label: 'Race Weekend', description: 'Sync results & manage events' },
+  { path: 'payouts', label: 'Payouts', description: 'Audit results & payout rules' },
+  { path: 'tools', label: 'Tools', description: 'Test data & advanced options' },
 ];
 
 export default function Admin() {
   const contextValue = useAdminData();
-  const { message } = contextValue;
+  const { message, settings, participants } = contextValue;
+  const nonAdminCount = (participants || []).filter((p) => !p.is_admin).length;
+  const auctionStatus = settings?.auction_status || '—';
 
   return (
     <div className="stack-lg">
-      <section className="panel panel-hero admin-header">
-        <div className="hero-kicker">Race Control</div>
-        <h1>Admin Console</h1>
-        <p>Use sectioned controls to run the auction, sync races, and tune payout models.</p>
-      </section>
+      <div className="admin-status-bar">
+        <span className="admin-status-kicker">Race Control</span>
+        <div className="admin-status-items">
+          <div className="admin-status-item">
+            <span className="label">Invite Code</span>
+            <strong>{settings?.invite_code || '—'}</strong>
+          </div>
+          <div className="admin-status-item">
+            <span className="label">Auction</span>
+            <strong className={`status-text status-${auctionStatus}`}>{auctionStatus}</strong>
+          </div>
+          <div className="admin-status-item">
+            <span className="label">Participants</span>
+            <strong>{nonAdminCount}</strong>
+          </div>
+        </div>
+      </div>
 
       {message ? <section className="panel note-panel">{message}</section> : null}
 

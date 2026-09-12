@@ -13,6 +13,7 @@ const {
 } = require('../db');
 const { evaluateCategoryRule } = require('./payoutRuleResolvers');
 const { buildEventPayoutComputation } = require('./payoutRedistributionService');
+const { rowsToCsv } = require('../lib/csv');
 
 function pctOfPot(cents, totalPotCents) {
   const total = Number(totalPotCents || 0);
@@ -195,12 +196,6 @@ function buildEventPayoutAudit({ seasonId, eventId }) {
   };
 }
 
-function csvCell(value) {
-  if (value == null) return '';
-  const text = String(value);
-  if (/[",\n]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
-  return text;
-}
 
 function formatWinnerSummary(winners) {
   if (!Array.isArray(winners) || winners.length === 0) return 'No winners';
@@ -259,7 +254,7 @@ function buildEventPayoutAuditCsv({ seasonId, eventId }) {
     ]),
   ];
 
-  return rows.map((row) => row.map(csvCell).join(',')).join('\n');
+  return rowsToCsv(rows);
 }
 
 function buildEventPayoutAuditWinnerCsv({ seasonId, eventId }) {
@@ -338,7 +333,7 @@ function buildEventPayoutAuditWinnerCsv({ seasonId, eventId }) {
     });
   });
 
-  return rows.map((row) => row.map(csvCell).join(',')).join('\n');
+  return rowsToCsv(rows);
 }
 
 module.exports = {

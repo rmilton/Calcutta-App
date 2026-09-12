@@ -222,20 +222,42 @@ function getSeasonRandomBonusPosition(seasonId, standingsCount) {
   return drawn;
 }
 
-function isSeasonBonusReady(seasonId) {
-  const scoringEventCounts = db.prepare(`
+/**
+ * Read-only counterpart to getSeasonRandomBonusPosition: reports the
+ * persisted draw without ever drawing/persisting one. Callers that must not
+ * risk a side-effecting draw (e.g. read-only reporting paths) should use
+ * this instead of resolveSeasonBonusWinners('season_random_finish_position', ...)
+ * when the draw isn't guaranteed to have happened yet.
+ */
+function peekSeasonRandomBonusPosition(seasonId) {
+  const season = db.prepare(`
+    SELECT season_random_bonus_position
+    FROM seasons
+    WHERE id = ?
+  `).get(seasonId);
+  const existing = Number(season?.season_random_bonus_position);
+  return existing >= 1 ? existing : null;
+}
+
+function getSeasonScoringEventCounts(seasonId) {
+  const row = db.prepare(`
     SELECT
-      COUNT(*) as scoring_event_count,
-      SUM(CASE WHEN status = 'scored' THEN 1 ELSE 0 END) as scored_event_count
+      COUNT(*) AS scoring_event_count,
+      SUM(CASE WHEN status = 'scored' THEN 1 ELSE 0 END) AS scored_event_count
     FROM events
     WHERE season_id = ?
       AND type IN ('grand_prix', 'sprint')
       AND status != 'cancelled'
   `).get(seasonId);
+  return {
+    scoringEventCount: Number(row?.scoring_event_count || 0),
+    scoredEventCount: Number(row?.scored_event_count || 0),
+  };
+}
 
-  const total = Number(scoringEventCounts?.scoring_event_count || 0);
-  const scored = Number(scoringEventCounts?.scored_event_count || 0);
-  return total > 0 && total === scored;
+function isSeasonBonusReady(seasonId) {
+  const { scoringEventCount, scoredEventCount } = getSeasonScoringEventCounts(seasonId);
+  return scoringEventCount > 0 && scoringEventCount === scoredEventCount;
 }
 
 function resolveSeasonBonusWinners(category, seasonId, context) {
@@ -535,4 +557,6 @@ module.exports = {
   getAllSeasonResultRows,
   getChampionshipStandings,
   resolveSeasonBonusWinners,
+  getSeasonScoringEventCounts,
+  peekSeasonRandomBonusPosition,
 };

@@ -470,3 +470,111 @@ test('season-bonus breakdown does not relabel an already-paid winner as unowned'
     );
   }
 });
+
+test('season-bonus breakdown skips the random-position category if the draw never happened', () => {
+  const {
+    db, getActiveSeasonId, upsertEventResults, buildSeasonUnallocatedSummary,
+  } = setupDb();
+  const seasonId = getActiveSeasonId();
+  const owner = seedParticipant(db, seasonId, 'Owner', 'tok-owner');
+  seedPotOwnership(db, seasonId, owner);
+
+  const keep = db.prepare(`
+    SELECT id FROM events
+    WHERE season_id = ? AND type = 'grand_prix'
+    ORDER BY round_number ASC LIMIT 1
+  `).get(seasonId);
+  db.prepare('DELETE FROM events WHERE season_id = ? AND id != ?').run(seasonId, keep.id);
+  db.prepare('UPDATE events SET lock_at = ? WHERE id = ?').run('2000-01-01T00:00:00Z', keep.id);
+
+  const roster = db.prepare('SELECT external_id FROM drivers WHERE season_id = ? ORDER BY external_id ASC').all(seasonId);
+  upsertEventResults({
+    seasonId,
+    eventId: keep.id,
+    rows: roster.map((driver, index) => ({
+      external_driver_id: driver.external_id,
+      finish_position: index + 1,
+      start_position: index + 1,
+    })),
+  });
+
+  // Force the season into a "complete" state WITHOUT ever going through
+  // scoreEvent/recalcSeasonBonuses -- reproduces the broken-invariant edge
+  // case the guard defends against: isSeasonBonusReady() becomes true, but
+  // the random position was never drawn and no season_bonus_payouts exist.
+  db.prepare("UPDATE events SET status = 'scored' WHERE id = ?").run(keep.id);
+
+  const before = db.prepare('SELECT season_random_bonus_position FROM seasons WHERE id = ?').get(seasonId);
+  assert.equal(before.season_random_bonus_position, null);
+
+  const summary = buildSeasonUnallocatedSummary({ seasonId });
+  assert.equal(summary.seasonBonus.resolved, true);
+
+  const categories = summary.seasonBonus.categories.map((c) => c.category);
+  assert.ok(categories.length > 0, 'other bonus categories should still resolve normally');
+  assert.ok(
+    !categories.includes('season_random_finish_position'),
+    'unresolved random draw must be skipped, not reported',
+  );
+
+  // The read must not have drawn/persisted a position as a side effect.
+  const after = db.prepare('SELECT season_random_bonus_position FROM seasons WHERE id = ?').get(seasonId);
+  assert.equal(after.season_random_bonus_position, null);
+});
+
+test('dashboard headline caches the season-bonus figure while the admin summary stays fresh', () => {
+  const {
+    db, getActiveSeasonId, upsertEventResults, scoreEvent, recalcSeasonBonuses,
+    buildSeasonUnallocatedSummary, getSeasonUnallocatedHeadline,
+  } = setupDb();
+  const seasonId = getActiveSeasonId();
+  const owner = seedParticipant(db, seasonId, 'Owner', 'tok-owner');
+  seedPotOwnership(db, seasonId, owner, { leaveUnownedExternalIds: [1] });
+
+  const keep = db.prepare(`
+    SELECT id FROM events
+    WHERE season_id = ? AND type = 'grand_prix'
+    ORDER BY round_number ASC LIMIT 1
+  `).get(seasonId);
+  db.prepare('DELETE FROM events WHERE season_id = ? AND id != ?').run(seasonId, keep.id);
+  db.prepare('UPDATE events SET lock_at = ? WHERE id = ?').run('2000-01-01T00:00:00Z', keep.id);
+
+  const roster = db.prepare('SELECT id, external_id FROM drivers WHERE season_id = ? ORDER BY external_id ASC').all(seasonId);
+  const unownedDriver = roster.find((driver) => driver.external_id === 1);
+  // The unowned driver wins the race (and, on a single-event season, the
+  // championship). Event-level payouts freeze at scoring time regardless of
+  // later ownership changes (see the earlier ownership-reset tests above),
+  // so only the season-bonus portion below is expected to change.
+  upsertEventResults({
+    seasonId,
+    eventId: keep.id,
+    rows: roster.map((driver) => ({
+      external_driver_id: driver.external_id,
+      finish_position: driver.external_id,
+      start_position: driver.external_id,
+    })),
+  });
+  assert.equal(scoreEvent({ seasonId, eventId: keep.id }).ok, true);
+
+  const first = getSeasonUnallocatedHeadline({ seasonId });
+  assert.equal(first.isFinal, true);
+  assert.ok(first.totalCents > 0);
+
+  // Give the unowned driver an owner and persist the season bonuses for real
+  // -- this is what an admin fixing the roster and re-running the season
+  // bonus calc would do between two dashboard polls.
+  db.prepare(`
+    INSERT INTO ownership (season_id, driver_id, participant_id, purchase_price_cents)
+    VALUES (?, ?, ?, ?)
+  `).run(seasonId, unownedDriver.id, owner, 0);
+  recalcSeasonBonuses({ seasonId });
+
+  const second = getSeasonUnallocatedHeadline({ seasonId });
+  assert.equal(second.totalCents, first.totalCents, 'headline should still return the cached, stale value');
+
+  const summary = buildSeasonUnallocatedSummary({ seasonId });
+  assert.ok(
+    summary.totalCents < first.totalCents,
+    'admin summary must reflect the fix immediately, uncached',
+  );
+});

@@ -200,7 +200,15 @@ function getWinnersFromMetric(metricMap, comparator) {
   return entries.filter(([, value]) => value === targetValue).map(([driverId]) => driverId);
 }
 
-function getSeasonRandomBonusPosition(seasonId, standingsCount) {
+/**
+ * `readOnly: true` guarantees this never draws/persists a position -- it
+ * either returns the already-valid persisted draw, or null. This is the
+ * single source of truth for "is the persisted position still valid for the
+ * current standings count" (existing >= 1 && existing <= standingsCount);
+ * any read-only caller gets that exact validation for free instead of a
+ * separately-maintained, easily-incomplete copy of it.
+ */
+function getSeasonRandomBonusPosition(seasonId, standingsCount, { readOnly = false } = {}) {
   if (standingsCount <= 0) return null;
   const season = db.prepare(`
     SELECT season_random_bonus_position
@@ -213,6 +221,8 @@ function getSeasonRandomBonusPosition(seasonId, standingsCount) {
     return existing;
   }
 
+  if (readOnly) return null;
+
   const drawn = Math.floor(Math.random() * standingsCount) + 1;
   db.prepare(`
     UPDATE seasons
@@ -220,23 +230,6 @@ function getSeasonRandomBonusPosition(seasonId, standingsCount) {
     WHERE id = ?
   `).run(drawn, Date.now(), seasonId);
   return drawn;
-}
-
-/**
- * Read-only counterpart to getSeasonRandomBonusPosition: reports the
- * persisted draw without ever drawing/persisting one. Callers that must not
- * risk a side-effecting draw (e.g. read-only reporting paths) should use
- * this instead of resolveSeasonBonusWinners('season_random_finish_position', ...)
- * when the draw isn't guaranteed to have happened yet.
- */
-function peekSeasonRandomBonusPosition(seasonId) {
-  const season = db.prepare(`
-    SELECT season_random_bonus_position
-    FROM seasons
-    WHERE id = ?
-  `).get(seasonId);
-  const existing = Number(season?.season_random_bonus_position);
-  return existing >= 1 ? existing : null;
 }
 
 function getSeasonScoringEventCounts(seasonId) {
@@ -261,7 +254,7 @@ function isSeasonBonusReady(seasonId) {
 }
 
 function resolveSeasonBonusWinners(category, seasonId, context) {
-  const { rows, standings } = context;
+  const { rows, standings, readOnly = false } = context;
 
   if (category === 'drivers_champion') {
     return standings.length ? [standings[0].driver_id] : [];
@@ -287,7 +280,7 @@ function resolveSeasonBonusWinners(category, seasonId, context) {
   }
 
   if (category === 'season_random_finish_position') {
-    const drawnPosition = getSeasonRandomBonusPosition(seasonId, standings.length);
+    const drawnPosition = getSeasonRandomBonusPosition(seasonId, standings.length, { readOnly });
     if (!drawnPosition) return [];
     const winner = standings[drawnPosition - 1];
     return winner ? [winner.driver_id] : [];
@@ -558,5 +551,4 @@ module.exports = {
   getChampionshipStandings,
   resolveSeasonBonusWinners,
   getSeasonScoringEventCounts,
-  peekSeasonRandomBonusPosition,
 };

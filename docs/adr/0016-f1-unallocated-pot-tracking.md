@@ -22,12 +22,12 @@ Implementation:
 
 1. `unallocatedPotService.js` computes leakage from existing state:
    - Per scored scoring event: `SUM(event_payout_snapshots.category_pot_cents) - SUM(event_payouts.amount_cents)`, clamped at zero. This tier-1 figure is authoritative (pool allocated minus pool paid).
-   - For flagged events only, a tier-2 per-category breakdown reuses `buildEventPayoutAudit` for status text and unowned-winner identification.
-   - Season bonuses: while `isSeasonBonusReady` is false the bonus pool is reported as `pending`, not unallocated. Once the season is complete, bonus leakage is `effectiveTotalCents - SUM(season_bonus_payouts.amount_cents)`, with a per-category breakdown built from the exported `resolveSeasonBonusWinners` / `getChampionshipStandings` / `getAllSeasonResultRows` helpers.
+   - For flagged events only, a tier-2 per-category breakdown reads the persisted `event_payout_snapshots`/`event_payouts` rows directly (not `buildEventPayoutAudit`'s live ownership lookup) for status text and unowned-winner identification, so it can't drift from the tier-1 total after an unrelated ownership change (e.g. "Reset Auction Only").
+   - Season bonuses: while `isSeasonBonusReady` is false the bonus pool is reported as `pending`, not unallocated. Once the season is complete, bonus leakage is `effectiveTotalCents - SUM(season_bonus_payouts.amount_cents)`, with a per-category breakdown built from the exported `resolveSeasonBonusWinners` / `getChampionshipStandings` / `getAllSeasonResultRows` helpers, likewise matched against persisted payout rows rather than live ownership.
+   - `resolveSeasonBonusWinners`'s `season_random_finish_position` branch can draw and persist the season's random bonus position if one isn't set yet (`getSeasonRandomBonusPosition`). Both the admin summary and the dashboard headline call it with `readOnly: true`, which guarantees no draw/persist happens on this read-only path — enforced in `getSeasonRandomBonusPosition` itself, not by a convention callers have to remember.
 2. Explicitly excluded: pending/`results_loaded` events (future money), cancelled events (value already moves via `event_redistributions` per ADR 0015), and even-split rounding remainders.
-3. `GET /api/admin/payouts/unallocated` and `/export.csv` back an admin "Unallocated" tab under Payouts.
-4. The participant dashboard payload carries `summary.unallocatedPot = { totalCents, isFinal }`; the dashboard renders a headline panel only when `totalCents > 0`.
-5. The figure recomputes on every admin data load and every dashboard poll, so re-syncing a race or assigning ownership to a substitute self-corrects it with no manual reversal.
+3. `GET /api/admin/payouts/unallocated` and `/export.csv` back an admin "Unallocated" tab under Payouts. This path (`buildSeasonUnallocatedSummary`) always recomputes fresh — no caching — so an admin sees their own corrective actions (re-syncing a race, assigning ownership to a substitute, rescoring) reflected immediately.
+4. The participant dashboard payload carries `summary.unallocatedPot = { totalCents, isFinal }`; the dashboard renders a headline panel only when `totalCents > 0`. Once the season is complete, the season-bonus portion of this headline (`getSeasonUnallocatedHeadline`) is cached for 60 seconds, since it would otherwise re-run a full season-wide result/standings scan on every 15-60s dashboard poll for the rest of that season's life. The admin path in point 3 is unaffected by this cache.
 
 ## Consequences
 
@@ -39,8 +39,8 @@ Positive:
 
 Tradeoffs:
 
-- `scoringService.js` now exports three previously-private season-bonus helpers.
-- The tier-2 breakdown inherits `buildEventPayoutAudit`'s category-key assumption (no `rank_order` in `event_payouts`); harmless with the default rule set, noted as a follow-up.
+- `scoringService.js` now exports several previously-private season-bonus helpers (`getAllSeasonResultRows`, `getChampionshipStandings`, `resolveSeasonBonusWinners`, `getSeasonScoringEventCounts`), plus a `readOnly` option on `getSeasonRandomBonusPosition`/`resolveSeasonBonusWinners`.
+- The participant dashboard's unallocated-pot headline can lag the true total by up to 60 seconds once the season is complete (the season-bonus cache in point 4 above); the admin Unallocated tab is never subject to this and is always live.
 - The number is informational only. Actually moving the money (rollover category, redistribution, external use) remains a manual, deliberate action.
 
 ## Rollback / Alternatives
@@ -51,7 +51,7 @@ Alternatives considered:
 - Auto-rolling unowned shares into the season-bonus pool. Rejected: pre-commits the disposition decision the league wants to defer.
 - Leaving it as today's per-event audit only. Rejected: no season total, no participant visibility.
 
-Rollback: remove `unallocatedPotService.js`, the two routes, the admin tab, the dashboard panel, and the three `scoringService` exports. No data to migrate back.
+Rollback: remove `unallocatedPotService.js`, the two routes, the admin tab, the dashboard panel, and the `scoringService` exports listed above. No data to migrate back.
 
 ## References
 

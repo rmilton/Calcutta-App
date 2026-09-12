@@ -12,7 +12,6 @@ const {
   getChampionshipStandings,
   resolveSeasonBonusWinners,
   getSeasonScoringEventCounts,
-  peekSeasonRandomBonusPosition,
 } = require('./scoringService');
 
 const SEASON_BONUS_PENDING_REASON =
@@ -225,18 +224,20 @@ function buildSeasonBonusUnallocated(seasonId) {
         const unallocated = clampNonNegative(categoryPotCents - categoryPaidCents);
         if (unallocated <= 0) return null;
 
-        // season_random_finish_position's resolver draws and persists the
-        // random position if one isn't set yet. In every currently-reachable
-        // flow recalcSeasonBonuses has already drawn it by the time this
-        // read-only path runs, but that's an invariant enforced only by
-        // convention across two files -- guard against it structurally so a
-        // future path to isSeasonBonusReady()===true can never turn a GET
-        // request into a side-effecting write. Every other bonus category
-        // still resolves normally even when the draw hasn't happened yet.
-        if (rule.category === 'season_random_finish_position' && peekSeasonRandomBonusPosition(seasonId) == null) {
+        // readOnly:true guarantees this can never draw/persist a random
+        // position -- that safety lives in getSeasonRandomBonusPosition
+        // itself (scoringService.js), not in a check here, so any future
+        // read-only caller of resolveSeasonBonusWinners gets it for free.
+        const winners = resolveSeasonBonusWinners(rule.category, seasonId, { rows, standings, readOnly: true });
+
+        // Distinct from the safety guarantee above: if the random position
+        // simply hasn't been drawn yet, omit this category from this pass
+        // rather than showing a misleading "no driver matched" status.
+        // Every other bonus category still resolves normally.
+        if (rule.category === 'season_random_finish_position' && winners.length === 0) {
           return null;
         }
-        const winners = resolveSeasonBonusWinners(rule.category, seasonId, { rows, standings });
+
         const paidDriverIds = paidDriverIdsByCategory.get(rule.category) || new Set();
         const unpaidWinners = winners.filter((driverId) => !paidDriverIds.has(driverId));
 

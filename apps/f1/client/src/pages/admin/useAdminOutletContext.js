@@ -7,6 +7,7 @@ import { useOutletContext } from 'react-router-dom';
  * @property {Array<Object>} events
  * @property {Object|null} rules
  * @property {Object|null} providerStatus
+ * @property {Object|null} unallocatedPot
  * @property {string} message
  * @property {boolean} loading
  * @property {boolean} hasLoaded

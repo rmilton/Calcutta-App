@@ -150,6 +150,16 @@ After deploy:
 3. The export includes one row per assigned driver plus participant totals.
 4. Use it after the auction for participant ownership review, recap sharing, or offline record-keeping.
 
+### K) F1 Unallocated Pot Review
+
+1. Open `Admin -> Payouts -> Unallocated`.
+2. The total is payout value the rules earmarked but never paid out: a category won by a driver nobody owns (substitute / stand-in), or a category no driver satisfied.
+3. It is a running total while the season is in progress and recalculates after every sync/rescore. It excludes cancelled-event value (that moves through redistribution instead).
+4. Season-bonus leakage is shown as `Pending` until every race and sprint is scored, then resolves.
+5. Use `Download CSV` for a line-item record before communicating a season-end decision.
+6. The same total appears to participants as a dashboard panel whenever it is above zero.
+7. Disposition (roll into a new category, distribute evenly, apply to hosting costs, etc.) is a manual decision - the app only tracks the amount. If you assign ownership of a substitute and re-sync the event, the figure self-corrects.
+
 ## Rollback Procedure
 
 1. Open service Deployments in Railway.

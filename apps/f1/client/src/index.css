@@ -1373,6 +1373,11 @@ button {
   gap: var(--space-4);
 }
 
+.stack-sm {
+  display: grid;
+  gap: var(--space-2);
+}
+
 .two-col {
   display: grid;
   gap: var(--space-4);
@@ -1754,6 +1759,16 @@ button {
 .note-panel-warning {
   border-color: rgba(183, 98, 72, 0.52);
   background: linear-gradient(165deg, rgba(183, 98, 72, 0.16), transparent 48%), var(--panel);
+}
+
+.unallocated-pot-card {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.unallocated-pot-amount {
+  font-size: 1.05rem;
+  color: var(--accent);
 }
 
 .telemetry-strip {

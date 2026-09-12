@@ -1,5 +1,5 @@
 import React from 'react';
-import { categoryLabel, eventTypeLabel, fmtCents } from '../../utils';
+import { categoryLabel, eventTypeLabel, fmtCents, fmtWhen } from '../../utils';
 import { unallocatedPotExportHref } from './adminApi';
 import AdminLoadingState from './AdminLoadingState';
 import useAdminOutletContext from './useAdminOutletContext';
@@ -15,7 +15,7 @@ function UnownedWinnerLine({ winners }) {
   );
 }
 
-export function UnallocatedPotContent({ unallocatedPot, loading, hasLoaded }) {
+export function UnallocatedPotContent({ unallocatedPot, loading, hasLoaded, settings }) {
   if (loading && !hasLoaded) {
     return <AdminLoadingState />;
   }
@@ -33,6 +33,10 @@ export function UnallocatedPotContent({ unallocatedPot, loading, hasLoaded }) {
     scoredEventCount = 0,
     scoringEventCount = 0,
   } = unallocatedPot;
+
+  const randomBonusPosition = settings?.season_random_bonus_position;
+  const drawnAtMs = Number(settings?.season_random_bonus_drawn_at);
+  const drawnAtIso = Number.isFinite(drawnAtMs) && drawnAtMs > 0 ? new Date(drawnAtMs).toISOString() : null;
 
   return (
     <div className="stack-lg">
@@ -78,6 +82,10 @@ export function UnallocatedPotContent({ unallocatedPot, loading, hasLoaded }) {
 
       <section className="panel stack">
         <h3>Season bonuses</h3>
+        <p className="muted small">
+          Random finish-position draw: {randomBonusPosition ? `P${randomBonusPosition}` : 'Not drawn yet'}
+          {drawnAtIso ? ` (drawn ${fmtWhen(drawnAtIso)})` : ''}
+        </p>
         {seasonBonus.resolved ? (
           <>
             <p className="muted small">{seasonBonus.reason}</p>
@@ -159,10 +167,10 @@ export function UnallocatedPotContent({ unallocatedPot, loading, hasLoaded }) {
 }
 
 export default function UnallocatedPotPage() {
-  const { unallocatedPot, loading, hasLoaded } = useAdminOutletContext();
+  const { unallocatedPot, loading, hasLoaded, settings } = useAdminOutletContext();
   return (
     <section className="panel stack-lg">
-      <UnallocatedPotContent unallocatedPot={unallocatedPot} loading={loading} hasLoaded={hasLoaded} />
+      <UnallocatedPotContent unallocatedPot={unallocatedPot} loading={loading} hasLoaded={hasLoaded} settings={settings} />
     </section>
   );
 }

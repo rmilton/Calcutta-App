@@ -200,7 +200,15 @@ function getWinnersFromMetric(metricMap, comparator) {
   return entries.filter(([, value]) => value === targetValue).map(([driverId]) => driverId);
 }
 
-function getSeasonRandomBonusPosition(seasonId, standingsCount) {
+/**
+ * `readOnly: true` guarantees this never draws/persists a position -- it
+ * either returns the already-valid persisted draw, or null. This is the
+ * single source of truth for "is the persisted position still valid for the
+ * current standings count" (existing >= 1 && existing <= standingsCount);
+ * any read-only caller gets that exact validation for free instead of a
+ * separately-maintained, easily-incomplete copy of it.
+ */
+function getSeasonRandomBonusPosition(seasonId, standingsCount, { readOnly = false } = {}) {
   if (standingsCount <= 0) return null;
   const season = db.prepare(`
     SELECT season_random_bonus_position
@@ -213,6 +221,8 @@ function getSeasonRandomBonusPosition(seasonId, standingsCount) {
     return existing;
   }
 
+  if (readOnly) return null;
+
   const drawn = Math.floor(Math.random() * standingsCount) + 1;
   db.prepare(`
     UPDATE seasons
@@ -222,24 +232,29 @@ function getSeasonRandomBonusPosition(seasonId, standingsCount) {
   return drawn;
 }
 
-function isSeasonBonusReady(seasonId) {
-  const scoringEventCounts = db.prepare(`
+function getSeasonScoringEventCounts(seasonId) {
+  const row = db.prepare(`
     SELECT
-      COUNT(*) as scoring_event_count,
-      SUM(CASE WHEN status = 'scored' THEN 1 ELSE 0 END) as scored_event_count
+      COUNT(*) AS scoring_event_count,
+      SUM(CASE WHEN status = 'scored' THEN 1 ELSE 0 END) AS scored_event_count
     FROM events
     WHERE season_id = ?
       AND type IN ('grand_prix', 'sprint')
       AND status != 'cancelled'
   `).get(seasonId);
+  return {
+    scoringEventCount: Number(row?.scoring_event_count || 0),
+    scoredEventCount: Number(row?.scored_event_count || 0),
+  };
+}
 
-  const total = Number(scoringEventCounts?.scoring_event_count || 0);
-  const scored = Number(scoringEventCounts?.scored_event_count || 0);
-  return total > 0 && total === scored;
+function isSeasonBonusReady(seasonId) {
+  const { scoringEventCount, scoredEventCount } = getSeasonScoringEventCounts(seasonId);
+  return scoringEventCount > 0 && scoringEventCount === scoredEventCount;
 }
 
 function resolveSeasonBonusWinners(category, seasonId, context) {
-  const { rows, standings } = context;
+  const { rows, standings, readOnly = false } = context;
 
   if (category === 'drivers_champion') {
     return standings.length ? [standings[0].driver_id] : [];
@@ -265,7 +280,7 @@ function resolveSeasonBonusWinners(category, seasonId, context) {
   }
 
   if (category === 'season_random_finish_position') {
-    const drawnPosition = getSeasonRandomBonusPosition(seasonId, standings.length);
+    const drawnPosition = getSeasonRandomBonusPosition(seasonId, standings.length, { readOnly });
     if (!drawnPosition) return [];
     const winner = standings[drawnPosition - 1];
     return winner ? [winner.driver_id] : [];
@@ -535,4 +550,5 @@ module.exports = {
   getAllSeasonResultRows,
   getChampionshipStandings,
   resolveSeasonBonusWinners,
+  getSeasonScoringEventCounts,
 };

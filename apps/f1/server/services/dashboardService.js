@@ -870,7 +870,8 @@ async function buildDashboardPayload({
 
   try {
     summary.unallocatedPot = getSeasonUnallocatedHeadline({ seasonId });
-  } catch {
+  } catch (error) {
+    console.error('[dashboardService] getSeasonUnallocatedHeadline failed', { seasonId, error });
     summary.unallocatedPot = { totalCents: 0, isFinal: false };
   }
 

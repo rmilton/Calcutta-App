@@ -11,6 +11,7 @@ export default function PayoutsPage() {
     updateRules,
     saveRules,
     unallocatedPot,
+    settings,
     loading,
     hasLoaded,
   } = useAdminOutletContext();
@@ -47,7 +48,7 @@ export default function PayoutsPage() {
           <PayoutAuditContent events={events} loading={loading} hasLoaded={hasLoaded} />
         ) : null}
         {tab === 'unallocated' ? (
-          <UnallocatedPotContent unallocatedPot={unallocatedPot} loading={loading} hasLoaded={hasLoaded} />
+          <UnallocatedPotContent unallocatedPot={unallocatedPot} loading={loading} hasLoaded={hasLoaded} settings={settings} />
         ) : null}
         {tab === 'rules' ? (
           <PayoutRulesContent rules={rules} updateRules={updateRules} saveRules={saveRules} loading={loading} hasLoaded={hasLoaded} />

@@ -5,11 +5,13 @@ const {
 } = require('../db');
 const { evaluateCategoryRule } = require('./payoutRuleResolvers');
 const { buildSeasonBonusComputation } = require('./payoutRedistributionService');
+const { rowsToCsv } = require('../lib/csv');
 const {
   isSeasonBonusReady,
   getAllSeasonResultRows,
   getChampionshipStandings,
   resolveSeasonBonusWinners,
+  getSeasonScoringEventCounts,
 } = require('./scoringService');
 
 const SEASON_BONUS_PENDING_REASON =
@@ -72,22 +74,6 @@ function getScoredEventLeakageRows(seasonId) {
     ORDER BY e.round_number ASC,
       CASE WHEN e.type = 'sprint' THEN 0 ELSE 1 END ASC
   `).all(seasonId, seasonId, seasonId);
-}
-
-function getScoringEventCounts(seasonId) {
-  const row = db.prepare(`
-    SELECT
-      COUNT(*) AS total,
-      SUM(CASE WHEN status = 'scored' THEN 1 ELSE 0 END) AS scored
-    FROM events
-    WHERE season_id = ?
-      AND type IN ('grand_prix', 'sprint')
-      AND status != 'cancelled'
-  `).get(seasonId);
-  return {
-    scoringEventCount: Number(row?.total || 0),
-    scoredEventCount: Number(row?.scored || 0),
-  };
 }
 
 /**
@@ -238,9 +224,20 @@ function buildSeasonBonusUnallocated(seasonId) {
         const unallocated = clampNonNegative(categoryPotCents - categoryPaidCents);
         if (unallocated <= 0) return null;
 
-        // Season complete: recalcSeasonBonuses has already drawn/persisted any
-        // random position, so this resolver call has no side effect here.
-        const winners = resolveSeasonBonusWinners(rule.category, seasonId, { rows, standings });
+        // readOnly:true guarantees this can never draw/persist a random
+        // position -- that safety lives in getSeasonRandomBonusPosition
+        // itself (scoringService.js), not in a check here, so any future
+        // read-only caller of resolveSeasonBonusWinners gets it for free.
+        const winners = resolveSeasonBonusWinners(rule.category, seasonId, { rows, standings, readOnly: true });
+
+        // Distinct from the safety guarantee above: if the random position
+        // simply hasn't been drawn yet, omit this category from this pass
+        // rather than showing a misleading "no driver matched" status.
+        // Every other bonus category still resolves normally.
+        if (rule.category === 'season_random_finish_position' && winners.length === 0) {
+          return null;
+        }
+
         const paidDriverIds = paidDriverIdsByCategory.get(rule.category) || new Set();
         const unpaidWinners = winners.filter((driverId) => !paidDriverIds.has(driverId));
 
@@ -283,17 +280,43 @@ function buildSeasonBonusUnallocated(seasonId) {
   };
 }
 
+// buildSeasonBonusUnallocated does a full season result/standings scan once
+// the season is complete, and stays complete for the rest of that season's
+// life. getSeasonUnallocatedHeadline backs the participant dashboard, which
+// every participant's client polls every 15-60s, so re-running that scan on
+// every single poll (forever, post-season) would recreate the exact cost
+// this headline is supposed to avoid. Cache it with a short TTL instead --
+// only for this headline path, never for buildSeasonUnallocatedSummary
+// below, which an admin reads far less often and should always see fresh
+// (e.g. immediately after taking a corrective action).
+const SEASON_BONUS_UNALLOCATED_CACHE_TTL_MS = 60_000;
+const seasonBonusUnallocatedCache = new Map(); // seasonId -> { computedAt, value }
+
+function getCachedSeasonBonusUnallocatedCents(seasonId) {
+  const now = Date.now();
+  const cached = seasonBonusUnallocatedCache.get(seasonId);
+  if (cached && (now - cached.computedAt) < SEASON_BONUS_UNALLOCATED_CACHE_TTL_MS) {
+    return cached.value;
+  }
+  const value = buildSeasonBonusUnallocated(seasonId).unallocatedCents;
+  seasonBonusUnallocatedCache.set(seasonId, { computedAt: now, value });
+  return value;
+}
+
 /**
  * Headline-only figure for the participant dashboard. Avoids the per-event
- * audit reconstruction so the dashboard poll stays cheap.
+ * audit reconstruction so the dashboard poll stays cheap, and caches the
+ * season-bonus portion (see getCachedSeasonBonusUnallocatedCents) since that
+ * part alone can be an expensive full-season scan once the season is over.
  */
 function getSeasonUnallocatedHeadline({ seasonId }) {
   const eventCents = getScoredEventLeakageRows(seasonId)
     .reduce((sum, row) => sum + clampNonNegative(row.pot_cents - row.paid_cents), 0);
-  const seasonBonus = buildSeasonBonusUnallocated(seasonId);
+  const isFinal = isSeasonBonusReady(seasonId);
+  const seasonBonusUnallocatedCents = isFinal ? getCachedSeasonBonusUnallocatedCents(seasonId) : 0;
   return {
-    totalCents: eventCents + seasonBonus.unallocatedCents,
-    isFinal: isSeasonBonusReady(seasonId),
+    totalCents: eventCents + seasonBonusUnallocatedCents,
+    isFinal,
   };
 }
 
@@ -302,7 +325,7 @@ function getSeasonUnallocatedHeadline({ seasonId }) {
  */
 function buildSeasonUnallocatedSummary({ seasonId }) {
   const leakageRows = getScoredEventLeakageRows(seasonId);
-  const { scoringEventCount, scoredEventCount } = getScoringEventCounts(seasonId);
+  const { scoringEventCount, scoredEventCount } = getSeasonScoringEventCounts(seasonId);
 
   let eventCents = 0;
   const contributingEvents = [];
@@ -334,13 +357,6 @@ function buildSeasonUnallocatedSummary({ seasonId }) {
     scoredEventCount,
     generatedAt: new Date().toISOString(),
   };
-}
-
-function csvCell(value) {
-  if (value == null) return '';
-  const text = String(value);
-  if (/[",\n]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
-  return text;
 }
 
 function formatUnownedWinners(winners) {
@@ -412,7 +428,7 @@ function buildSeasonUnallocatedCsv({ seasonId }) {
     rows.push(['Season Bonus', '(pending season end)', summary.seasonBonus.potCents, summary.seasonBonus.paidCents, 0, 'pending', summary.seasonBonus.reason, '']);
   }
 
-  return rows.map((row) => row.map(csvCell).join(',')).join('\n');
+  return rowsToCsv(rows);
 }
 
 module.exports = {

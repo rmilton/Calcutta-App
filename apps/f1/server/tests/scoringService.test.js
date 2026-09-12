@@ -611,6 +611,48 @@ test('season bonus winners and allocations follow payout model v2', () => {
   assert.equal(season.season_random_bonus_drawn_at, 1234567890);
 });
 
+test('resolveSeasonBonusWinners readOnly never draws/persists, even when the stored position is stale for a shrunk standings count', () => {
+  const { db, getActiveSeasonId, resolveSeasonBonusWinners } = setupDb();
+  const seasonId = getActiveSeasonId();
+
+  // A position was drawn earlier against a larger standings count (position
+  // 5 needs at least 5 entries), then simulate the count later shrinking.
+  db.prepare(`
+    UPDATE seasons
+    SET season_random_bonus_position = 5, season_random_bonus_drawn_at = 1234567890
+    WHERE id = ?
+  `).run(seasonId);
+
+  const shrunkStandings = [
+    { driver_id: 1, total_points: 30 },
+    { driver_id: 2, total_points: 20 },
+    { driver_id: 3, total_points: 10 },
+  ];
+
+  const readOnlyWinners = resolveSeasonBonusWinners('season_random_finish_position', seasonId, {
+    rows: [],
+    standings: shrunkStandings,
+    readOnly: true,
+  });
+  assert.deepEqual(readOnlyWinners, [], 'a stale, out-of-range position must not resolve a winner');
+
+  const afterReadOnly = db.prepare('SELECT season_random_bonus_position, season_random_bonus_drawn_at FROM seasons WHERE id = ?').get(seasonId);
+  assert.equal(afterReadOnly.season_random_bonus_position, 5, 'readOnly must not redraw or overwrite the stale value');
+  assert.equal(afterReadOnly.season_random_bonus_drawn_at, 1234567890);
+
+  // Contrast: the normal (non-readOnly) write path still redraws a valid
+  // position for the current standings count, proving readOnly is what
+  // suppresses the draw, not a broken write path.
+  const writeWinners = resolveSeasonBonusWinners('season_random_finish_position', seasonId, {
+    rows: [],
+    standings: shrunkStandings,
+  });
+  assert.equal(writeWinners.length, 1);
+
+  const afterWrite = db.prepare('SELECT season_random_bonus_position FROM seasons WHERE id = ?').get(seasonId);
+  assert.ok(afterWrite.season_random_bonus_position >= 1 && afterWrite.season_random_bonus_position <= 3);
+});
+
 test('season bonuses stay empty until every scoring event in the season is scored', () => {
   const {
     db,

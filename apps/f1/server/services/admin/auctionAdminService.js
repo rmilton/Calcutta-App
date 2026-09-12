@@ -9,15 +9,7 @@ const {
   getOwnership,
 } = require('../../db');
 const { shuffleArray } = require('../../lib/shuffle');
-
-function csvCell(value) {
-  if (value == null) return '';
-  const text = String(value);
-  if (/[",\n]/.test(text)) {
-    return `"${text.replace(/"/g, '""')}"`;
-  }
-  return text;
-}
+const { rowsToCsv } = require('../../lib/csv');
 
 function formatCurrency(cents) {
   return (Number(cents || 0) / 100).toFixed(2);
@@ -219,7 +211,7 @@ function buildAuctionResultsCsv({ seasonId }) {
     });
   });
 
-  return rows.map((row) => row.map(csvCell).join(',')).join('\n');
+  return rowsToCsv(rows);
 }
 
 module.exports = {

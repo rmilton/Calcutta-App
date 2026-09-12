@@ -302,3 +302,171 @@ test('season bonus won by an unowned driver is counted once the season is comple
   assert.equal(champion.unownedWinners[0].driverName, db.prepare('SELECT name FROM drivers WHERE id = ?').get(unownedDriver.id).name);
   assert.equal(summary.totalCents, summary.eventCents + summary.seasonBonus.unallocatedCents);
 });
+
+test('unowned season-bonus winner that is an inactive substitute driver still shows a real name', () => {
+  const {
+    db, getActiveSeasonId, upsertEventResults, scoreEvent, buildSeasonUnallocatedSummary,
+  } = setupDb();
+  const seasonId = getActiveSeasonId();
+  const owner = seedParticipant(db, seasonId, 'Owner', 'tok-owner');
+  seedPotOwnership(db, seasonId, owner);
+
+  // Collapse the season to a single grand prix so it can be "complete".
+  const keep = db.prepare(`
+    SELECT id FROM events
+    WHERE season_id = ? AND type = 'grand_prix'
+    ORDER BY round_number ASC LIMIT 1
+  `).get(seasonId);
+  db.prepare('DELETE FROM events WHERE season_id = ? AND id != ?').run(seasonId, keep.id);
+  db.prepare('UPDATE events SET lock_at = ? WHERE id = ?').run('2000-01-01T00:00:00Z', keep.id);
+
+  const roster = db.prepare('SELECT external_id FROM drivers WHERE season_id = ? ORDER BY external_id ASC').all(seasonId);
+
+  // Substitute (external id 777) is not in the roster -> created inactive/unowned
+  // (active = 0), and wins the race, so becomes the champion.
+  upsertEventResults({
+    seasonId,
+    eventId: keep.id,
+    rows: [
+      { external_driver_id: 777, driver_code: 'SUB', driver_name: 'Sub Driver', team_name: 'Cadillac', finish_position: 1, start_position: 12 },
+      ...roster.map((driver, index) => ({
+        external_driver_id: driver.external_id,
+        finish_position: index + 2,
+        start_position: index + 2,
+      })),
+    ],
+  });
+  assert.equal(scoreEvent({ seasonId, eventId: keep.id }).ok, true);
+
+  const subDriver = db.prepare('SELECT id, active FROM drivers WHERE season_id = ? AND external_id = 777').get(seasonId);
+  assert.equal(subDriver.active, 0, 'substitute driver should be created inactive');
+
+  const summary = buildSeasonUnallocatedSummary({ seasonId });
+  const champion = summary.seasonBonus.categories.find((category) => category.category === 'drivers_champion');
+  assert.ok(champion, 'drivers_champion bonus should be flagged as unallocated');
+  assert.equal(champion.unownedWinners.length, 1);
+  assert.equal(champion.unownedWinners[0].driverName, 'Sub Driver');
+  assert.equal(champion.unownedWinners[0].driverCode, 'SUB');
+  assert.equal(champion.unownedWinners[0].teamName, 'Cadillac');
+});
+
+test('event category breakdown does not inflate when a paid winner\'s ownership is later removed', () => {
+  const {
+    db, getActiveSeasonId, upsertEventResults, scoreEvent, buildSeasonUnallocatedSummary,
+  } = setupDb();
+  const seasonId = getActiveSeasonId();
+  const owner = seedParticipant(db, seasonId, 'Owner', 'tok-owner');
+  seedPotOwnership(db, seasonId, owner);
+  const event = firstGrandPrix(db, seasonId);
+
+  const roster = db.prepare('SELECT id, external_id FROM drivers WHERE season_id = ? ORDER BY external_id ASC').all(seasonId);
+
+  // A substitute (external id 777, unowned by construction) wins the race,
+  // so race_winner genuinely leaks. Every roster driver is owned and paid
+  // normally for the other categories (2nd/3rd/best-p6/etc).
+  upsertEventResults({
+    seasonId,
+    eventId: event.id,
+    rows: [
+      { external_driver_id: 777, driver_code: 'SUB', driver_name: 'Sub Driver', team_name: 'Cadillac', finish_position: 1, start_position: 12 },
+      ...roster.map((driver, index) => ({
+        external_driver_id: driver.external_id,
+        finish_position: index + 2,
+        start_position: index + 2,
+        slowest_pit_stop_seconds: 3 + (index * 0.1),
+      })),
+    ],
+  });
+  assert.equal(scoreEvent({ seasonId, eventId: event.id }).ok, true);
+
+  const before = buildSeasonUnallocatedSummary({ seasonId });
+  const beforeEvent = before.contributingEvents[0];
+  assert.ok(beforeEvent);
+  const beforeCategorySum = beforeEvent.categories.reduce((sum, c) => sum + c.unallocatedCents, 0);
+  assert.equal(beforeCategorySum, beforeEvent.unallocatedCents, 'category rows must sum to the event total');
+  // The substitute leads on both finish position and positions gained.
+  assert.deepEqual(
+    beforeEvent.categories.map((c) => c.category).sort(),
+    ['most_positions_gained', 'race_winner'],
+  );
+
+  // The driver who legitimately WON and was PAID for "2nd Place" (roster[0],
+  // finish position 2) has their ownership removed independently of scoring
+  // -- e.g. a manual auction correction -- with no rescore.
+  const secondPlaceDriverId = roster[0].id;
+  db.prepare('DELETE FROM ownership WHERE season_id = ? AND driver_id = ?').run(seasonId, secondPlaceDriverId);
+
+  const after = buildSeasonUnallocatedSummary({ seasonId });
+  const afterEvent = after.contributingEvents[0];
+  assert.ok(afterEvent);
+  const afterCategorySum = afterEvent.categories.reduce((sum, c) => sum + c.unallocatedCents, 0);
+
+  // The event total (tier 1, from persisted snapshots/payouts) is untouched
+  // by the ownership change, and the category breakdown must still agree
+  // with it -- "2nd Place" was already paid and stays paid in the audit,
+  // it must not appear as a newly-unowned category.
+  assert.equal(afterEvent.unallocatedCents, beforeEvent.unallocatedCents);
+  assert.equal(afterCategorySum, afterEvent.unallocatedCents, 'category rows must still sum to the event total');
+  assert.deepEqual(
+    afterEvent.categories.map((c) => c.category).sort(),
+    ['most_positions_gained', 'race_winner'],
+  );
+});
+
+test('season-bonus breakdown does not relabel an already-paid winner as unowned', () => {
+  const {
+    db, getActiveSeasonId, upsertEventResults, scoreEvent, buildSeasonUnallocatedSummary,
+  } = setupDb();
+  const seasonId = getActiveSeasonId();
+  const owner = seedParticipant(db, seasonId, 'Owner', 'tok-owner');
+  seedPotOwnership(db, seasonId, owner);
+
+  const keep = db.prepare(`
+    SELECT id FROM events
+    WHERE season_id = ? AND type = 'grand_prix'
+    ORDER BY round_number ASC LIMIT 1
+  `).get(seasonId);
+  db.prepare('DELETE FROM events WHERE season_id = ? AND id != ?').run(seasonId, keep.id);
+  db.prepare('UPDATE events SET lock_at = ? WHERE id = ?').run('2000-01-01T00:00:00Z', keep.id);
+
+  const roster = db.prepare('SELECT id, external_id FROM drivers WHERE season_id = ? ORDER BY external_id ASC').all(seasonId);
+  upsertEventResults({
+    seasonId,
+    eventId: keep.id,
+    rows: roster.map((driver, index) => ({
+      external_driver_id: driver.external_id,
+      finish_position: index + 1,
+      start_position: index + 1,
+    })),
+  });
+  assert.equal(scoreEvent({ seasonId, eventId: keep.id }).ok, true);
+
+  // Every driver owned -> the champion was paid, nothing unallocated yet.
+  const before = buildSeasonUnallocatedSummary({ seasonId });
+  assert.equal(before.seasonBonus.resolved, true);
+  assert.equal(before.seasonBonus.unallocatedCents, 0);
+
+  const championDriverId = roster[0].id; // finish_position 1 -> drivers_champion
+  const championPayout = db.prepare(`
+    SELECT amount_cents FROM season_bonus_payouts
+    WHERE season_id = ? AND driver_id = ? AND category = 'drivers_champion'
+  `).get(seasonId, championDriverId);
+  assert.ok(championPayout, 'champion should already have a persisted season bonus payout');
+
+  // The champion's ownership is removed independently of scoring (manual
+  // correction, no recalcSeasonBonuses call afterward).
+  db.prepare('DELETE FROM ownership WHERE season_id = ? AND driver_id = ?').run(seasonId, championDriverId);
+
+  const championName = db.prepare('SELECT name FROM drivers WHERE id = ?').get(championDriverId).name;
+  const after = buildSeasonUnallocatedSummary({ seasonId });
+  const championRow = (after.seasonBonus.categories || []).find((c) => c.category === 'drivers_champion');
+  // The champion was already paid (persisted in season_bonus_payouts); a
+  // later, unrelated ownership change must not retroactively list them as
+  // an unowned winner.
+  if (championRow) {
+    assert.ok(
+      !championRow.unownedWinners.some((w) => w.driverName === championName),
+      'already-paid champion must not be reported as an unowned winner',
+    );
+  }
+});

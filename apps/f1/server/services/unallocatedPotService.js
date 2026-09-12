@@ -1,10 +1,9 @@
-const { splitCentsEvenly } = require('../lib/core');
 const {
   db,
-  getDrivers,
-  getOwnershipBySeason,
+  getEventById,
+  getEventResults,
 } = require('../db');
-const { buildEventPayoutAudit } = require('./payoutAuditService');
+const { evaluateCategoryRule } = require('./payoutRuleResolvers');
 const { buildSeasonBonusComputation } = require('./payoutRedistributionService');
 const {
   isSeasonBonusReady,
@@ -19,6 +18,21 @@ const SEASON_BONUS_PENDING_REASON =
 function clampNonNegative(value) {
   const num = Number(value) || 0;
   return num > 0 ? num : 0;
+}
+
+/**
+ * Driver identity lookup that deliberately does NOT filter by `active`
+ * (unlike db.getDrivers). Unowned winners are frequently the inactive
+ * substitute drivers created during results sync (ensureSeasonDriverForResultRow),
+ * so a lookup scoped to active=1 would show them with a blank name.
+ */
+function getSeasonDriversById(seasonId) {
+  const rows = db.prepare(`
+    SELECT id, code, name, team_name
+    FROM drivers
+    WHERE season_id = ?
+  `).all(seasonId);
+  return new Map(rows.map((driver) => [driver.id, driver]));
 }
 
 /**
@@ -77,33 +91,95 @@ function getScoringEventCounts(seasonId) {
 }
 
 /**
- * Per-category breakdown for the flagged events. Reuses the existing event
- * payout audit so status text and unowned-winner identification stay in one
- * place. Only called for events the cheap query already flagged.
+ * Per-category breakdown for the flagged events. Deliberately reads only
+ * persisted tables (event_payout_snapshots for the pot, event_payouts for
+ * what was actually paid) rather than re-deriving "who is owned" from the
+ * CURRENT ownership table — ownership can change after scoring (e.g. the
+ * admin "Reset Auction Only" tool clears ownership but leaves results/
+ * payouts intact), and a live re-derivation would make this breakdown
+ * disagree with the persisted, authoritative event total above it.
+ *
+ * Winner identity for the unpaid share still needs evaluateCategoryRule
+ * against event_results, since scoring never persists "who won but wasn't
+ * paid" anywhere — but event_results/snapshots/payouts are always rewritten
+ * together by scoreEvent, so that derivation stays in lockstep with the
+ * persisted pot/paid totals even though ownership isn't.
  */
 function buildEventCategoryBreakdown({ seasonId, eventId }) {
-  const audit = buildEventPayoutAudit({ seasonId, eventId });
-  if (!audit) return [];
+  const event = getEventById(seasonId, eventId);
+  if (!event) return [];
 
-  return (audit.rules || [])
-    .filter((rule) => clampNonNegative(rule.undistributed_cents) > 0)
-    .map((rule) => ({
-      category: rule.category,
-      label: rule.label,
-      potCents: Number(rule.category_pot_cents || 0),
-      paidCents: Number(rule.distributed_cents || 0),
-      unallocatedCents: clampNonNegative(rule.undistributed_cents),
-      status: rule.status,
-      statusReason: rule.status_reason,
-      unownedWinners: (rule.winners || [])
-        .filter((winner) => !winner.owner_participant_id)
-        .map((winner) => ({
-          driverCode: winner.driver_code || null,
-          driverName: winner.driver_name || null,
-          teamName: winner.team_name || null,
-          finishPosition: winner.finish_position ?? null,
-        })),
-    }));
+  const snapshotRows = db.prepare(`
+    SELECT category, label, rank_order, category_pot_cents
+    FROM event_payout_snapshots
+    WHERE season_id = ? AND event_id = ?
+    ORDER BY category ASC, rank_order ASC
+  `).all(seasonId, eventId);
+  if (!snapshotRows.length) return [];
+
+  const paidRows = db.prepare(`
+    SELECT category, driver_id, SUM(amount_cents) AS paid_cents
+    FROM event_payouts
+    WHERE season_id = ? AND event_id = ?
+    GROUP BY category, driver_id
+  `).all(seasonId, eventId);
+  const paidCentsByCategory = new Map();
+  const paidDriverIdsByCategory = new Map();
+  paidRows.forEach((row) => {
+    paidCentsByCategory.set(
+      row.category,
+      (paidCentsByCategory.get(row.category) || 0) + Number(row.paid_cents || 0),
+    );
+    if (!paidDriverIdsByCategory.has(row.category)) {
+      paidDriverIdsByCategory.set(row.category, new Set());
+    }
+    paidDriverIdsByCategory.get(row.category).add(row.driver_id);
+  });
+
+  const results = getEventResults(eventId);
+  const resultByDriverId = new Map(results.map((row) => [row.driver_id, row]));
+
+  return snapshotRows
+    .map((row) => {
+      const potCents = Number(row.category_pot_cents || 0);
+      const paidCents = paidCentsByCategory.get(row.category) || 0;
+      const unallocatedCents = clampNonNegative(potCents - paidCents);
+      if (unallocatedCents <= 0) return null;
+
+      const evaluation = evaluateCategoryRule({
+        category: row.category,
+        rows: results,
+        event,
+        rankOrder: row.rank_order,
+      });
+      const winnerDriverIds = evaluation.winnerDriverIds || [];
+      const paidDriverIds = paidDriverIdsByCategory.get(row.category) || new Set();
+      const unpaidWinners = winnerDriverIds.filter((driverId) => !paidDriverIds.has(driverId));
+
+      return {
+        category: row.category,
+        label: row.label,
+        potCents,
+        paidCents,
+        unallocatedCents,
+        status: winnerDriverIds.length ? 'unowned_winners' : 'no_winners',
+        statusReason: winnerDriverIds.length
+          ? (paidCents > 0
+            ? 'Partially distributed; at least one winner had no owner'
+            : 'No payout distributed; winners had no owner')
+          : 'No driver matched this rule in event results',
+        unownedWinners: unpaidWinners.map((driverId) => {
+          const result = resultByDriverId.get(driverId);
+          return {
+            driverCode: result?.driver_code || null,
+            driverName: result?.driver_name || null,
+            teamName: result?.team_name || null,
+            finishPosition: result?.finish_position ?? null,
+          };
+        }),
+      };
+    })
+    .filter(Boolean);
 }
 
 /**
@@ -111,81 +187,86 @@ function buildEventCategoryBreakdown({ seasonId, eventId }) {
  * (isSeasonBonusReady), so until then the whole bonus pool is "pending", not
  * unallocated. After that, any bonus category resolving to an unowned driver
  * is real leakage.
+ *
+ * Like buildEventCategoryBreakdown, the pot/paid figures come only from
+ * persisted tables (buildSeasonBonusComputation's rule pots and the actual
+ * season_bonus_payouts rows recalcSeasonBonuses wrote), not from re-checking
+ * CURRENT ownership. Winner identity for the unpaid share is re-derived via
+ * resolveSeasonBonusWinners against event_results/standings, which only
+ * change together with season_bonus_payouts (both are rewritten by
+ * recalcSeasonBonuses), so this stays consistent even if ownership is later
+ * reset independently.
  */
 function buildSeasonBonusUnallocated(seasonId) {
   const computation = buildSeasonBonusComputation({ seasonId });
   const potCents = Number(computation.effectiveTotalCents || 0);
-  const paidCents = Number(
-    db.prepare(`
-      SELECT COALESCE(SUM(amount_cents), 0) AS c
-      FROM season_bonus_payouts
-      WHERE season_id = ?
-    `).get(seasonId)?.c || 0,
-  );
+
+  const paidRows = db.prepare(`
+    SELECT category, driver_id, SUM(amount_cents) AS paid_cents
+    FROM season_bonus_payouts
+    WHERE season_id = ?
+    GROUP BY category, driver_id
+  `).all(seasonId);
+  const paidCentsByCategory = new Map();
+  const paidDriverIdsByCategory = new Map();
+  paidRows.forEach((row) => {
+    paidCentsByCategory.set(
+      row.category,
+      (paidCentsByCategory.get(row.category) || 0) + Number(row.paid_cents || 0),
+    );
+    if (!paidDriverIdsByCategory.has(row.category)) {
+      paidDriverIdsByCategory.set(row.category, new Set());
+    }
+    paidDriverIdsByCategory.get(row.category).add(row.driver_id);
+  });
+  const paidCents = Array.from(paidCentsByCategory.values())
+    .reduce((sum, cents) => sum + cents, 0);
+
   const resolved = isSeasonBonusReady(seasonId);
   const unallocatedCents = resolved ? clampNonNegative(potCents - paidCents) : 0;
 
   let categories = [];
-  if (resolved && computation.rules.length) {
+  if (resolved && unallocatedCents > 0 && computation.rules.length) {
     const rows = getAllSeasonResultRows(seasonId);
     const standings = getChampionshipStandings(seasonId, rows);
-    const ownershipMap = new Map(
-      getOwnershipBySeason(seasonId).map((o) => [o.driver_id, o.participant_id]),
-    );
-    const driverById = new Map(getDrivers(seasonId).map((d) => [d.id, d]));
+    const driverById = getSeasonDriversById(seasonId);
 
     categories = computation.rules
       .map((rule) => {
         const categoryPotCents = Number(rule.category_pot_cents || 0);
+        const categoryPaidCents = paidCentsByCategory.get(rule.category) || 0;
+        const unallocated = clampNonNegative(categoryPotCents - categoryPaidCents);
+        if (unallocated <= 0) return null;
+
         // Season complete: recalcSeasonBonuses has already drawn/persisted any
         // random position, so this resolver call has no side effect here.
         const winners = resolveSeasonBonusWinners(rule.category, seasonId, { rows, standings });
-        if (!winners.length || categoryPotCents <= 0) {
-          return {
-            category: rule.category,
-            label: rule.label,
-            potCents: categoryPotCents,
-            paidCents: 0,
-            unallocatedCents: categoryPotCents > 0 && !winners.length ? categoryPotCents : 0,
-            status: winners.length ? 'paid' : 'no_winners',
-            statusReason: winners.length
-              ? 'Paid to owned winners'
-              : 'No driver matched this bonus rule',
-            unownedWinners: [],
-          };
-        }
+        const paidDriverIds = paidDriverIdsByCategory.get(rule.category) || new Set();
+        const unpaidWinners = winners.filter((driverId) => !paidDriverIds.has(driverId));
 
-        const shares = splitCentsEvenly(categoryPotCents, winners.length);
-        let paid = 0;
-        const unownedWinners = [];
-        winners.forEach((driverId, idx) => {
-          if (ownershipMap.get(driverId)) {
-            paid += shares[idx];
-            return;
-          }
-          const driver = driverById.get(driverId);
-          unownedWinners.push({
-            driverCode: driver?.code || null,
-            driverName: driver?.name || null,
-            teamName: driver?.team_name || null,
-          });
-        });
-
-        const unallocated = clampNonNegative(categoryPotCents - paid);
         return {
           category: rule.category,
           label: rule.label,
           potCents: categoryPotCents,
-          paidCents: paid,
+          paidCents: categoryPaidCents,
           unallocatedCents: unallocated,
-          status: unallocated > 0 ? 'unowned_winners' : 'paid',
-          statusReason: unallocated > 0
-            ? 'At least one bonus winner had no owner'
-            : `Paid to ${winners.length} owned winner${winners.length === 1 ? '' : 's'}`,
-          unownedWinners,
+          status: winners.length ? 'unowned_winners' : 'no_winners',
+          statusReason: winners.length
+            ? (categoryPaidCents > 0
+              ? 'Partially distributed; at least one bonus winner had no owner'
+              : 'No payout distributed; bonus winner had no owner')
+            : 'No driver matched this bonus rule',
+          unownedWinners: unpaidWinners.map((driverId) => {
+            const driver = driverById.get(driverId);
+            return {
+              driverCode: driver?.code || null,
+              driverName: driver?.name || null,
+              teamName: driver?.team_name || null,
+            };
+          }),
         };
       })
-      .filter((row) => row.unallocatedCents > 0);
+      .filter(Boolean);
   }
 
   return {
